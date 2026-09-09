@@ -1,69 +1,59 @@
 ﻿using System;
 using Lifestate;
 
-Console.WriteLine("--- LIFESTATE Sleep & Energy Recovery Test ---");
+Console.WriteLine("--- LIFESTATE Hunger Drain Test ---");
 
 var clock = new GameClock();
 var player = new PlayerState(clock);
 
-// 1. New player -> Energy 100, IsSleeping = false
-Console.WriteLine($"1. Start: Energy {player.Energy}, IsSleeping {player.IsSleeping} (Expected: 100, False)");
+// 1. New player -> Hunger 100
+Console.WriteLine($"1. Start: Hunger {player.Hunger} (Expected: 100)");
 
-// 2. Awake Energy drain (120 mins = -2 Energy)
-Console.WriteLine("\nPassing 120 minutes awake...");
-player.UpdateEnergy(120);
-Console.WriteLine($"2. Energy: {player.Energy} (Expected: 98)");
+// 2. Pass 30 minutes: Hunger 100
+Console.WriteLine("\nPassing 30 minutes...");
+player.UpdateHunger(30);
+Console.WriteLine($"2. Hunger: {player.Hunger} (Expected: 100)");
 
-// 3. Start sleeping
+// 3. Pass another 30 minutes: Hunger 99
+Console.WriteLine("Passing another 30 minutes...");
+player.UpdateHunger(30);
+Console.WriteLine($"3. Hunger: {player.Hunger} (Expected: 99)");
+
+// 4. Pass another 9 hours (540 mins): Hunger 90
+Console.WriteLine("Passing another 9 hours (540 minutes)...");
+player.UpdateHunger(540);
+Console.WriteLine($"4. Hunger: {player.Hunger} (Expected: 90)");
+
+// 5. Start sleeping
 player.StartSleeping();
-Console.WriteLine($"3. Start sleeping: IsSleeping {player.IsSleeping} (Expected: True)");
+Console.WriteLine("Start sleeping...");
 
-// 4. Partial sleep (30 mins sleep = +0 energy recovered, rate is +5/hr)
-Console.WriteLine("\nPassing 30 minutes sleep...");
-player.UpdateEnergy(30);
-Console.WriteLine($"4. Energy: {player.Energy} (Expected: 98)");
+// 6. Sleep for 8 hours (480 mins): Hunger 82
+Console.WriteLine("Passing 8 hours (480 minutes) sleep...");
+player.UpdateHunger(480);
+Console.WriteLine($"6. Hunger: {player.Hunger} (Expected: 82)");
 
-// 5. Another 30 minutes (Total 60 mins sleep = +5 Energy)
-Console.WriteLine("Passing another 30 minutes sleep...");
-player.UpdateEnergy(30);
-Console.WriteLine($"5. Energy: {player.Energy} (Expected: 100)");
-
-// 6. Test 8 hours of sleep from a low Energy value (20 Energy)
-Console.WriteLine("\nResetting to Energy 20...");
-// Hack to reset energy for test:
-// Create a new player state (the clock continues, but energy is reset)
-player = new PlayerState(clock); 
-// Force energy to 20
-typeof(PlayerState).GetProperty("Energy")!.SetValue(player, 20);
-
-player.StartSleeping();
-Console.WriteLine($"Sleeping from Energy {player.Energy} for 8 hours (480 mins)...");
-player.UpdateEnergy(480);
-Console.WriteLine($"6. Energy: {player.Energy} (Expected: 60)");
-
-// 7. Continue sleeping at Energy 100
-player.UpdateEnergy(60); // Already 60, but test if it caps at 100
-player.UpdateEnergy(1000); // Massive sleep
-Console.WriteLine($"7. Continued sleep: Energy {player.Energy} (Expected: 100)");
-
-// 8. Stop sleeping
+// 7. Stop sleeping
 player.StopSleeping();
-Console.WriteLine($"8. Stop sleeping: IsSleeping {player.IsSleeping} (Expected: False)");
+Console.WriteLine("Stop sleeping...");
 
-// 9. Resume awake time
-Console.WriteLine("\nPassing 60 minutes awake...");
-player.UpdateEnergy(60);
-Console.WriteLine($"9. Energy: {player.Energy} (Expected: 99)");
+// 8. Pass enough additional time -> Hunger 0
+// Remaining hunger: 82. Need 82 hours = 4920 minutes.
+Console.WriteLine("Passing 4920 minutes (82 hours)...");
+player.UpdateHunger(4920);
+Console.WriteLine($"8. Hunger: {player.Hunger} (Expected: 0)");
 
-// 10. State-switch test
-// Start: 100 Energy.
-// Awake 30 mins: (Accumulator = 30. Energy = 100 - 0 = 100)
-// Sleep 30 mins: (Accumulator = 30. No Energy gain yet. Energy = 100)
-Console.WriteLine("\n10. State-switch test...");
-player = new PlayerState(clock); // Reset player state
-player.UpdateEnergy(30); // Awake 30
-player.StartSleeping();
-player.UpdateEnergy(30); // Sleep 30
-Console.WriteLine($"Energy: {player.Energy} (Expected: 100)");
-player.StopSleeping();
-Console.WriteLine($"IsSleeping: {player.IsSleeping} (Expected: False)");
+// 9. Pass more time: Hunger 0
+Console.WriteLine("Passing another 60 minutes...");
+player.UpdateHunger(60);
+Console.WriteLine($"9. Hunger: {player.Hunger} (Expected: 0)");
+
+// 10. Verify repeated small updates
+// 60 x 1 minute = 1 hour (-1 Hunger)
+Console.WriteLine("\n10. Testing repeated small updates (60 * 1 min)...");
+player = new PlayerState(clock); // Reset hunger to 100
+for (int i = 0; i < 60; i++)
+{
+    player.UpdateHunger(1);
+}
+Console.WriteLine($"Hunger (60 * 1 min): {player.Hunger} (Expected: 99)");
