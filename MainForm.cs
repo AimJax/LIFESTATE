@@ -64,24 +64,24 @@ public class MainForm : Form
         var btnWait = new Button { Text = "Wait 1 Hour" };
         btnWait.Click += (s, e) => {
             _clock.AdvanceSeconds(15); // 15 seconds * 4 = 60 minutes
-            _player.UpdateEnergy(60);
-            _player.UpdateHunger(60);
-            _player.UpdateThirst(60);
+            _player.AdvanceSimulation(60);
             RefreshUI();
         };
         panel.Controls.Add(btnWait);
 
-        var btnSleep = new Button { Text = "Sleep 8 Hours" };
+        var btnSleep = new Button { Text = "Sleep" };
         btnSleep.Click += (s, e) => {
             _player.StartSleeping();
-            _clock.AdvanceSeconds(15 * 8); // 8 hours
-            _player.UpdateEnergy(480);
-            _player.UpdateHunger(480);
-            _player.UpdateThirst(480);
-            _player.StopSleeping();
             RefreshUI();
         };
         panel.Controls.Add(btnSleep);
+
+        var btnWake = new Button { Text = "Wake Up" };
+        btnWake.Click += (s, e) => {
+            _player.StopSleeping();
+            RefreshUI();
+        };
+        panel.Controls.Add(btnWake);
 
         var btnEat = new Button { Text = "Eat +20" };
         btnEat.Click += (s, e) => {

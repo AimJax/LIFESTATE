@@ -277,5 +277,41 @@ public static class SimulationTests
 
         // 9. Confirm Energy/Sleeping unchanged
         Console.WriteLine($"9. Energy: {player.Energy}, IsSleeping: {player.IsSleeping} (Expected: 100, False)");
+
+        // 13. Continuous Sleeping Tests
+        Console.WriteLine("\n--- LIFESTATE Continuous Sleeping Tests ---");
+        var sleepTestClock = new GameClock();
+        var sleepTestPlayer = new PlayerState(sleepTestClock);
+
+        // Test 1: Enter sleeping state
+        Console.WriteLine($"1. Start: IsSleeping {sleepTestPlayer.IsSleeping} (Expected: False)");
+        sleepTestPlayer.StartSleeping();
+        Console.WriteLine($"2. Started sleeping: IsSleeping {sleepTestPlayer.IsSleeping} (Expected: True)");
+
+        // Test 2: One sleeping hour
+        // Start with energy 50 to avoid clamping.
+        var awakeClock = new GameClock();
+        var awakePlayer = new PlayerState(awakeClock);
+        awakePlayer.UpdateEnergy(50 * 60); 
+        
+        // Now awakePlayer.Energy = 50.
+        awakePlayer.StartSleeping();
+        awakePlayer.AdvanceSimulation(60); // 1 hour sleep
+        Console.WriteLine($"3. One sleeping hour (from Energy 50): Energy {awakePlayer.Energy} (Expected: 55), Hunger {awakePlayer.Hunger} (Expected: 99), Thirst {awakePlayer.Thirst} (Expected: 98), IsSleeping {awakePlayer.IsSleeping} (Expected: True)");
+
+        // Test 3: Eight continuous sleeping hours
+        awakePlayer.AdvanceSimulation(480); // 8 hours sleep
+        Console.WriteLine($"4. Eight continuous sleeping hours: Energy {awakePlayer.Energy} (Expected: 95; 55 + 40), Hunger {awakePlayer.Hunger} (Expected: 91), Thirst {awakePlayer.Thirst} (Expected: 82), IsSleeping {awakePlayer.IsSleeping} (Expected: True)");
+
+        // Test 4: Wake Up
+        awakePlayer.StopSleeping();
+        Console.WriteLine($"5. Wake Up: IsSleeping {awakePlayer.IsSleeping} (Expected: False)");
+
+        // Test 5: Paused concept does not alter sleep state
+        var pauseClock = new GameClock();
+        var pausePlayer = new PlayerState(pauseClock);
+        pausePlayer.StartSleeping();
+        // Do nothing for simulation
+        Console.WriteLine($"6. Paused: IsSleeping {pausePlayer.IsSleeping} (Expected: True), Energy {pausePlayer.Energy} (Expected: 100), Hunger {pausePlayer.Hunger} (Expected: 100), Thirst {pausePlayer.Thirst} (Expected: 100), Time {pauseClock.Hour:00}:{pauseClock.Minute:00} (Expected: 00:00)");
     }
 }
