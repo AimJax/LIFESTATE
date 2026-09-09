@@ -659,21 +659,259 @@ public static class SimulationTests
 
         // --- PERSISTENCE TESTS ---
         Console.WriteLine("\n--- LIFESTATE Save/Load Tests ---");
-        var saveClock = new GameClock();
-        var savePlayer = new PlayerState(saveClock);
-        saveClock.AdvanceSeconds(60);
-        savePlayer.UpdateEnergy(30);
-        savePlayer.StartWorking();
-        savePlayer.AdvanceSimulation(60);
 
-        SaveManager.Save(saveClock, savePlayer);
+        RunSaveLoadTests();
+    }
 
-        var loadClock = new GameClock();
-        var loadPlayer = new PlayerState(loadClock);
-        bool loaded = SaveManager.Load(loadClock, loadPlayer);
+    private static void RunSaveLoadTests()
+    {
+        Console.WriteLine("\n--- LIFESTATE Save/Load Regression Tests ---");
 
-        Console.WriteLine($"Load successful: {loaded} (Expected: True)");
-        Console.WriteLine($"Day: {loadClock.Day} (Expected: {saveClock.Day}), Time: {loadClock.Hour}:{loadClock.Minute} (Expected: {saveClock.Hour}:{saveClock.Minute})");
-        Console.WriteLine($"Money: {loadPlayer.Money} (Expected: {savePlayer.Money}), IsWorking: {loadPlayer.IsWorking} (Expected: {savePlayer.IsWorking})");
+        // Helper to run a test with an isolated save path
+        void RunWithTempSave(Action<string> testAction)
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), "LIFESTATE-tests", Guid.NewGuid().ToString());
+            string tempSavePath = Path.Combine(tempDir, "save.json");
+            try
+            {
+                Directory.CreateDirectory(tempDir);
+                testAction(tempSavePath);
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+            }
+        }
+
+        // Test 1: Basic Round Trip
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            clock.AdvanceSeconds(60); // 4 mins
+            var player = new PlayerState(clock);
+            player.Drink(10); // Thirst 110 -> 100
+            player.UpdateEnergy(30);
+            
+            SaveManager.Save(clock, player, path);
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path);
+            
+            bool match = loaded && loadClock.Day == clock.Day && loadClock.Hour == clock.Hour && loadClock.Minute == clock.Minute &&
+                         loadPlayer.Money == player.Money && loadPlayer.Energy == player.Energy &&
+                         loadPlayer.Hunger == player.Hunger && loadPlayer.Thirst == player.Thirst &&
+                         loadPlayer.StudyXP == player.StudyXP;
+            Console.WriteLine($"1. Basic Round Trip: {match} (Expected: True)");
+        });
+
+        // Test 2: Age remains derived
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(25 * 365);
+            SaveManager.Save(clock, player, path);
+            
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            SaveManager.Load(loadClock, loadPlayer, path);
+            
+            bool match = loadPlayer.Age == 25 && loadPlayer.LifeStage == LifeStage.Adult;
+            Console.WriteLine($"2. Age/LifeStage Derived: {match} (Expected: True)");
+        });
+
+        // Test 3: Sleep state survives
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.UpdateEnergy(50 * 60); // Drain
+            player.StartSleeping();
+            SaveManager.Save(clock, player, path);
+            
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            SaveManager.Load(loadClock, loadPlayer, path);
+            
+            bool stateMatch = loadPlayer.IsSleeping && !loadPlayer.IsWorking && !loadPlayer.IsStudying;
+            loadPlayer.AdvanceSimulation(60);
+            bool recovery = loadPlayer.Energy > player.Energy;
+            Console.WriteLine($"3. Sleep state survives/recovers: {stateMatch && recovery} (Expected: True)");
+        });
+
+        // Test 4: Work state survives (Age >= 18)
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(18 * 365);
+            player.StartWorking();
+            SaveManager.Save(clock, player, path);
+            
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            SaveManager.Load(loadClock, loadPlayer, path);
+            
+            bool stateMatch = loadPlayer.IsWorking && !loadPlayer.IsSleeping && !loadPlayer.IsStudying;
+            Console.WriteLine($"4. Work state survives: {stateMatch} (Expected: True)");
+        });
+
+        // Test 5: Work partial progress
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(18 * 365);
+            player.StartWorking();
+            player.AdvanceSimulation(30);
+            int moneyBefore = player.Money;
+            SaveManager.Save(clock, player, path);
+            
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            SaveManager.Load(loadClock, loadPlayer, path);
+            
+            bool moneyMatch = loadPlayer.Money == moneyBefore;
+            loadPlayer.AdvanceSimulation(30);
+            bool moneyIncreased = loadPlayer.Money == moneyBefore + 10;
+            Console.WriteLine($"5. Work partial progress: {moneyMatch && moneyIncreased} (Expected: True)");
+        });
+
+        // Test 6: Study state survives (Age >= 6)
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(6 * 365);
+            player.StartStudying();
+            SaveManager.Save(clock, player, path);
+            
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            SaveManager.Load(loadClock, loadPlayer, path);
+            
+            bool stateMatch = loadPlayer.IsStudying && !loadPlayer.IsSleeping && !loadPlayer.IsWorking;
+            Console.WriteLine($"6. Study state survives: {stateMatch} (Expected: True)");
+        });
+
+        // Test 7: Study partial progress
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(6 * 365);
+            player.StartStudying();
+            player.AdvanceSimulation(30);
+            int xpBefore = player.StudyXP;
+            SaveManager.Save(clock, player, path);
+            
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            SaveManager.Load(loadClock, loadPlayer, path);
+            
+            bool xpMatch = loadPlayer.StudyXP == xpBefore;
+            loadPlayer.AdvanceSimulation(30);
+            bool xpIncreased = loadPlayer.StudyXP == xpBefore + 10;
+            Console.WriteLine($"7. Study partial progress: {xpMatch && xpIncreased} (Expected: True)");
+        });
+
+        // Test 8: Save does not mutate state
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.UpdateEnergy(10);
+            var money = player.Money;
+            var energy = player.Energy;
+            var hunger = player.Hunger;
+            var thirst = player.Thirst;
+            var studyXP = player.StudyXP;
+            SaveManager.Save(clock, player, path);
+            bool unchanged = player.Money == money && player.Energy == energy && player.Hunger == hunger && 
+                             player.Thirst == thirst && player.StudyXP == studyXP;
+            Console.WriteLine($"8. Save does not mutate state: {unchanged} (Expected: True)");
+        });
+
+        // Test 9: Load does not simulate offline time
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            SaveManager.Save(clock, player, path);
+            
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            SaveManager.Load(loadClock, loadPlayer, path);
+            
+            bool unchanged = loadClock.Day == clock.Day && loadClock.Hour == clock.Hour && loadClock.Minute == clock.Minute &&
+                             loadPlayer.Money == player.Money && loadPlayer.Energy == player.Energy;
+            Console.WriteLine($"9. Load does not simulate offline: {unchanged} (Expected: True)");
+        });
+
+        // Test 10: Missing save file
+        bool loaded = SaveManager.Load(new GameClock(), new PlayerState(new GameClock()), "nonexistent_file.json");
+        Console.WriteLine($"10. Missing save file: {loaded == false} (Expected: True)");
+
+        // Test 11: Invalid JSON
+        RunWithTempSave(path => {
+            File.WriteAllText(path, "{ invalid json }");
+            bool loaded = SaveManager.Load(new GameClock(), new PlayerState(new GameClock()), path);
+            Console.WriteLine($"11. Invalid JSON: {loaded == false} (Expected: True)");
+        });
+
+        // Test 12: Invalid activity combination (sleeping + working)
+        RunWithTempSave(path => {
+            File.WriteAllText(path, "{\"Version\":1, \"IsSleeping\":true, \"IsWorking\":true}");
+            bool loaded = SaveManager.Load(new GameClock(), new PlayerState(new GameClock()), path);
+            Console.WriteLine($"12. Invalid activity combination: {loaded == false} (Expected: True)");
+        });
+
+        // Test 13: Invalid need value (Energy 999)
+        RunWithTempSave(path => {
+            File.WriteAllText(path, "{\"Version\":1, \"Energy\":999}");
+            bool loaded = SaveManager.Load(new GameClock(), new PlayerState(new GameClock()), path);
+            Console.WriteLine($"13. Invalid need value: {loaded == false} (Expected: True)");
+        });
+
+        // Test 14: Wrong version
+        RunWithTempSave(path => {
+            File.WriteAllText(path, "{\"Version\":999}");
+            bool loaded = SaveManager.Load(new GameClock(), new PlayerState(new GameClock()), path);
+            Console.WriteLine($"14. Wrong version: {loaded == false} (Expected: True)");
+        });
+
+        // Test 15: God Mode non-persistence
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            SaveManager.Save(clock, player, path);
+            
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            var loadGm = new GodMode(loadClock, loadPlayer);
+            SaveManager.Load(loadClock, loadPlayer, path);
+            
+            Console.WriteLine($"15. God Mode non-persistence: {loadGm.IsEnabled == false} (Expected: True)");
+        });
+
+        // Clock Validation Tests
+        RunWithTempSave(path => {
+            // Day -1
+            File.WriteAllText(path, "{\"Version\":1, \"Day\":-1}");
+            bool loadedDay = SaveManager.Load(new GameClock(), new PlayerState(new GameClock()), path);
+            // Hour 24
+            File.WriteAllText(path, "{\"Version\":1, \"Day\":0, \"Hour\":24}");
+            bool loadedHour = SaveManager.Load(new GameClock(), new PlayerState(new GameClock()), path);
+            // Minute 60
+            File.WriteAllText(path, "{\"Version\":1, \"Day\":0, \"Hour\":0, \"Minute\":60}");
+            bool loadedMinute = SaveManager.Load(new GameClock(), new PlayerState(new GameClock()), path);
+            
+            Console.WriteLine($"Clock Validation: {loadedDay == false && loadedHour == false && loadedMinute == false} (Expected: True)");
+        });
+
+
     }
 }

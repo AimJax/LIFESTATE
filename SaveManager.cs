@@ -9,7 +9,7 @@ public static class SaveManager
     private static readonly string SaveDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LIFESTATE");
     private static readonly string SaveFilePath = Path.Combine(SaveDirectory, "save.json");
 
-    public static void Save(GameClock clock, PlayerState player)
+    public static void Save(GameClock clock, PlayerState player, string? path = null)
     {
         var saveData = new SaveData
         {
@@ -28,28 +28,34 @@ public static class SaveManager
             StudyMinutesAccumulator = player.GetStudyMinutesAccumulator()
         };
 
-        if (!Directory.Exists(SaveDirectory))
+        string targetPath = path ?? SaveFilePath;
+        string? targetDir = Path.GetDirectoryName(targetPath);
+        if (targetDir != null && !Directory.Exists(targetDir))
         {
-            Directory.CreateDirectory(SaveDirectory);
+            Directory.CreateDirectory(targetDir);
         }
 
         string json = JsonSerializer.Serialize(saveData);
-        File.WriteAllText(SaveFilePath, json);
+        File.WriteAllText(targetPath, json);
     }
 
-    public static bool Load(GameClock clock, PlayerState player)
+    public static bool Load(GameClock clock, PlayerState player, string? path = null)
     {
-        if (!File.Exists(SaveFilePath)) return false;
+        string targetPath = path ?? SaveFilePath;
+        if (!File.Exists(targetPath)) return false;
 
         try
         {
-            string json = File.ReadAllText(SaveFilePath);
+            string json = File.ReadAllText(targetPath);
             var saveData = JsonSerializer.Deserialize<SaveData>(json);
 
             if (saveData == null || saveData.Version != 1) return false;
 
-            // Basic Validation
-            if (saveData.Energy < 0 || saveData.Energy > 100 ||
+            // Strict Validation
+            if (saveData.Day < 0 ||
+                saveData.Hour < 0 || saveData.Hour > 23 ||
+                saveData.Minute < 0 || saveData.Minute > 59 ||
+                saveData.Energy < 0 || saveData.Energy > 100 ||
                 saveData.Hunger < 0 || saveData.Hunger > 100 ||
                 saveData.Thirst < 0 || saveData.Thirst > 100 ||
                 saveData.Money < 0 || saveData.StudyXP < 0 ||
@@ -60,6 +66,7 @@ public static class SaveManager
                 return false;
             }
 
+            // Transactional Restore
             clock.Restore(saveData.Day, saveData.Hour, saveData.Minute);
             player.Restore(saveData.Money, saveData.Energy, saveData.Hunger, saveData.Thirst, saveData.StudyXP, saveData.IsSleeping, saveData.IsWorking, saveData.IsStudying, saveData.WorkMinutesAccumulator, saveData.StudyMinutesAccumulator);
             
