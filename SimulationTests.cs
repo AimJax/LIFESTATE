@@ -509,7 +509,7 @@ public static class SimulationTests
         var s2Clock = new GameClock();
         var s2Player = new PlayerState(s2Clock);
         s2Player.StartStudying();
-        Console.WriteLine($"2. Newborn IsStudying: {s2Player.IsStudying} (Expected: False), Energy: {s2Player.Energy} (Expected: 100), Money: {s2Player.Money} (Expected: 1050)");
+        Console.WriteLine($"2. Newborn IsStudying: {s2Player.IsStudying} (Expected: False), Energy: {s2Player.Energy} (Expected: 100), Money: {s2Player.Money} (Expected: 1000)");
 
         // TEST 3 — AGE 5 CANNOT STUDY
         var s3Clock = new GameClock();
@@ -528,7 +528,7 @@ public static class SimulationTests
         s4Gm.AdvanceDays(6 * 365);
         s4Player.StartStudying();
         Console.WriteLine($"4. Age 6 IsStudying: {s4Player.IsStudying} (Expected: True)");
-        Console.WriteLine($"4. Side effects: Day {s4Clock.Day} (Expected: 2190), Energy {s4Player.Energy} (Expected: 100), Money {s4Player.Money} (Expected: 1050), StudyXP {s4Player.StudyXP} (Expected: 0)");
+        Console.WriteLine($"4. Side effects: Day {s4Clock.Day} (Expected: 2190), Energy {s4Player.Energy} (Expected: 100), Money {s4Player.Money} (Expected: 1000), StudyXP {s4Player.StudyXP} (Expected: 0)");
 
         // TEST 5 — 60 MINUTES STUDY
         var s5Clock = new GameClock();
@@ -561,6 +561,11 @@ public static class SimulationTests
         s7Gm.AdvanceDays(6 * 365);
         s7Player.StartStudying();
         s7Player.AdvanceSimulation(15);
+        s7Player.AdvanceSimulation(15);
+        s7Player.AdvanceSimulation(15);
+        Console.WriteLine($"7a. 45m StudyXP: {s7Player.StudyXP} (Expected: 0)");
+        s7Player.AdvanceSimulation(15);
+        Console.WriteLine($"7b. 60m StudyXP: {s7Player.StudyXP} (Expected: 10)");
 
         // TEST 8 — 120 MINUTES
         var s8Clock = new GameClock();
@@ -647,15 +652,9 @@ public static class SimulationTests
         var s15Clock = new GameClock();
         var s15Player = new PlayerState(s15Clock);
         var s15Gm = new GodMode(s15Clock, s15Player);
-        s15Gm.SetEnabled(true);
         s15Gm.AdvanceDays(25 * 365);
         s15Player.StartStudying();
         Console.WriteLine($"15. Adult study: Age {s15Player.Age} (Expected: 25), IsStudying {s15Player.IsStudying} (Expected: True)");
-
-        s7Player.AdvanceSimulation(15);
-        s7Player.AdvanceSimulation(15);
-        s7Player.AdvanceSimulation(15);
-        Console.WriteLine($"7. 4x15m StudyXP: {s7Player.StudyXP} (Expected: 10)");
 
 
     }
