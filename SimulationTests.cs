@@ -422,5 +422,65 @@ public static class SimulationTests
         workPlayer.StartSleeping();
         Console.WriteLine($"11. Cannot sleep while working: IsWorking {workPlayer.IsWorking} (Expected: True), IsSleeping {workPlayer.IsSleeping} (Expected: False)");
 
+        // Test 12: God Mode
+        Console.WriteLine("\n--- LIFESTATE God Mode Tests ---");
+        var gmClock = new GameClock();
+        var gmPlayer = new PlayerState(gmClock);
+        var godMode = new GodMode(gmClock, gmPlayer);
+        
+        // 1. Disabled God Mode blocks mutation
+        godMode.AdvanceDays(1);
+        Console.WriteLine($"1. Disabled GM - AdvanceDays(1): Day {gmClock.Day} (Expected: 0)");
+
+        // 2. +1 Day
+        godMode.SetEnabled(true);
+        godMode.AdvanceDays(1);
+        Console.WriteLine($"2. +1 Day: Day {gmClock.Day} (Expected: 1)");
+
+        // 3. +1 Year
+        godMode.AdvanceDays(365);
+        Console.WriteLine($"3. +1 Year (Age): Age {gmPlayer.Age} (Expected: 1)");
+
+        // 4. +10 Years
+        godMode.AdvanceDays(3650);
+        Console.WriteLine($"4. +10 Years (Age/LifeStage): Age {gmPlayer.Age} (Expected: 11), LifeStage {gmPlayer.LifeStage} (Expected: Child)");
+
+        // 5. Disabled blocks Money
+        godMode.SetEnabled(false);
+        gmPlayer.Money = 1000;
+        godMode.AddMoney(100);
+        Console.WriteLine($"5. Disabled GM - AddMoney: Money {gmPlayer.Money} (Expected: 1000)");
+
+        // 6. +100 Money
+        godMode.SetEnabled(true);
+        godMode.AddMoney(100);
+        Console.WriteLine($"6. Enabled GM - AddMoney: Money {gmPlayer.Money} (Expected: 1100)");
+
+        // 7. Disabled blocks Restore Needs
+        godMode.SetEnabled(false);
+        gmPlayer.UpdateEnergy(60); // Drain energy
+        godMode.RestoreNeeds();
+        Console.WriteLine($"7. Disabled GM - RestoreNeeds: Energy {gmPlayer.Energy} (Expected: <100)");
+
+        // 8. Restore Needs
+        godMode.SetEnabled(true);
+        godMode.RestoreNeeds();
+        Console.WriteLine($"8. Enabled GM - RestoreNeeds: Energy {gmPlayer.Energy}, Hunger {gmPlayer.Hunger}, Thirst {gmPlayer.Thirst} (Expected: 100, 100, 100)");
+
+        // 9. Disabled again
+        godMode.SetEnabled(false);
+        godMode.AdvanceDays(1);
+        Console.WriteLine($"9. Re-disabled GM - AdvanceDays: Day {gmClock.Day} (Expected: 1)");
+        // Reset clock for final test
+        var resetClock = new GameClock();
+        var resetPlayer = new PlayerState(resetClock);
+        var resetGm = new GodMode(resetClock, resetPlayer);
+        resetGm.SetEnabled(true);
+        resetGm.AdvanceDays(1);
+        resetGm.SetEnabled(false);
+        resetGm.AdvanceDays(1);
+        Console.WriteLine($\"9. Re-disabled GM - AdvanceDays: Day {resetClock.Day} (Expected: 1)\");
+
+
     }
 }

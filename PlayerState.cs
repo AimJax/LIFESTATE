@@ -125,4 +125,19 @@ public class PlayerState
         if (thirstRestored <= 0) return;
         Thirst = Math.Min(100, Thirst + thirstRestored);
     }
+
+    internal void DebugAddMoney(int amount)
+    {
+        if (amount > 0)
+        {
+            Money += amount;
+        }
+    }
+
+    internal void DebugRestoreNeeds()
+    {
+        Energy = 100;
+        Hunger = 100;
+        Thirst = 100;
+    }
 }

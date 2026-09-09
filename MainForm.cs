@@ -8,6 +8,7 @@ public class MainForm : Form
 {
     private readonly PlayerState _player;
     private readonly GameClock _clock;
+    private readonly GodMode _godMode;
     private readonly System.Windows.Forms.Timer _timer;
 
     private Label _lblAge = new();
@@ -19,10 +20,13 @@ public class MainForm : Form
     private Label _lblMoney = new();
     private Label _lblFeedback = new();
 
+    private FlowLayoutPanel _debugPanel = new();
+
     public MainForm(PlayerState player, GameClock clock)
     {
         _player = player;
         _clock = clock;
+        _godMode = new GodMode(clock, player);
         _timer = new System.Windows.Forms.Timer { Interval = 1000 };
         _timer.Tick += (s, e) => {
             _clock.AdvanceSeconds(1);
@@ -125,6 +129,37 @@ public class MainForm : Form
             RefreshUI();
         };
         panel.Controls.Add(btnDrink);
+
+        var btnToggleGodMode = new Button { Text = "GOD MODE: OFF" };
+        _debugPanel = new FlowLayoutPanel { Visible = false, FlowDirection = FlowDirection.TopDown, AutoSize = true };
+        btnToggleGodMode.Click += (s, e) => {
+            _godMode.SetEnabled(!_godMode.IsEnabled);
+            btnToggleGodMode.Text = _godMode.IsEnabled ? "GOD MODE: ON" : "GOD MODE: OFF";
+            _debugPanel.Visible = _godMode.IsEnabled;
+        };
+        panel.Controls.Add(btnToggleGodMode);
+
+        var btnDay = new Button { Text = "+1 Day" };
+        btnDay.Click += (s, e) => { _godMode.AdvanceDays(1); RefreshUI(); };
+        _debugPanel.Controls.Add(btnDay);
+
+        var btnYear = new Button { Text = "+1 Year" };
+        btnYear.Click += (s, e) => { _godMode.AdvanceDays(365); RefreshUI(); };
+        _debugPanel.Controls.Add(btnYear);
+
+        var btn10Years = new Button { Text = "+10 Years" };
+        btn10Years.Click += (s, e) => { _godMode.AdvanceDays(3650); RefreshUI(); };
+        _debugPanel.Controls.Add(btn10Years);
+
+        var btnMoney = new Button { Text = "+100 Money" };
+        btnMoney.Click += (s, e) => { _godMode.AddMoney(100); RefreshUI(); };
+        _debugPanel.Controls.Add(btnMoney);
+
+        var btnNeeds = new Button { Text = "Restore Needs" };
+        btnNeeds.Click += (s, e) => { _godMode.RestoreNeeds(); RefreshUI(); };
+        _debugPanel.Controls.Add(btnNeeds);
+
+        panel.Controls.Add(_debugPanel);
 
         Controls.Add(panel);
     }
