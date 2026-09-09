@@ -16,4 +16,13 @@ packages/
 .vscode/
 .idea/
 *.swp
+
+# Build and test artifacts
+build_test.log
+test_output.log
+test_output.txt
+test_results.log
+SimulationTests.cs.bak
+SimulationTests.cs.restored
+
 *.swn
