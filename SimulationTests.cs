@@ -912,6 +912,25 @@ public static class SimulationTests
             Console.WriteLine($"Clock Validation: {loadedDay == false && loadedHour == false && loadedMinute == false} (Expected: True)");
         });
 
+        // Test 16: Offline Progression
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            // 15 seconds real time = 60 minutes in-game
+            DateTimeOffset past = DateTimeOffset.UtcNow.AddSeconds(-15);
+            SaveManager.Save(clock, player, path, past);
+            
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            // Load now with current time.
+            SaveManager.Load(loadClock, loadPlayer, path, DateTimeOffset.UtcNow);
+            
+            // Expected: 60 minutes passed. Energy/Needs should have decreased.
+            bool advanced = loadClock.Hour == 1 || (loadClock.Hour == 0 && loadClock.Minute > 0);
+            bool statsChanged = loadPlayer.Energy < 100;
+            Console.WriteLine($"16. Offline progression: {advanced && statsChanged} (Expected: True)");
+        });
+
 
     }
 }

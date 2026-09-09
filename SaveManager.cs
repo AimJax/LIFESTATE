@@ -9,10 +9,11 @@ public static class SaveManager
     private static readonly string SaveDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LIFESTATE");
     private static readonly string SaveFilePath = Path.Combine(SaveDirectory, "save.json");
 
-    public static void Save(GameClock clock, PlayerState player, string? path = null)
+    public static void Save(GameClock clock, PlayerState player, string? path = null, DateTimeOffset? nowUtc = null)
     {
         var saveData = new SaveData
         {
+            Version = 2,
             Day = clock.Day,
             Hour = clock.Hour,
             Minute = clock.Minute,
@@ -25,7 +26,8 @@ public static class SaveManager
             IsWorking = player.IsWorking,
             IsStudying = player.IsStudying,
             WorkMinutesAccumulator = player.GetWorkMinutesAccumulator(),
-            StudyMinutesAccumulator = player.GetStudyMinutesAccumulator()
+            StudyMinutesAccumulator = player.GetStudyMinutesAccumulator(),
+            SavedAtUtc = nowUtc ?? DateTimeOffset.UtcNow
         };
 
         string targetPath = path ?? SaveFilePath;
@@ -39,7 +41,7 @@ public static class SaveManager
         File.WriteAllText(targetPath, json);
     }
 
-    public static bool Load(GameClock clock, PlayerState player, string? path = null)
+    public static bool Load(GameClock clock, PlayerState player, string? path = null, DateTimeOffset? nowUtc = null)
     {
         string targetPath = path ?? SaveFilePath;
         if (!File.Exists(targetPath)) return false;
@@ -49,7 +51,7 @@ public static class SaveManager
             string json = File.ReadAllText(targetPath);
             var saveData = JsonSerializer.Deserialize<SaveData>(json);
 
-            if (saveData == null || saveData.Version != 1) return false;
+            if (saveData == null || saveData.Version != 2) return false;
 
             // Strict Validation
             if (saveData.Day < 0 ||
@@ -70,6 +72,28 @@ public static class SaveManager
             clock.Restore(saveData.Day, saveData.Hour, saveData.Minute);
             player.Restore(saveData.Money, saveData.Energy, saveData.Hunger, saveData.Thirst, saveData.StudyXP, saveData.IsSleeping, saveData.IsWorking, saveData.IsStudying, saveData.WorkMinutesAccumulator, saveData.StudyMinutesAccumulator);
             
+            // Offline Progression
+            DateTimeOffset currentTime = nowUtc ?? DateTimeOffset.UtcNow;
+            long elapsedSeconds = (long)(currentTime - saveData.SavedAtUtc).TotalSeconds;
+            if (elapsedSeconds < 0) elapsedSeconds = 0;
+
+            if (elapsedSeconds > 0)
+            {
+                // Bulk chunking to avoid huge simulation ticks
+                long elapsedMinutes = elapsedSeconds * GameClock.MinutesPerRealSecond;
+                const int MaxMinutesPerTick = 60 * 24; // 1 day chunk
+                
+                while (elapsedMinutes > 0)
+                {
+                    int chunk = (int)Math.Min(elapsedMinutes, MaxMinutesPerTick);
+                    player.AdvanceSimulation(chunk);
+                    elapsedMinutes -= chunk;
+                }
+                
+                // Clock handles rollover logic
+                clock.AdvanceSeconds((int)elapsedSeconds);
+            }
+
             return true;
         }
         catch

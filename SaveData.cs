@@ -5,7 +5,7 @@ namespace Lifestate;
 
 public class SaveData
 {
-    public int Version { get; set; } = 1;
+    public int Version { get; set; } = 2;
     public int Day { get; set; }
     public int Hour { get; set; }
     public int Minute { get; set; }
@@ -19,4 +19,5 @@ public class SaveData
     public bool IsStudying { get; set; }
     public int WorkMinutesAccumulator { get; set; }
     public int StudyMinutesAccumulator { get; set; }
+    public DateTimeOffset SavedAtUtc { get; set; }
 }
