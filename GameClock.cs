@@ -5,6 +5,8 @@ public class GameClock
     private const int MinutesPerRealSecond = 4; // 1 real second = 4 in-game minutes
 
     public int Day { get; private set; }
+    public int Year => Day / 365;
+    public int DayOfYear => Day % 365;
     public int Hour { get; private set; }
     public int Minute { get; private set; }
 

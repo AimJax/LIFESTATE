@@ -1,19 +1,16 @@
 ﻿using System;
 using Lifestate;
 
-var clock = new GameClock();
-var player = new PlayerState(clock);
+int[] testDays = { 0, 364, 365, 730 };
 
-Console.WriteLine("--- LIFESTATE Age System Test ---");
-Console.WriteLine($"New Game - {clock}");
-Console.WriteLine($"Player Age: {player.Age}");
+Console.WriteLine("--- LIFESTATE Calendar Test ---");
 
-// Test: Advance 365 days
-// 365 days * 24 hours * 60 minutes = 525,600 in-game minutes
-// 525,600 / 4 (minutes/sec) = 131,400 real seconds
-int secondsToAdvance = 131400;
-clock.AdvanceSeconds(secondsToAdvance);
+foreach (int day in testDays)
+{
+    var clock = new GameClock();
 
-Console.WriteLine($"\nSimulating 365 days passing ({secondsToAdvance} real seconds)...");
-Console.WriteLine($"Current Time: {clock}");
-Console.WriteLine($"Player Age: {player.Age}");
+    // 1 real second = 4 in-game minutes, so 360 real seconds = 1 in-game day.
+    clock.AdvanceSeconds(day * 360);
+
+    Console.WriteLine($"Day {day} -> Year {clock.Year}, DayOfYear {clock.DayOfYear}");
+}
