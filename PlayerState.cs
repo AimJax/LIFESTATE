@@ -22,5 +22,18 @@ public class PlayerState
     };
 
     public int Money { get; set; } = 1000;
-    public int Energy { get; set; } = 100;
+    public int Energy { get; private set; } = 100;
+    private int _energyMinutesAccumulator = 0;
+
+    public void UpdateEnergy(int elapsedMinutes)
+    {
+        _energyMinutesAccumulator += elapsedMinutes;
+        int energyToLose = _energyMinutesAccumulator / 60;
+        
+        if (energyToLose > 0)
+        {
+            Energy = Math.Max(0, Energy - energyToLose);
+            _energyMinutesAccumulator %= 60;
+        }
+    }
 }

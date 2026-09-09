@@ -1,21 +1,39 @@
 ﻿using System;
 using Lifestate;
 
-Console.WriteLine("--- LIFESTATE Life Stage Test ---");
+Console.WriteLine("--- LIFESTATE Energy Drain Test ---");
 
-int[] targetAges = { 0, 2, 6, 13, 18, 65 };
+var clock = new GameClock();
+var player = new PlayerState(clock);
 
-foreach (int age in targetAges)
-{
-    var clock = new GameClock();
-    var player = new PlayerState(clock);
+// 1. New player -> Energy 100
+Console.WriteLine($"Start: Energy {player.Energy}");
 
-    // Calculate seconds needed to reach this age
-    // 360 real seconds per in-game day
-    int daysNeeded = age * 365;
-    int secondsToAdvance = daysNeeded * 360;
+// 2. Pass 30 game minutes -> Energy 100
+// 30 in-game minutes = 7.5 seconds, but AdvanceSeconds takes int.
+// Let's use 8 seconds = 32 minutes or just pass minutes to a wrapper.
+// Actually, I'll just call player.UpdateEnergy(30) directly for precise testing as requested.
 
-    clock.AdvanceSeconds(secondsToAdvance);
+Console.WriteLine("\nPassing 30 game minutes...");
+player.UpdateEnergy(30);
+Console.WriteLine($"Energy: {player.Energy} (Expected: 100)");
 
-    Console.WriteLine($"Age {player.Age} -> LifeStage {player.LifeStage}");
-}
+// 3. Pass another 30 game minutes -> Energy 99
+Console.WriteLine("Passing another 30 game minutes...");
+player.UpdateEnergy(30);
+Console.WriteLine($"Energy: {player.Energy} (Expected: 99)");
+
+// 4. Pass another 9 game hours -> Energy 90
+Console.WriteLine("Passing another 9 game hours (540 minutes)...");
+player.UpdateEnergy(540);
+Console.WriteLine($"Energy: {player.Energy} (Expected: 90)");
+
+// 5. Pass enough additional time -> Energy 0
+Console.WriteLine("Passing another 100 game hours (6000 minutes)...");
+player.UpdateEnergy(6000);
+Console.WriteLine($"Energy: {player.Energy} (Expected: 0)");
+
+// 6. Energy must never become negative
+Console.WriteLine("Passing another 10 game hours...");
+player.UpdateEnergy(600);
+Console.WriteLine($"Energy: {player.Energy} (Expected: 0)");
