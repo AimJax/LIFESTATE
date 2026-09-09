@@ -304,8 +304,20 @@ public static class SimulationTests
         Console.WriteLine($"4. Eight continuous sleeping hours: Energy {awakePlayer.Energy} (Expected: 95; 55 + 40), Hunger {awakePlayer.Hunger} (Expected: 91), Thirst {awakePlayer.Thirst} (Expected: 82), IsSleeping {awakePlayer.IsSleeping} (Expected: True)");
 
         // Test 4: Wake Up
+        int beforeDay = awakeClock.Day;
+        int beforeHour = awakeClock.Hour;
+        int beforeMinute = awakeClock.Minute;
+        int beforeEnergy = awakePlayer.Energy;
+        int beforeHunger = awakePlayer.Hunger;
+        int beforeThirst = awakePlayer.Thirst;
+
         awakePlayer.StopSleeping();
+
+        bool clockUnchanged = (beforeDay == awakeClock.Day) && (beforeHour == awakeClock.Hour) && (beforeMinute == awakeClock.Minute);
+        bool statsUnchanged = (beforeEnergy == awakePlayer.Energy) && (beforeHunger == awakePlayer.Hunger) && (beforeThirst == awakePlayer.Thirst);
+
         Console.WriteLine($"5. Wake Up: IsSleeping {awakePlayer.IsSleeping} (Expected: False)");
+        Console.WriteLine($"   Clock Unchanged: {clockUnchanged} (Expected: True), Stats Unchanged: {statsUnchanged} (Expected: True)");
 
         // Test 5: Paused concept does not alter sleep state
         var pauseClock = new GameClock();
