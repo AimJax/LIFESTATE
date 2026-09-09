@@ -320,10 +320,6 @@ public static class SimulationTests
         Console.WriteLine($"Clock Unchanged: {clockUnchanged} (Expected: True)");
         Console.WriteLine($"Stats Unchanged: {statsUnchanged} (Expected: True)");
 
-        Console.WriteLine($"Wake Up: IsSleeping {awakePlayer.IsSleeping} (Expected: False)");
-        Console.WriteLine($"Clock Unchanged: {clockUnchanged} (Expected: True)");
-        Console.WriteLine($"Stats Unchanged: {statsUnchanged} (Expected: True)");
-
         // Test 6: Paused concept does not alter sleep state
         var pauseClock = new GameClock();
         var pausePlayer = new PlayerState(pauseClock);
@@ -350,9 +346,24 @@ public static class SimulationTests
         workClock.AdvanceSeconds(realSecondsForAdultAge);
 
         Console.WriteLine($"Adult setup: Age {workPlayer.Age} (Expected: 18), LifeStage {workPlayer.LifeStage} (Expected: Adult)");
-        Console.WriteLine($"3a. Adult (Age {workPlayer.Age}): Attempting to work...");
+        
+        // Explicitly verify StartWorking side effects
+        int beforeWorkDay = workClock.Day;
+        int beforeWorkHour = workClock.Hour;
+        int beforeWorkMinute = workClock.Minute;
+        int beforeWorkMoney = workPlayer.Money;
+        int beforeWorkEnergy = workPlayer.Energy;
+        int beforeWorkHunger = workPlayer.Hunger;
+        int beforeWorkThirst = workPlayer.Thirst;
+        
         workPlayer.StartWorking();
-        Console.WriteLine($"3b. Work started: IsWorking {workPlayer.IsWorking} (Expected: True)");
+        
+        bool startWorkClockUnchanged = (beforeWorkDay == workClock.Day) && (beforeWorkHour == workClock.Hour) && (beforeWorkMinute == workClock.Minute);
+        bool startWorkStatsUnchanged = (beforeWorkMoney == workPlayer.Money) && (beforeWorkEnergy == workPlayer.Energy) && (beforeWorkHunger == workPlayer.Hunger) && (beforeWorkThirst == workPlayer.Thirst);
+
+        Console.WriteLine($"StartWorking IsWorking = {workPlayer.IsWorking} (Expected: True)");
+        Console.WriteLine($"StartWorking Clock Unchanged = {startWorkClockUnchanged} (Expected: True)");
+        Console.WriteLine($"StartWorking Stats Unchanged = {startWorkStatsUnchanged} (Expected: True)");
 
         // Test 4: One working hour
         // Start from age 18.
