@@ -17,19 +17,15 @@ public class GameClock
 
     public void AdvanceSeconds(int realSecondsElapsed)
     {
-        var inGameMinutesToAdd = realSecondsElapsed * MinutesPerRealSecond;
-
-        // Convert total minutes to hours and days, handling rollovers
-        int newHour = Hour + (inGameMinutesToAdd / 60);
-        int overflowHours = newHour / 24;
-        int newDay = Day + overflowHours;
-        newHour %= 24;
-
-        Minute += inGameMinutesToAdd % 60;
-
-        // Assign back to fields
-        Hour = newHour;
-        Day = newDay;
+        int inGameMinutesToAdd = realSecondsElapsed * MinutesPerRealSecond;
+        int totalMinutes = Minute + inGameMinutesToAdd;
+        
+        Minute = totalMinutes % 60;
+        int hoursToAdd = totalMinutes / 60;
+        
+        int totalHours = Hour + hoursToAdd;
+        Hour = totalHours % 24;
+        Day += totalHours / 24;
     }
 
     public override string ToString() => $"Day {Day}, {Hour:00}:{Minute:00}";
