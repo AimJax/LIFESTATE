@@ -35,20 +35,20 @@ public class PlayerState
         if (IsSleeping)
         {
             _sleepingMinutesAccumulator += elapsedMinutes;
-            int energyToRecover = _sleepingMinutesAccumulator / 5;
-            if (energyToRecover > 0)
+            int hoursSlept = _sleepingMinutesAccumulator / 60;
+            if (hoursSlept > 0)
             {
-                Energy = Math.Min(100, Energy + energyToRecover);
-                _sleepingMinutesAccumulator %= 5;
+                Energy = Math.Min(100, Energy + (hoursSlept * 5));
+                _sleepingMinutesAccumulator %= 60;
             }
         }
         else
         {
             _awakeMinutesAccumulator += elapsedMinutes;
-            int energyToLose = _awakeMinutesAccumulator / 60;
-            if (energyToLose > 0)
+            int hoursAwake = _awakeMinutesAccumulator / 60;
+            if (hoursAwake > 0)
             {
-                Energy = Math.Max(0, Energy - energyToLose);
+                Energy = Math.Max(0, Energy - hoursAwake);
                 _awakeMinutesAccumulator %= 60;
             }
         }
