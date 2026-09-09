@@ -7,7 +7,73 @@ public static class SimulationTests
 {
     public static void RunTests()
     {
-        Console.WriteLine("--- LIFESTATE Hunger Drain Test ---");
+        Console.WriteLine("--- LIFESTATE Energy & Sleep Regression Tests ---");
+
+        var energyClock = new GameClock();
+        var energyPlayer = new PlayerState(energyClock);
+        Console.WriteLine($"1. New player: Energy {energyPlayer.Energy} (Expected: 100), IsSleeping {energyPlayer.IsSleeping} (Expected: False)");
+
+        energyPlayer.UpdateEnergy(30);
+        Console.WriteLine($"2. Awake 30 minutes: Energy {energyPlayer.Energy} (Expected: 100)");
+        energyPlayer.UpdateEnergy(30);
+        Console.WriteLine($"3. Another 30 minutes awake: Energy {energyPlayer.Energy} (Expected: 99)");
+
+        var smallClock = new GameClock();
+        var smallEnergyPlayer = new PlayerState(smallClock);
+        for (int i = 0; i < 60; i++)
+        {
+            smallEnergyPlayer.UpdateEnergy(1);
+        }
+
+        var largeClock = new GameClock();
+        var largeEnergyPlayer = new PlayerState(largeClock);
+        largeEnergyPlayer.UpdateEnergy(60);
+        Console.WriteLine($"4. Repeated small awake updates: Energy {smallEnergyPlayer.Energy} (Expected: 99); one 60-minute update: Energy {largeEnergyPlayer.Energy} (Expected: 99); Equal: {smallEnergyPlayer.Energy == largeEnergyPlayer.Energy} (Expected: True)");
+
+        var sleepClock = new GameClock();
+        var sleepPlayer = new PlayerState(sleepClock);
+        sleepPlayer.UpdateEnergy(20 * 60); // Drain to 80 so recovery is visible.
+        sleepPlayer.StartSleeping();
+        Console.WriteLine($"5. Start sleeping: IsSleeping {sleepPlayer.IsSleeping} (Expected: True)");
+        sleepPlayer.UpdateEnergy(30);
+        Console.WriteLine($"6. Sleep 30 minutes: Energy {sleepPlayer.Energy} (Expected: 80)");
+        sleepPlayer.UpdateEnergy(30);
+        Console.WriteLine($"7. Another 30 minutes sleeping: Energy {sleepPlayer.Energy} (Expected: 85)");
+
+        var eightHourClock = new GameClock();
+        var eightHourPlayer = new PlayerState(eightHourClock);
+        eightHourPlayer.UpdateEnergy(50 * 60); // Drain to 50 so +40 is visible.
+        eightHourPlayer.StartSleeping();
+        eightHourPlayer.UpdateEnergy(480);
+        Console.WriteLine($"8. Eight-hour sleep from Energy 50: Energy {eightHourPlayer.Energy} (Expected: 90; +40 before clamp)");
+        eightHourPlayer.UpdateEnergy(480);
+        Console.WriteLine($"9. Energy upper clamp after 8-hour sleep: Energy {eightHourPlayer.Energy} (Expected: 100)");
+        eightHourPlayer.StopSleeping();
+        Console.WriteLine($"10. Stop sleeping: IsSleeping {eightHourPlayer.IsSleeping} (Expected: False)");
+
+        var lowerClock = new GameClock();
+        var lowerEnergyPlayer = new PlayerState(lowerClock);
+        lowerEnergyPlayer.UpdateEnergy(100 * 60);
+        Console.WriteLine($"11. Awake Energy lower clamp: Energy {lowerEnergyPlayer.Energy} (Expected: 0)");
+        lowerEnergyPlayer.UpdateEnergy(60);
+        Console.WriteLine($"12. Additional awake time at zero: Energy {lowerEnergyPlayer.Energy} (Expected: 0)");
+
+        var partialClock = new GameClock();
+        var partialEnergyPlayer = new PlayerState(partialClock);
+        partialEnergyPlayer.UpdateEnergy(30);
+        partialEnergyPlayer.StartSleeping();
+        partialEnergyPlayer.UpdateEnergy(30);
+        Console.WriteLine($"13. Awake 30 then sleeping 30 (separate partial accumulators): Energy {partialEnergyPlayer.Energy} (Expected: 100), IsSleeping {partialEnergyPlayer.IsSleeping} (Expected: True)");
+        partialEnergyPlayer.StopSleeping();
+        partialEnergyPlayer.UpdateEnergy(30);
+        Console.WriteLine($"14. Resume awake 30 (awake partial completes): Energy {partialEnergyPlayer.Energy} (Expected: 99)");
+        partialEnergyPlayer.StartSleeping();
+        partialEnergyPlayer.UpdateEnergy(30);
+        Console.WriteLine($"15. Resume sleeping 30 (sleep partial completes): Energy {partialEnergyPlayer.Energy} (Expected: 100)");
+        partialEnergyPlayer.StopSleeping();
+        Console.WriteLine($"16. Final state: IsSleeping {partialEnergyPlayer.IsSleeping} (Expected: False)");
+
+        Console.WriteLine("\n--- LIFESTATE Hunger Drain Test ---");
 
         var clock = new GameClock();
         var player = new PlayerState(clock);

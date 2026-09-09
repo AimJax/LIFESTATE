@@ -9,6 +9,8 @@ public class MainForm : Form
     private readonly PlayerState _player;
     private readonly GameClock _clock;
 
+    private Label _lblAge;
+    private Label _lblLifeStage;
     private Label _lblStatus;
     private Label _lblEnergy;
     private Label _lblHunger;
@@ -29,11 +31,14 @@ public class MainForm : Form
     {
         var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown };
 
+        _lblAge = new Label { AutoSize = true };
+        _lblLifeStage = new Label { AutoSize = true };
         _lblStatus = new Label { AutoSize = true };
         _lblEnergy = new Label { AutoSize = true };
         _lblHunger = new Label { AutoSize = true };
 
-        panel.Controls.Add(new Label { Text = "Age: 0, Life Stage: Infant", AutoSize = true });
+        panel.Controls.Add(_lblAge);
+        panel.Controls.Add(_lblLifeStage);
         panel.Controls.Add(_lblStatus);
         panel.Controls.Add(_lblEnergy);
         panel.Controls.Add(_lblHunger);
@@ -70,6 +75,8 @@ public class MainForm : Form
 
     private void RefreshUI()
     {
+        _lblAge.Text = $"Age: {_player.Age}";
+        _lblLifeStage.Text = $"Life Stage: {_player.LifeStage}";
         _lblStatus.Text = $"Day: {_clock.Day}, Time: {_clock.Hour:00}:{_clock.Minute:00}, State: {(_player.IsSleeping ? "Sleeping" : "Awake")}";
         _lblEnergy.Text = $"Energy: {_player.Energy}";
         _lblHunger.Text = $"Hunger: {_player.Hunger}";
