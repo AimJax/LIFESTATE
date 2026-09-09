@@ -25,27 +25,38 @@ public class PlayerState
     public int Energy { get; private set; } = 100;
     public int Hunger { get; private set; } = 100;
     public int Thirst { get; private set; } = 100;
+    public int StudyXP { get; private set; } = 0;
     public bool IsSleeping { get; private set; } = false;
     public bool IsWorking { get; private set; } = false;
+    public bool IsStudying { get; private set; } = false;
+
     private int _awakeMinutesAccumulator = 0;
     private int _sleepingMinutesAccumulator = 0;
     private int _hungerMinutesAccumulator = 0;
     private int _thirstMinutesAccumulator = 0;
     private int _workMinutesAccumulator = 0;
+    private int _studyMinutesAccumulator = 0;
 
     public void StartSleeping()
     {
-        if (IsWorking) return;
+        if (IsWorking || IsStudying) return;
         IsSleeping = true;
     }
     public void StopSleeping() => IsSleeping = false;
 
     public void StartWorking()
     {
-        if (Age < 18 || IsSleeping) return;
+        if (Age < 18 || IsSleeping || IsStudying) return;
         IsWorking = true;
     }
     public void StopWorking() => IsWorking = false;
+
+    public void StartStudying()
+    {
+        if (Age < 6 || IsSleeping || IsWorking) return;
+        IsStudying = true;
+    }
+    public void StopStudying() => IsStudying = false;
 
     public void UpdateEnergy(int elapsedMinutes)
     {
@@ -94,6 +105,7 @@ public class PlayerState
         UpdateHunger(minutes);
         UpdateThirst(minutes);
         UpdateWork(minutes);
+        UpdateStudy(minutes);
     }
 
     public void UpdateWork(int elapsedMinutes)
@@ -106,6 +118,19 @@ public class PlayerState
         {
             Money += (hoursWorked * 10);
             _workMinutesAccumulator %= 60;
+        }
+    }
+
+    public void UpdateStudy(int elapsedMinutes)
+    {
+        if (!IsStudying) return;
+
+        _studyMinutesAccumulator += elapsedMinutes;
+        int hoursStudied = _studyMinutesAccumulator / 60;
+        if (hoursStudied > 0)
+        {
+            StudyXP += (hoursStudied * 10);
+            _studyMinutesAccumulator %= 60;
         }
     }
 

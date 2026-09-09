@@ -496,5 +496,167 @@ public static class SimulationTests
         Console.WriteLine($"9. Re-disabled GM - Day {rClock.Day} (Expected: 1)");
 
 
+        // Study Tests
+        Console.WriteLine("\n--- LIFESTATE Study Tests ---");
+
+        // TEST 1 — FRESH PLAYER
+        var s1Clock = new GameClock();
+        var s1Player = new PlayerState(s1Clock);
+        Console.WriteLine($"1. Fresh StudyXP: {s1Player.StudyXP} (Expected: 0)");
+        Console.WriteLine($"1. Fresh IsStudying: {s1Player.IsStudying} (Expected: False)");
+
+        // TEST 2 — NEWBORN CANNOT STUDY
+        var s2Clock = new GameClock();
+        var s2Player = new PlayerState(s2Clock);
+        s2Player.StartStudying();
+        Console.WriteLine($"2. Newborn IsStudying: {s2Player.IsStudying} (Expected: False), Energy: {s2Player.Energy} (Expected: 100), Money: {s2Player.Money} (Expected: 1050)");
+
+        // TEST 3 — AGE 5 CANNOT STUDY
+        var s3Clock = new GameClock();
+        var s3Player = new PlayerState(s3Clock);
+        var s3Gm = new GodMode(s3Clock, s3Player);
+        s3Gm.SetEnabled(true);
+        s3Gm.AdvanceDays(5 * 365);
+        s3Player.StartStudying();
+        Console.WriteLine($"3. Age 5 IsStudying: {s3Player.IsStudying} (Expected: False)");
+
+        // TEST 4 — EXACT AGE 6 CAN STUDY
+        var s4Clock = new GameClock();
+        var s4Player = new PlayerState(s4Clock);
+        var s4Gm = new GodMode(s4Clock, s4Player);
+        s4Gm.SetEnabled(true);
+        s4Gm.AdvanceDays(6 * 365);
+        s4Player.StartStudying();
+        Console.WriteLine($"4. Age 6 IsStudying: {s4Player.IsStudying} (Expected: True)");
+        Console.WriteLine($"4. Side effects: Day {s4Clock.Day} (Expected: 2190), Energy {s4Player.Energy} (Expected: 100), Money {s4Player.Money} (Expected: 1050), StudyXP {s4Player.StudyXP} (Expected: 0)");
+
+        // TEST 5 — 60 MINUTES STUDY
+        var s5Clock = new GameClock();
+        var s5Player = new PlayerState(s5Clock);
+        var s5Gm = new GodMode(s5Clock, s5Player);
+        s5Gm.SetEnabled(true);
+        s5Gm.AdvanceDays(6 * 365);
+        s5Player.StartStudying();
+        s5Player.AdvanceSimulation(60);
+        Console.WriteLine($"5. 60m StudyXP: {s5Player.StudyXP} (Expected: 10)");
+        Console.WriteLine($"5. 60m Needs: Energy {s5Player.Energy} (Expected: 99), Hunger {s5Player.Hunger} (Expected: 99), Thirst {s5Player.Thirst} (Expected: 98)");
+
+        // TEST 6 — PARTIAL STUDY ACCUMULATION
+        var s6Clock = new GameClock();
+        var s6Player = new PlayerState(s6Clock);
+        var s6Gm = new GodMode(s6Clock, s6Player);
+        s6Gm.SetEnabled(true);
+        s6Gm.AdvanceDays(6 * 365);
+        s6Player.StartStudying();
+        s6Player.AdvanceSimulation(30);
+        Console.WriteLine($"6a. 30m StudyXP: {s6Player.StudyXP} (Expected: 0)");
+        s6Player.AdvanceSimulation(30);
+        Console.WriteLine($"6b. +30m StudyXP: {s6Player.StudyXP} (Expected: 10)");
+
+        // TEST 7 — MULTIPLE SMALL UPDATES
+        var s7Clock = new GameClock();
+        var s7Player = new PlayerState(s7Clock);
+        var s7Gm = new GodMode(s7Clock, s7Player);
+        s7Gm.SetEnabled(true);
+        s7Gm.AdvanceDays(6 * 365);
+        s7Player.StartStudying();
+        s7Player.AdvanceSimulation(15);
+
+        // TEST 8 — 120 MINUTES
+        var s8Clock = new GameClock();
+        var s8Player = new PlayerState(s8Clock);
+        var s8Gm = new GodMode(s8Clock, s8Player);
+        s8Gm.SetEnabled(true);
+        s8Gm.AdvanceDays(6 * 365);
+        s8Player.StartStudying();
+        s8Player.AdvanceSimulation(120);
+        Console.WriteLine($"8. 120m StudyXP: {s8Player.StudyXP} (Expected: 20)");
+
+        // TEST 9 — STOP STUDY HAS NO SIDE EFFECTS
+        var s9Clock = new GameClock();
+        var s9Player = new PlayerState(s9Clock);
+        var s9Gm = new GodMode(s9Clock, s9Player);
+        s9Gm.SetEnabled(true);
+        s9Gm.AdvanceDays(6 * 365);
+        s9Player.StartStudying();
+        s9Player.AdvanceSimulation(30);
+        int s9E = s9Player.Energy;
+        int s9H = s9Player.Hunger;
+        int s9T = s9Player.Thirst;
+        int s9M = s9Player.Money;
+        int s9XP = s9Player.StudyXP;
+        int s9D = s9Clock.Day;
+        s9Player.StopStudying();
+        Console.WriteLine($"9. StopStudy IsStudying: {s9Player.IsStudying} (Expected: False)");
+        Console.WriteLine($"9. Side effects: Day {s9Clock.Day} == {s9D}, Energy {s9Player.Energy} == {s9E}, Money {s9Player.Money} == {s9M}, StudyXP {s9Player.StudyXP} == {s9XP}");
+
+        // TEST 10 — PARTIAL TIME SURVIVES STOP / START
+        var s10Clock = new GameClock();
+        var s10Player = new PlayerState(s10Clock);
+        var s10Gm = new GodMode(s10Clock, s10Player);
+        s10Gm.SetEnabled(true);
+        s10Gm.AdvanceDays(6 * 365);
+        s10Player.StartStudying();
+        s10Player.AdvanceSimulation(30);
+        s10Player.StopStudying();
+        s10Player.StartStudying();
+        s10Player.AdvanceSimulation(30);
+        Console.WriteLine($"10. Persistent partial: StudyXP {s10Player.StudyXP} (Expected: 10)");
+
+        // TEST 11 — CANNOT STUDY WHILE SLEEPING
+        var s11Clock = new GameClock();
+        var s11Player = new PlayerState(s11Clock);
+        var s11Gm = new GodMode(s11Clock, s11Player);
+        s11Gm.SetEnabled(true);
+        s11Gm.AdvanceDays(6 * 365);
+        s11Player.StartSleeping();
+        s11Player.StartStudying();
+        Console.WriteLine($"11. Study while sleeping: IsSleeping {s11Player.IsSleeping} (Expected: True), IsStudying {s11Player.IsStudying} (Expected: False)");
+
+        // TEST 12 — CANNOT SLEEP WHILE STUDYING
+        var s12Clock = new GameClock();
+        var s12Player = new PlayerState(s12Clock);
+        var s12Gm = new GodMode(s12Clock, s12Player);
+        s12Gm.SetEnabled(true);
+        s12Gm.AdvanceDays(6 * 365);
+        s12Player.StartStudying();
+        s12Player.StartSleeping();
+        Console.WriteLine($"12. Sleep while studying: IsStudying {s12Player.IsStudying} (Expected: True), IsSleeping {s12Player.IsSleeping} (Expected: False)");
+
+        // TEST 13 — CANNOT STUDY WHILE WORKING
+        var s13Clock = new GameClock();
+        var s13Player = new PlayerState(s13Clock);
+        var s13Gm = new GodMode(s13Clock, s13Player);
+        s13Gm.SetEnabled(true);
+        s13Gm.AdvanceDays(18 * 365);
+        s13Player.StartWorking();
+        s13Player.StartStudying();
+        Console.WriteLine($"13. Study while working: IsWorking {s13Player.IsWorking} (Expected: True), IsStudying {s13Player.IsStudying} (Expected: False)");
+
+        // TEST 14 — CANNOT WORK WHILE STUDYING
+        var s14Clock = new GameClock();
+        var s14Player = new PlayerState(s14Clock);
+        var s14Gm = new GodMode(s14Clock, s14Player);
+        s14Gm.SetEnabled(true);
+        s14Gm.AdvanceDays(18 * 365);
+        s14Player.StartStudying();
+        s14Player.StartWorking();
+        Console.WriteLine($"14. Work while studying: IsStudying {s14Player.IsStudying} (Expected: True), IsWorking {s14Player.IsWorking} (Expected: False)");
+
+        // TEST 15 — ADULTS CAN STUDY
+        var s15Clock = new GameClock();
+        var s15Player = new PlayerState(s15Clock);
+        var s15Gm = new GodMode(s15Clock, s15Player);
+        s15Gm.SetEnabled(true);
+        s15Gm.AdvanceDays(25 * 365);
+        s15Player.StartStudying();
+        Console.WriteLine($"15. Adult study: Age {s15Player.Age} (Expected: 25), IsStudying {s15Player.IsStudying} (Expected: True)");
+
+        s7Player.AdvanceSimulation(15);
+        s7Player.AdvanceSimulation(15);
+        s7Player.AdvanceSimulation(15);
+        Console.WriteLine($"7. 4x15m StudyXP: {s7Player.StudyXP} (Expected: 10)");
+
+
     }
 }

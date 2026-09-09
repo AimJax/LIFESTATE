@@ -18,6 +18,7 @@ public class MainForm : Form
     private Label _lblHunger = new();
     private Label _lblThirst = new();
     private Label _lblMoney = new();
+    private Label _lblStudyXP = new();
     private Label _lblFeedback = new();
 
     private FlowLayoutPanel _debugPanel = new();
@@ -52,6 +53,7 @@ public class MainForm : Form
         _lblHunger = new Label { AutoSize = true };
         _lblThirst = new Label { AutoSize = true };
         _lblMoney = new Label { AutoSize = true };
+        _lblStudyXP = new Label { AutoSize = true };
         _lblFeedback = new Label { AutoSize = true, ForeColor = System.Drawing.Color.Red };
 
         panel.Controls.Add(_lblAge);
@@ -61,6 +63,7 @@ public class MainForm : Form
         panel.Controls.Add(_lblHunger);
         panel.Controls.Add(_lblThirst);
         panel.Controls.Add(_lblMoney);
+        panel.Controls.Add(_lblStudyXP);
         panel.Controls.Add(_lblFeedback);
 
         var btnStart = new Button { Text = "Start Time" };
@@ -130,6 +133,36 @@ public class MainForm : Form
         };
         panel.Controls.Add(btnDrink);
 
+        var btnStudy = new Button { Text = "Study" };
+        btnStudy.Click += (s, e) => {
+            if (_player.Age < 6)
+            {
+                _lblFeedback.Text = "Cannot study before age 6.";
+            }
+            else if (_player.IsSleeping)
+            {
+                _lblFeedback.Text = "Cannot study while sleeping.";
+            }
+            else if (_player.IsWorking)
+            {
+                _lblFeedback.Text = "Cannot study while working.";
+            }
+            else
+            {
+                _player.StartStudying();
+                _lblFeedback.Text = "";
+            }
+            RefreshUI();
+        };
+        panel.Controls.Add(btnStudy);
+
+        var btnStopStudy = new Button { Text = "Stop Study" };
+        btnStopStudy.Click += (s, e) => {
+            _player.StopStudying();
+            RefreshUI();
+        };
+        panel.Controls.Add(btnStopStudy);
+
         var btnToggleGodMode = new Button { Text = "GOD MODE: OFF" };
         _debugPanel = new FlowLayoutPanel { Visible = false, FlowDirection = FlowDirection.TopDown, AutoSize = true };
         btnToggleGodMode.Click += (s, e) => {
@@ -168,11 +201,12 @@ public class MainForm : Form
     {
         _lblAge.Text = $"Age: {_player.Age}";
         _lblLifeStage.Text = $"Life Stage: {_player.LifeStage}";
-        string state = _player.IsSleeping ? "Sleeping" : (_player.IsWorking ? "Working" : "Awake");
+        string state = _player.IsSleeping ? "Sleeping" : (_player.IsWorking ? "Working" : (_player.IsStudying ? "Studying" : "Awake"));
         _lblStatus.Text = $"Day: {_clock.Day}, Time: {_clock.Hour:00}:{_clock.Minute:00}, State: {state}";
         _lblEnergy.Text = $"Energy: {_player.Energy}";
         _lblHunger.Text = $"Hunger: {_player.Hunger}";
         _lblThirst.Text = $"Thirst: {_player.Thirst}";
         _lblMoney.Text = $"Money: {_player.Money}";
+        _lblStudyXP.Text = $"Study XP: {_player.StudyXP}";
     }
 }
