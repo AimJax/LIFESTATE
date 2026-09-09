@@ -80,8 +80,18 @@ public static class SaveManager
 
             if (elapsedSeconds > 0)
             {
-                // Bulk chunking to avoid huge simulation ticks
                 long elapsedMinutes = elapsedSeconds * GameClock.MinutesPerRealSecond;
+
+                // Validate representability BEFORE mutation
+                long totalMinutes = (long)saveData.Minute + elapsedMinutes;
+                long hoursToAdd = totalMinutes / 60;
+                long totalHours = (long)saveData.Hour + hoursToAdd;
+                long daysToAdd = totalHours / 24;
+                long resultingDay = (long)saveData.Day + daysToAdd;
+
+                if (resultingDay > int.MaxValue) return false;
+
+                // Bulk chunking to avoid huge simulation ticks
                 const int MaxMinutesPerTick = 60 * 24; // 1 day chunk
                 
                 long remainingMinutes = elapsedMinutes;

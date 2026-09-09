@@ -22,13 +22,22 @@ public class GameClock
         if (minutes < 0) return;
 
         long totalMinutes = Minute + minutes;
-
-        Minute = (int)(totalMinutes % 60);
+        int newMinute = (int)(totalMinutes % 60);
         long hoursToAdd = totalMinutes / 60;
-
+        
         long totalHours = Hour + hoursToAdd;
-        Hour = (int)(totalHours % 24);
-        Day += (int)(totalHours / 24);
+        int newHour = (int)(totalHours % 24);
+        long daysToAdd = totalHours / 24;
+        
+        long newDay = (long)Day + daysToAdd;
+        if (newDay > int.MaxValue)
+        {
+            throw new System.OverflowException("GameClock Day overflow");
+        }
+        
+        Day = (int)newDay;
+        Hour = (int)newHour;
+        Minute = (int)newMinute;
     }
 
     public void AdvanceSeconds(int realSecondsElapsed)
