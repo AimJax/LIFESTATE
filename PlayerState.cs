@@ -23,17 +23,34 @@ public class PlayerState
 
     public int Money { get; set; } = 1000;
     public int Energy { get; private set; } = 100;
-    private int _energyMinutesAccumulator = 0;
+    public bool IsSleeping { get; private set; } = false;
+    private int _awakeMinutesAccumulator = 0;
+    private int _sleepingMinutesAccumulator = 0;
+
+    public void StartSleeping() => IsSleeping = true;
+    public void StopSleeping() => IsSleeping = false;
 
     public void UpdateEnergy(int elapsedMinutes)
     {
-        _energyMinutesAccumulator += elapsedMinutes;
-        int energyToLose = _energyMinutesAccumulator / 60;
-        
-        if (energyToLose > 0)
+        if (IsSleeping)
         {
-            Energy = Math.Max(0, Energy - energyToLose);
-            _energyMinutesAccumulator %= 60;
+            _sleepingMinutesAccumulator += elapsedMinutes;
+            int energyToRecover = _sleepingMinutesAccumulator / 5;
+            if (energyToRecover > 0)
+            {
+                Energy = Math.Min(100, Energy + energyToRecover);
+                _sleepingMinutesAccumulator %= 5;
+            }
+        }
+        else
+        {
+            _awakeMinutesAccumulator += elapsedMinutes;
+            int energyToLose = _awakeMinutesAccumulator / 60;
+            if (energyToLose > 0)
+            {
+                Energy = Math.Max(0, Energy - energyToLose);
+                _awakeMinutesAccumulator %= 60;
+            }
         }
     }
 }
