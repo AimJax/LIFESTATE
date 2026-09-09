@@ -63,7 +63,8 @@ public static class SaveManager
                 saveData.Money < 0 || saveData.StudyXP < 0 ||
                 saveData.WorkMinutesAccumulator < 0 || saveData.WorkMinutesAccumulator >= 60 ||
                 saveData.StudyMinutesAccumulator < 0 || saveData.StudyMinutesAccumulator >= 60 ||
-                (saveData.IsSleeping ? 1 : 0) + (saveData.IsWorking ? 1 : 0) + (saveData.IsStudying ? 1 : 0) > 1)
+                (saveData.IsSleeping ? 1 : 0) + (saveData.IsWorking ? 1 : 0) + (saveData.IsStudying ? 1 : 0) > 1 ||
+                saveData.SavedAtUtc == DateTimeOffset.MinValue)
             {
                 return false;
             }
@@ -83,15 +84,16 @@ public static class SaveManager
                 long elapsedMinutes = elapsedSeconds * GameClock.MinutesPerRealSecond;
                 const int MaxMinutesPerTick = 60 * 24; // 1 day chunk
                 
-                while (elapsedMinutes > 0)
+                long remainingMinutes = elapsedMinutes;
+                while (remainingMinutes > 0)
                 {
-                    int chunk = (int)Math.Min(elapsedMinutes, MaxMinutesPerTick);
+                    int chunk = (int)Math.Min(remainingMinutes, MaxMinutesPerTick);
                     player.AdvanceSimulation(chunk);
-                    elapsedMinutes -= chunk;
+                    remainingMinutes -= chunk;
                 }
                 
-                // Clock handles rollover logic
-                clock.AdvanceSeconds((int)elapsedSeconds);
+                // Clock handles rollover logic using long-safe method
+                clock.AdvanceGameMinutes(elapsedMinutes);
             }
 
             return true;

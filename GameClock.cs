@@ -17,17 +17,23 @@ public class GameClock
         Minute = 0;
     }
 
+    public void AdvanceGameMinutes(long minutes)
+    {
+        if (minutes < 0) return;
+
+        long totalMinutes = Minute + minutes;
+
+        Minute = (int)(totalMinutes % 60);
+        long hoursToAdd = totalMinutes / 60;
+
+        long totalHours = Hour + hoursToAdd;
+        Hour = (int)(totalHours % 24);
+        Day += (int)(totalHours / 24);
+    }
+
     public void AdvanceSeconds(int realSecondsElapsed)
     {
-        int inGameMinutesToAdd = realSecondsElapsed * MinutesPerRealSecond;
-        int totalMinutes = Minute + inGameMinutesToAdd;
-        
-        Minute = totalMinutes % 60;
-        int hoursToAdd = totalMinutes / 60;
-        
-        int totalHours = Hour + hoursToAdd;
-        Hour = totalHours % 24;
-        Day += totalHours / 24;
+        AdvanceGameMinutes((long)realSecondsElapsed * MinutesPerRealSecond);
     }
 
     public override string ToString() => $"Day {Day}, {Hour:00}:{Minute:00}";
