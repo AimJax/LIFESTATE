@@ -31,4 +31,11 @@ public class GameClock
     }
 
     public override string ToString() => $"Day {Day}, {Hour:00}:{Minute:00}";
+    internal void Restore(int day, int hour, int minute)
+    {
+        Day = day;
+        Hour = hour;
+        Minute = minute;
+    }
+
 }

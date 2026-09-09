@@ -165,4 +165,21 @@ public class PlayerState
         Hunger = 100;
         Thirst = 100;
     }
+    internal void Restore(int money, int energy, int hunger, int thirst, int studyXP, bool isSleeping, bool isWorking, bool isStudying, int workMinutesAccumulator, int studyMinutesAccumulator)
+    {
+        Money = money;
+        Energy = energy;
+        Hunger = hunger;
+        Thirst = thirst;
+        StudyXP = studyXP;
+        IsSleeping = isSleeping;
+        IsWorking = isWorking;
+        IsStudying = isStudying;
+        _workMinutesAccumulator = workMinutesAccumulator;
+        _studyMinutesAccumulator = studyMinutesAccumulator;
+    }
+
+    internal int GetWorkMinutesAccumulator() => _workMinutesAccumulator;
+    internal int GetStudyMinutesAccumulator() => _studyMinutesAccumulator;
 }
+

@@ -657,6 +657,23 @@ public static class SimulationTests
         s15Player.StartStudying();
         Console.WriteLine($"15. Adult study: Age {s15Player.Age} (Expected: 25), IsStudying {s15Player.IsStudying} (Expected: True)");
 
+        // --- PERSISTENCE TESTS ---
+        Console.WriteLine("\n--- LIFESTATE Save/Load Tests ---");
+        var saveClock = new GameClock();
+        var savePlayer = new PlayerState(saveClock);
+        saveClock.AdvanceSeconds(60);
+        savePlayer.UpdateEnergy(30);
+        savePlayer.StartWorking();
+        savePlayer.AdvanceSimulation(60);
 
+        SaveManager.Save(saveClock, savePlayer);
+
+        var loadClock = new GameClock();
+        var loadPlayer = new PlayerState(loadClock);
+        bool loaded = SaveManager.Load(loadClock, loadPlayer);
+
+        Console.WriteLine($"Load successful: {loaded} (Expected: True)");
+        Console.WriteLine($"Day: {loadClock.Day} (Expected: {saveClock.Day}), Time: {loadClock.Hour}:{loadClock.Minute} (Expected: {saveClock.Hour}:{saveClock.Minute})");
+        Console.WriteLine($"Money: {loadPlayer.Money} (Expected: {savePlayer.Money}), IsWorking: {loadPlayer.IsWorking} (Expected: {savePlayer.IsWorking})");
     }
 }

@@ -163,6 +163,27 @@ public class MainForm : Form
         };
         panel.Controls.Add(btnStopStudy);
 
+        var btnSave = new Button { Text = "Save" };
+        btnSave.Click += (s, e) => {
+            SaveManager.Save(_clock, _player);
+            _lblFeedback.Text = "Saved.";
+        };
+        panel.Controls.Add(btnSave);
+
+        var btnLoad = new Button { Text = "Load" };
+        btnLoad.Click += (s, e) => {
+            if (SaveManager.Load(_clock, _player))
+            {
+                RefreshUI();
+                _lblFeedback.Text = "Loaded.";
+            }
+            else
+            {
+                _lblFeedback.Text = "Load failed.";
+            }
+        };
+        panel.Controls.Add(btnLoad);
+
         var btnToggleGodMode = new Button { Text = "GOD MODE: OFF" };
         _debugPanel = new FlowLayoutPanel { Visible = false, FlowDirection = FlowDirection.TopDown, AutoSize = true };
         btnToggleGodMode.Click += (s, e) => {
