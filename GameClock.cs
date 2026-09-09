@@ -1,6 +1,8 @@
+namespace Lifestate;
+
 public class GameClock
 {
-    private const int MinutesPerRealMinute = 4; // 1 real minute = 4 in-game hours
+    private const int MinutesPerRealSecond = 4; // 1 real second = 4 in-game minutes
 
     public int Day { get; private set; }
     public int Hour { get; private set; }
@@ -15,7 +17,7 @@ public class GameClock
 
     public void AdvanceSeconds(int realSecondsElapsed)
     {
-        var inGameMinutesToAdd = realSecondsElapsed * MinutesPerRealMinute;
+        var inGameMinutesToAdd = realSecondsElapsed * MinutesPerRealSecond;
 
         // Convert total minutes to hours and days, handling rollovers
         int newHour = Hour + (inGameMinutesToAdd / 60);
