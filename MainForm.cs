@@ -8,6 +8,7 @@ public class MainForm : Form
 {
     private readonly PlayerState _player;
     private readonly GameClock _clock;
+    private readonly System.Windows.Forms.Timer _timer;
 
     private Label _lblAge;
     private Label _lblLifeStage;
@@ -20,9 +21,15 @@ public class MainForm : Form
     {
         _player = player;
         _clock = clock;
+        _timer = new System.Windows.Forms.Timer { Interval = 1000 };
+        _timer.Tick += (s, e) => {
+            _clock.AdvanceSeconds(1);
+            _player.AdvanceSimulation(GameClock.MinutesPerRealSecond);
+            RefreshUI();
+        };
 
         Text = "LIFESTATE Prototype";
-        Size = new System.Drawing.Size(300, 380);
+        Size = new System.Drawing.Size(300, 420);
 
         InitializeComponents();
         RefreshUI();
@@ -45,6 +52,14 @@ public class MainForm : Form
         panel.Controls.Add(_lblEnergy);
         panel.Controls.Add(_lblHunger);
         panel.Controls.Add(_lblThirst);
+
+        var btnStart = new Button { Text = "Start Time" };
+        btnStart.Click += (s, e) => _timer.Start();
+        panel.Controls.Add(btnStart);
+
+        var btnPause = new Button { Text = "Pause Time" };
+        btnPause.Click += (s, e) => _timer.Stop();
+        panel.Controls.Add(btnPause);
 
         var btnWait = new Button { Text = "Wait 1 Hour" };
         btnWait.Click += (s, e) => {

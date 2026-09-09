@@ -75,6 +75,13 @@ public class PlayerState
         Hunger = Math.Min(100, Hunger + hungerRestored);
     }
 
+    public void AdvanceSimulation(int minutes)
+    {
+        UpdateEnergy(minutes);
+        UpdateHunger(minutes);
+        UpdateThirst(minutes);
+    }
+
     public void UpdateThirst(int elapsedMinutes)
     {
         _thirstMinutesAccumulator += elapsedMinutes;

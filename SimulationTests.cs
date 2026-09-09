@@ -229,6 +229,40 @@ public static class SimulationTests
         player.Eat(50);
         Console.WriteLine($"5. Eat(50): Hunger {player.Hunger} (Expected: 100)");
 
+
+        // 12. Automatic Progression Tests
+        Console.WriteLine("\n--- LIFESTATE Automatic Progression Tests ---");
+        var autoClock = new GameClock();
+        var autoPlayer = new PlayerState(autoClock);
+
+        // Helper to run steps
+        void RunAutoSteps(int steps)
+        {
+            for (int i = 0; i < steps; i++)
+            {
+                autoClock.AdvanceSeconds(1);
+                autoPlayer.AdvanceSimulation(4);
+            }
+        }
+
+        // Test 1: 15 steps = 1 hour (-1 Energy, -1 Hunger, -2 Thirst)
+        RunAutoSteps(15);
+        Console.WriteLine($"1. 15 steps (60m): Time {autoClock.Hour:00}:{autoClock.Minute:00}, Energy {autoPlayer.Energy}, Hunger {autoPlayer.Hunger}, Thirst {autoPlayer.Thirst} (Expected: 01:00, 99, 99, 98)");
+
+        // Test 2: Partial accumulation
+        autoClock = new GameClock();
+        autoPlayer = new PlayerState(autoClock);
+        RunAutoSteps(14); // 14 steps * 4 = 56 mins
+        Console.WriteLine($"2a. 14 steps: Time {autoClock.Hour:00}:{autoClock.Minute:00}, Energy {autoPlayer.Energy}, Hunger {autoPlayer.Hunger}, Thirst {autoPlayer.Thirst} (Expected: 00:56, 100, 100, 100)");
+        RunAutoSteps(1); // 15th step
+        Console.WriteLine($"2b. 15th step: Time {autoClock.Hour:00}:{autoClock.Minute:00}, Energy {autoPlayer.Energy}, Hunger {autoPlayer.Hunger}, Thirst {autoPlayer.Thirst} (Expected: 01:00, 99, 99, 98)");
+
+        // Test 3: 30 steps = 2 hours
+        autoClock = new GameClock();
+        autoPlayer = new PlayerState(autoClock);
+        RunAutoSteps(30); // 30 steps * 4 = 120 mins
+        Console.WriteLine($"3. 30 steps (120m): Time {autoClock.Hour:00}:{autoClock.Minute:00}, Energy {autoPlayer.Energy}, Hunger {autoPlayer.Hunger}, Thirst {autoPlayer.Thirst} (Expected: 02:00, 98, 98, 96)");
+
         // 6. Drain
         player.UpdateHunger(60);
         Console.WriteLine($"6. Drain: Hunger {player.Hunger} (Expected: 99)");
