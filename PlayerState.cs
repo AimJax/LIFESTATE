@@ -24,10 +24,12 @@ public class PlayerState
     public int Money { get; set; } = 1000;
     public int Energy { get; private set; } = 100;
     public int Hunger { get; private set; } = 100;
+    public int Thirst { get; private set; } = 100;
     public bool IsSleeping { get; private set; } = false;
     private int _awakeMinutesAccumulator = 0;
     private int _sleepingMinutesAccumulator = 0;
     private int _hungerMinutesAccumulator = 0;
+    private int _thirstMinutesAccumulator = 0;
 
     public void StartSleeping() => IsSleeping = true;
     public void StopSleeping() => IsSleeping = false;
@@ -71,5 +73,22 @@ public class PlayerState
     {
         if (hungerRestored <= 0) return;
         Hunger = Math.Min(100, Hunger + hungerRestored);
+    }
+
+    public void UpdateThirst(int elapsedMinutes)
+    {
+        _thirstMinutesAccumulator += elapsedMinutes;
+        int hoursPassed = _thirstMinutesAccumulator / 60;
+        if (hoursPassed > 0)
+        {
+            Thirst = Math.Max(0, Thirst - (hoursPassed * 2));
+            _thirstMinutesAccumulator %= 60;
+        }
+    }
+
+    public void Drink(int thirstRestored)
+    {
+        if (thirstRestored <= 0) return;
+        Thirst = Math.Min(100, Thirst + thirstRestored);
     }
 }

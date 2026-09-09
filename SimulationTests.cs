@@ -130,6 +130,66 @@ public static class SimulationTests
         }
         Console.WriteLine($"Hunger (60 * 1 min): {player.Hunger} (Expected: 99)");
 
+        // --- NEW THIRST TESTS ---
+        Console.WriteLine("\n--- LIFESTATE Thirst & Drinking Tests ---");
+        var tClock = new GameClock();
+        var tPlayer = new PlayerState(tClock);
+
+        // 1. New player -> Thirst 100
+        Console.WriteLine($"1. Start: Thirst {tPlayer.Thirst} (Expected: 100)");
+
+        // 2. +30 minutes
+        tPlayer.UpdateThirst(30);
+        Console.WriteLine($"2. +30 minutes: Thirst {tPlayer.Thirst} (Expected: 100)");
+
+        // 3. +30 minutes (Total 60)
+        tPlayer.UpdateThirst(30);
+        Console.WriteLine($"3. +30 minutes: Thirst {tPlayer.Thirst} (Expected: 98)");
+
+        // 4. +1 hour
+        tPlayer.UpdateThirst(60);
+        Console.WriteLine($"4. +1 hour: Thirst {tPlayer.Thirst} (Expected: 96)");
+
+        // 5. Repeated small updates
+        tPlayer = new PlayerState(tClock);
+        for (int i = 0; i < 60; i++) tPlayer.UpdateThirst(1);
+        var tPlayer2 = new PlayerState(tClock);
+        tPlayer2.UpdateThirst(60);
+        Console.WriteLine($"5. Repeated small updates equals 60-min update: {tPlayer.Thirst == tPlayer2.Thirst} (Expected: True)");
+
+        // 6. Clamp at 0
+        tPlayer = new PlayerState(tClock);
+        tPlayer.UpdateThirst(50 * 60); // 50 hours * -2 = 100 drain
+        Console.WriteLine($"6. Clamp at 0: Thirst {tPlayer.Thirst} (Expected: 0)");
+
+        // 7. More time at 0
+        tPlayer.UpdateThirst(60);
+        Console.WriteLine($"7. Still 0: Thirst {tPlayer.Thirst} (Expected: 0)");
+
+        // 8. Decrease during sleep
+        tPlayer = new PlayerState(tClock);
+        tPlayer.StartSleeping();
+        tPlayer.UpdateThirst(480); // 8 hours * -2 = 16 drain
+        Console.WriteLine($"8. Decrease during sleep: Thirst {tPlayer.Thirst} (Expected: 84)");
+
+        // 9. Drink tests
+        tPlayer.Drink(20);
+        Console.WriteLine($"9. Drink(20): Thirst {tPlayer.Thirst} (Expected: 100)"); // 84+20 = 104, clamped to 100
+        tPlayer.UpdateThirst(60); // 100 -> 98
+        tPlayer.Drink(20); // 98+20 = 118, clamped to 100
+        Console.WriteLine($"10. Clamp at 100: Thirst {tPlayer.Thirst} (Expected: 100)");
+        tPlayer.Drink(0);
+        Console.WriteLine($"11. Drink(0): Thirst {tPlayer.Thirst} (Expected: 100)");
+        tPlayer.Drink(-10);
+        Console.WriteLine($"12. Drink(-10): Thirst {tPlayer.Thirst} (Expected: 100)");
+
+        // 13. Does not affect other stats
+        tPlayer.Drink(20);
+        Console.WriteLine($"13. Drinking unchanged: Energy {tPlayer.Energy}, Hunger {tPlayer.Hunger}, IsSleeping {tPlayer.IsSleeping} (Expected: 100, 100, True)");
+        // Note: Clock advance was not tested directly but by passing time, and Drink() does not call Update...
+        // We can verify GameClock simply doesn't advance when calling Drink.
+        // Actually, Drink doesn't take clock, it's fine.
+
         // 11. Eating Tests
         Console.WriteLine("\n--- LIFESTATE Eating Tests ---");
         player = new PlayerState(clock); // Reset
