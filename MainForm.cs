@@ -10,12 +10,14 @@ public class MainForm : Form
     private readonly GameClock _clock;
     private readonly System.Windows.Forms.Timer _timer;
 
-    private Label _lblAge;
-    private Label _lblLifeStage;
-    private Label _lblStatus;
-    private Label _lblEnergy;
-    private Label _lblHunger;
-    private Label _lblThirst;
+    private Label _lblAge = new();
+    private Label _lblLifeStage = new();
+    private Label _lblStatus = new();
+    private Label _lblEnergy = new();
+    private Label _lblHunger = new();
+    private Label _lblThirst = new();
+    private Label _lblMoney = new();
+    private Label _lblFeedback = new();
 
     public MainForm(PlayerState player, GameClock clock)
     {
@@ -29,7 +31,7 @@ public class MainForm : Form
         };
 
         Text = "LIFESTATE Prototype";
-        Size = new System.Drawing.Size(300, 420);
+        Size = new System.Drawing.Size(300, 500);
 
         InitializeComponents();
         RefreshUI();
@@ -45,6 +47,8 @@ public class MainForm : Form
         _lblEnergy = new Label { AutoSize = true };
         _lblHunger = new Label { AutoSize = true };
         _lblThirst = new Label { AutoSize = true };
+        _lblMoney = new Label { AutoSize = true };
+        _lblFeedback = new Label { AutoSize = true, ForeColor = System.Drawing.Color.Red };
 
         panel.Controls.Add(_lblAge);
         panel.Controls.Add(_lblLifeStage);
@@ -52,9 +56,11 @@ public class MainForm : Form
         panel.Controls.Add(_lblEnergy);
         panel.Controls.Add(_lblHunger);
         panel.Controls.Add(_lblThirst);
+        panel.Controls.Add(_lblMoney);
+        panel.Controls.Add(_lblFeedback);
 
         var btnStart = new Button { Text = "Start Time" };
-        btnStart.Click += (s, e) => _timer.Start();
+        btnStart.Click += (s, e) => { _timer.Start(); _lblFeedback.Text = ""; };
         panel.Controls.Add(btnStart);
 
         var btnPause = new Button { Text = "Pause Time" };
@@ -63,7 +69,7 @@ public class MainForm : Form
 
         var btnWait = new Button { Text = "Wait 1 Hour" };
         btnWait.Click += (s, e) => {
-            _clock.AdvanceSeconds(15); // 15 seconds * 4 = 60 minutes
+            _clock.AdvanceSeconds(15);
             _player.AdvanceSimulation(60);
             RefreshUI();
         };
@@ -72,6 +78,7 @@ public class MainForm : Form
         var btnSleep = new Button { Text = "Sleep" };
         btnSleep.Click += (s, e) => {
             _player.StartSleeping();
+            _lblFeedback.Text = "";
             RefreshUI();
         };
         panel.Controls.Add(btnSleep);
@@ -82,6 +89,28 @@ public class MainForm : Form
             RefreshUI();
         };
         panel.Controls.Add(btnWake);
+
+        var btnWork = new Button { Text = "Work" };
+        btnWork.Click += (s, e) => {
+            if (_player.Age < 18)
+            {
+                _lblFeedback.Text = "Cannot work before age 18.";
+            }
+            else
+            {
+                _player.StartWorking();
+                _lblFeedback.Text = "";
+            }
+            RefreshUI();
+        };
+        panel.Controls.Add(btnWork);
+
+        var btnStopWork = new Button { Text = "Stop Work" };
+        btnStopWork.Click += (s, e) => {
+            _player.StopWorking();
+            RefreshUI();
+        };
+        panel.Controls.Add(btnStopWork);
 
         var btnEat = new Button { Text = "Eat +20" };
         btnEat.Click += (s, e) => {
@@ -104,9 +133,11 @@ public class MainForm : Form
     {
         _lblAge.Text = $"Age: {_player.Age}";
         _lblLifeStage.Text = $"Life Stage: {_player.LifeStage}";
-        _lblStatus.Text = $"Day: {_clock.Day}, Time: {_clock.Hour:00}:{_clock.Minute:00}, State: {(_player.IsSleeping ? "Sleeping" : "Awake")}";
+        string state = _player.IsSleeping ? "Sleeping" : (_player.IsWorking ? "Working" : "Awake");
+        _lblStatus.Text = $"Day: {_clock.Day}, Time: {_clock.Hour:00}:{_clock.Minute:00}, State: {state}";
         _lblEnergy.Text = $"Energy: {_player.Energy}";
         _lblHunger.Text = $"Hunger: {_player.Hunger}";
         _lblThirst.Text = $"Thirst: {_player.Thirst}";
+        _lblMoney.Text = $"Money: {_player.Money}";
     }
 }

@@ -315,15 +315,94 @@ public static class SimulationTests
 
         bool clockUnchanged = (beforeDay == awakeClock.Day) && (beforeHour == awakeClock.Hour) && (beforeMinute == awakeClock.Minute);
         bool statsUnchanged = (beforeEnergy == awakePlayer.Energy) && (beforeHunger == awakePlayer.Hunger) && (beforeThirst == awakePlayer.Thirst);
-
-        Console.WriteLine($"5. Wake Up: IsSleeping {awakePlayer.IsSleeping} (Expected: False)");
-        Console.WriteLine($"   Clock Unchanged: {clockUnchanged} (Expected: True), Stats Unchanged: {statsUnchanged} (Expected: True)");
-
-        // Test 5: Paused concept does not alter sleep state
+        // Test 6: Paused concept does not alter sleep state
         var pauseClock = new GameClock();
         var pausePlayer = new PlayerState(pauseClock);
         pausePlayer.StartSleeping();
         // Do nothing for simulation
         Console.WriteLine($"6. Paused: IsSleeping {pausePlayer.IsSleeping} (Expected: True), Energy {pausePlayer.Energy} (Expected: 100), Hunger {pausePlayer.Hunger} (Expected: 100), Thirst {pausePlayer.Thirst} (Expected: 100), Time {pauseClock.Hour:00}:{pauseClock.Minute:00} (Expected: 00:00)");
+
+        // --- LIFESTATE Work Tests ---
+        Console.WriteLine("\n--- LIFESTATE Work Tests ---");
+        var workClock = new GameClock();
+        var workPlayer = new PlayerState(workClock);
+
+        // Test 1: Fresh player
+        Console.WriteLine($"1. Fresh player: Age {workPlayer.Age} (Expected: 0), IsWorking {workPlayer.IsWorking} (Expected: False)");
+
+        // Test 2: Underage work rejection
+        workPlayer.StartWorking();
+        Console.WriteLine($"2. Underage work rejection: IsWorking {workPlayer.IsWorking} (Expected: False), Money {workPlayer.Money} (Expected: 1000)");
+
+        // Test 3: Adult can work
+        // Age is derived from Day / 365. To get age 18, we need 18 * 365 = 6570 days.
+        workClock.AdvanceSeconds(6570 * 24 * 60 / 4); // This might be too much for AdvanceSeconds... Wait, AdvanceSeconds takes real seconds.
+        // GameClock: 1 real second = 4 in-game minutes = 240 minutes.
+        // 1 hour = 60 minutes = 0.25 real seconds.
+        // 1 day = 24 hours = 1440 minutes = 6 real seconds.
+        // 1 year = 365 days = 2190 real seconds.
+        // 18 years = 365 * 18 * 6 = 39420 real seconds.
+        workClock.AdvanceSeconds(39420);
+        Console.WriteLine($"3a. Adult (Age {workPlayer.Age}): Attempting to work...");
+        workPlayer.StartWorking();
+        Console.WriteLine($"3b. Work started: IsWorking {workPlayer.IsWorking} (Expected: True)");
+
+        // Test 4: One working hour
+        // Start from age 18.
+        workPlayer.AdvanceSimulation(60);
+        Console.WriteLine($"4. One working hour: Money {workPlayer.Money} (Expected: 1010), Energy {workPlayer.Energy} (Expected: 99), Hunger {workPlayer.Hunger} (Expected: 99), Thirst {workPlayer.Thirst} (Expected: 98), IsWorking {workPlayer.IsWorking} (Expected: True)");
+
+        // Test 5 & 6: Multiple small updates (30 min + 30 min = 60 min, then 15+15+15+15)
+        workPlayer.StopWorking();
+        workPlayer.StartWorking();
+        workPlayer.AdvanceSimulation(30);
+        Console.WriteLine($"5a. Partial 30m work: Money {workPlayer.Money} (Expected: 1010)");
+        workPlayer.AdvanceSimulation(30);
+        Console.WriteLine($"5b. Another 30m work: Money {workPlayer.Money} (Expected: 1020)");
+
+        // 15+15+15+15 = 60
+        workPlayer.AdvanceSimulation(15);
+        workPlayer.AdvanceSimulation(15);
+        workPlayer.AdvanceSimulation(15);
+        workPlayer.AdvanceSimulation(15);
+        Console.WriteLine($"6. Four 15m updates: Money {workPlayer.Money} (Expected: 1030)");
+
+        // Test 7: Two working hours
+        workPlayer.AdvanceSimulation(120);
+        Console.WriteLine($"7. Two working hours: Money {workPlayer.Money} (Expected: 1050)");
+
+        // Test 8: Stop Work side effects
+        int beforeDayWork = workClock.Day;
+        int beforeHourWork = workClock.Hour;
+        int beforeMinuteWork = workClock.Minute;
+        int beforeMoneyWork = workPlayer.Money;
+        int beforeEnergyWork = workPlayer.Energy;
+        int beforeHungerWork = workPlayer.Hunger;
+        int beforeThirstWork = workPlayer.Thirst;
+        workPlayer.StopWorking();
+        bool clockUnchangedWork = (beforeDayWork == workClock.Day) && (beforeHourWork == workClock.Hour) && (beforeMinuteWork == workClock.Minute);
+        bool statsUnchangedWork = (beforeMoneyWork == workPlayer.Money) && (beforeEnergyWork == workPlayer.Energy) && (beforeHungerWork == workPlayer.Hunger) && (beforeThirstWork == workPlayer.Thirst);
+        Console.WriteLine($"8. Stop Work: IsWorking {workPlayer.IsWorking} (Expected: False), Clock Unchanged: {clockUnchangedWork} (Expected: True), Stats Unchanged: {statsUnchangedWork} (Expected: True)");
+
+        // Test 9: Partial work survives stopping
+        workPlayer.StartWorking();
+        workPlayer.AdvanceSimulation(30);
+        workPlayer.StopWorking();
+        Console.WriteLine($"9a. Worked 30m (accumulated 30m): Money {workPlayer.Money} (Expected: 1050)");
+        workPlayer.StartWorking();
+        workPlayer.AdvanceSimulation(30);
+        Console.WriteLine($"9b. Worked another 30m (total 60m): Money {workPlayer.Money} (Expected: 1060)");
+
+        // Test 10: Cannot work while sleeping
+        workPlayer.StartSleeping();
+        workPlayer.StartWorking();
+        Console.WriteLine($"10. Cannot work while sleeping: IsSleeping {workPlayer.IsSleeping} (Expected: True), IsWorking {workPlayer.IsWorking} (Expected: False)");
+
+        // Test 11: Cannot sleep while working
+        workPlayer.StopSleeping();
+        workPlayer.StartWorking();
+        workPlayer.StartSleeping();
+        Console.WriteLine($"11. Cannot sleep while working: IsWorking {workPlayer.IsWorking} (Expected: True), IsSleeping {workPlayer.IsSleeping} (Expected: False)");
+
     }
 }

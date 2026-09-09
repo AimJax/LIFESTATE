@@ -26,13 +26,26 @@ public class PlayerState
     public int Hunger { get; private set; } = 100;
     public int Thirst { get; private set; } = 100;
     public bool IsSleeping { get; private set; } = false;
+    public bool IsWorking { get; private set; } = false;
     private int _awakeMinutesAccumulator = 0;
     private int _sleepingMinutesAccumulator = 0;
     private int _hungerMinutesAccumulator = 0;
     private int _thirstMinutesAccumulator = 0;
+    private int _workMinutesAccumulator = 0;
 
-    public void StartSleeping() => IsSleeping = true;
+    public void StartSleeping()
+    {
+        if (IsWorking) return;
+        IsSleeping = true;
+    }
     public void StopSleeping() => IsSleeping = false;
+
+    public void StartWorking()
+    {
+        if (Age < 18 || IsSleeping) return;
+        IsWorking = true;
+    }
+    public void StopWorking() => IsWorking = false;
 
     public void UpdateEnergy(int elapsedMinutes)
     {
@@ -80,6 +93,20 @@ public class PlayerState
         UpdateEnergy(minutes);
         UpdateHunger(minutes);
         UpdateThirst(minutes);
+        UpdateWork(minutes);
+    }
+
+    public void UpdateWork(int elapsedMinutes)
+    {
+        if (!IsWorking) return;
+
+        _workMinutesAccumulator += elapsedMinutes;
+        int hoursWorked = _workMinutesAccumulator / 60;
+        if (hoursWorked > 0)
+        {
+            Money += (hoursWorked * 10);
+            _workMinutesAccumulator %= 60;
+        }
     }
 
     public void UpdateThirst(int elapsedMinutes)
