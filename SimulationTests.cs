@@ -189,6 +189,22 @@ public static class SimulationTests
         // Note: Clock advance was not tested directly but by passing time, and Drink() does not call Update...
         // We can verify GameClock simply doesn't advance when calling Drink.
         // Actually, Drink doesn't take clock, it's fine.
+        // 14. Non-clamped restoration (70 -> 90)
+        tPlayer = new PlayerState(tClock);
+        tPlayer.UpdateThirst(15 * 60); // 15 hours * -2 = 30 drain (Thirst 70)
+        tPlayer.Drink(20);
+        Console.WriteLine($"14. Non-clamped Drink(20): Thirst {tPlayer.Thirst} (Expected: 90)");
+
+        // 15. Verify Drink does not advance GameClock
+        var clockCheck = new GameClock();
+        var playerCheck = new PlayerState(clockCheck);
+        var startDay = clockCheck.Day;
+        var startHour = clockCheck.Hour;
+        var startMinute = clockCheck.Minute;
+        playerCheck.Drink(20);
+        bool clockChanged = (clockCheck.Day != startDay || clockCheck.Hour != startHour || clockCheck.Minute != startMinute);
+        Console.WriteLine($"15. Drink(20) does not advance GameClock: {!clockChanged} (Expected: True)");
+
 
         // 11. Eating Tests
         Console.WriteLine("\n--- LIFESTATE Eating Tests ---");
