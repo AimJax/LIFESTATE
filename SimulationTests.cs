@@ -652,6 +652,7 @@ public static class SimulationTests
         var s15Clock = new GameClock();
         var s15Player = new PlayerState(s15Clock);
         var s15Gm = new GodMode(s15Clock, s15Player);
+        s15Gm.SetEnabled(true);
         s15Gm.AdvanceDays(25 * 365);
         s15Player.StartStudying();
         Console.WriteLine($"15. Adult study: Age {s15Player.Age} (Expected: 25), IsStudying {s15Player.IsStudying} (Expected: True)");
