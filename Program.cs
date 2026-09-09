@@ -1,16 +1,21 @@
 ﻿using System;
 using Lifestate;
 
-int[] testDays = { 0, 364, 365, 730 };
+Console.WriteLine("--- LIFESTATE Life Stage Test ---");
 
-Console.WriteLine("--- LIFESTATE Calendar Test ---");
+int[] targetAges = { 0, 2, 6, 13, 18, 65 };
 
-foreach (int day in testDays)
+foreach (int age in targetAges)
 {
     var clock = new GameClock();
+    var player = new PlayerState(clock);
 
-    // 1 real second = 4 in-game minutes, so 360 real seconds = 1 in-game day.
-    clock.AdvanceSeconds(day * 360);
+    // Calculate seconds needed to reach this age
+    // 360 real seconds per in-game day
+    int daysNeeded = age * 365;
+    int secondsToAdvance = daysNeeded * 360;
 
-    Console.WriteLine($"Day {day} -> Year {clock.Year}, DayOfYear {clock.DayOfYear}");
+    clock.AdvanceSeconds(secondsToAdvance);
+
+    Console.WriteLine($"Age {player.Age} -> LifeStage {player.LifeStage}");
 }
