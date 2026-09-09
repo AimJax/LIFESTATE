@@ -292,8 +292,8 @@ public static class SimulationTests
         // Start with energy 50 to avoid clamping.
         var awakeClock = new GameClock();
         var awakePlayer = new PlayerState(awakeClock);
-        awakePlayer.UpdateEnergy(50 * 60); 
-        
+        awakePlayer.UpdateEnergy(50 * 60);
+
         // Now awakePlayer.Energy = 50.
         awakePlayer.StartSleeping();
         awakePlayer.AdvanceSimulation(60); // 1 hour sleep
@@ -315,6 +315,15 @@ public static class SimulationTests
 
         bool clockUnchanged = (beforeDay == awakeClock.Day) && (beforeHour == awakeClock.Hour) && (beforeMinute == awakeClock.Minute);
         bool statsUnchanged = (beforeEnergy == awakePlayer.Energy) && (beforeHunger == awakePlayer.Hunger) && (beforeThirst == awakePlayer.Thirst);
+
+        Console.WriteLine($"Wake Up: IsSleeping {awakePlayer.IsSleeping} (Expected: False)");
+        Console.WriteLine($"Clock Unchanged: {clockUnchanged} (Expected: True)");
+        Console.WriteLine($"Stats Unchanged: {statsUnchanged} (Expected: True)");
+
+        Console.WriteLine($"Wake Up: IsSleeping {awakePlayer.IsSleeping} (Expected: False)");
+        Console.WriteLine($"Clock Unchanged: {clockUnchanged} (Expected: True)");
+        Console.WriteLine($"Stats Unchanged: {statsUnchanged} (Expected: True)");
+
         // Test 6: Paused concept does not alter sleep state
         var pauseClock = new GameClock();
         var pausePlayer = new PlayerState(pauseClock);
@@ -336,13 +345,11 @@ public static class SimulationTests
 
         // Test 3: Adult can work
         // Age is derived from Day / 365. To get age 18, we need 18 * 365 = 6570 days.
-        workClock.AdvanceSeconds(6570 * 24 * 60 / 4); // This might be too much for AdvanceSeconds... Wait, AdvanceSeconds takes real seconds.
-        // GameClock: 1 real second = 4 in-game minutes = 240 minutes.
-        // 1 hour = 60 minutes = 0.25 real seconds.
-        // 1 day = 24 hours = 1440 minutes = 6 real seconds.
-        // 1 year = 365 days = 2190 real seconds.
-        // 18 years = 365 * 18 * 6 = 39420 real seconds.
-        workClock.AdvanceSeconds(39420);
+        int adultDays = 18 * 365;
+        int realSecondsForAdultAge = adultDays * 24 * 60 / GameClock.MinutesPerRealSecond;
+        workClock.AdvanceSeconds(realSecondsForAdultAge);
+
+        Console.WriteLine($"Adult setup: Age {workPlayer.Age} (Expected: 18), LifeStage {workPlayer.LifeStage} (Expected: Adult)");
         Console.WriteLine($"3a. Adult (Age {workPlayer.Age}): Attempting to work...");
         workPlayer.StartWorking();
         Console.WriteLine($"3b. Work started: IsWorking {workPlayer.IsWorking} (Expected: True)");
