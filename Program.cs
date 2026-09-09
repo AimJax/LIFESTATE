@@ -57,3 +57,42 @@ for (int i = 0; i < 60; i++)
     player.UpdateHunger(1);
 }
 Console.WriteLine($"Hunger (60 * 1 min): {player.Hunger} (Expected: 99)");
+
+// 11. Eating Tests
+Console.WriteLine("\n--- LIFESTATE Eating Tests ---");
+player = new PlayerState(clock); // Reset
+
+// 1. New player -> Hunger 100
+Console.WriteLine($"1. Start: Hunger {player.Hunger} (Expected: 100)");
+
+// 2. Drain to 80
+player.UpdateHunger(20 * 60); // 20 hours drain
+Console.WriteLine($"2. Drain to 80: Hunger {player.Hunger} (Expected: 80)");
+
+// 3. Eat 10
+player.Eat(10);
+Console.WriteLine($"3. Eat(10): Hunger {player.Hunger} (Expected: 90)");
+
+// 4. Eat 20 -> 100
+player.Eat(20);
+Console.WriteLine($"4. Eat(20): Hunger {player.Hunger} (Expected: 100)");
+
+// 5. Eat 50 -> 100 (clamp)
+player.Eat(50);
+Console.WriteLine($"5. Eat(50): Hunger {player.Hunger} (Expected: 100)");
+
+// 6. Drain
+player.UpdateHunger(60);
+Console.WriteLine($"6. Drain: Hunger {player.Hunger} (Expected: 99)");
+
+// 7. Eat 0
+player.Eat(0);
+Console.WriteLine($"7. Eat(0): Hunger {player.Hunger} (Expected: 99)");
+
+// 8. Eat -10
+player.Eat(-10);
+Console.WriteLine($"8. Eat(-10): Hunger {player.Hunger} (Expected: 99)");
+
+// 9. Confirm Energy/Sleeping unchanged
+Console.WriteLine($"9. Energy: {player.Energy}, IsSleeping: {player.IsSleeping} (Expected: 100, False)");
+

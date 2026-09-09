@@ -66,4 +66,10 @@ public class PlayerState
             _hungerMinutesAccumulator %= 60;
         }
     }
+
+    public void Eat(int hungerRestored)
+    {
+        if (hungerRestored <= 0) return;
+        Hunger = Math.Min(100, Hunger + hungerRestored);
+    }
 }
