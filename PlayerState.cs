@@ -108,6 +108,68 @@ public class PlayerState
         UpdateStudy(minutes);
     }
 
+    /// <summary>
+    /// Performs a bulk update of player stats for large time spans.
+    /// This avoids linear loops while preserving game semantics (clamping, reward rates).
+    /// </summary>
+    internal void BulkAdvanceSimulation(long elapsedMinutes, out long moneyEarned, out long xpEarned)
+    {
+        moneyEarned = 0;
+        xpEarned = 0;
+
+        if (elapsedMinutes <= 0) return;
+
+        // Needs always decay/recover toward their clamps.
+        // For very large time spans, they simply hit their limits.
+        // 10,000 minutes (~166 hours) is enough for any need to reach its clamp from any state.
+        UpdateEnergy((int)Math.Min(elapsedMinutes, 10000));
+        UpdateHunger((int)Math.Min(elapsedMinutes, 10000));
+        UpdateThirst((int)Math.Min(elapsedMinutes, 10000));
+
+        // Work/Study rewards are linear.
+        if (IsWorking)
+        {
+            long totalWorkMinutes = (long)_workMinutesAccumulator + elapsedMinutes;
+            moneyEarned = (totalWorkMinutes / 60) * 10;
+            _workMinutesAccumulator = (int)(totalWorkMinutes % 60);
+        }
+
+        if (IsStudying)
+        {
+            long totalStudyMinutes = (long)_studyMinutesAccumulator + elapsedMinutes;
+            xpEarned = (totalStudyMinutes / 60) * 10;
+            _studyMinutesAccumulator = (int)(totalStudyMinutes % 60);
+        }
+    }
+
+    internal bool PreflightWorkAndStudy(long elapsedMinutes, out long totalMoney, out long totalXP)
+    {
+        totalMoney = Money;
+        totalXP = StudyXP;
+
+        if (IsWorking)
+        {
+            long totalWorkMinutes = (long)_workMinutesAccumulator + elapsedMinutes;
+            long moneyEarned = (totalWorkMinutes / 60) * 10;
+            totalMoney += moneyEarned;
+        }
+
+        if (IsStudying)
+        {
+            long totalStudyMinutes = (long)_studyMinutesAccumulator + elapsedMinutes;
+            long xpEarned = (totalStudyMinutes / 60) * 10;
+            totalXP += xpEarned;
+        }
+
+        return totalMoney <= int.MaxValue && totalXP <= int.MaxValue;
+    }
+
+    internal void ApplyRewards(long moneyEarned, long xpEarned)
+    {
+        Money = (int)(Money + moneyEarned);
+        StudyXP = (int)(StudyXP + xpEarned);
+    }
+
     public void UpdateWork(int elapsedMinutes)
     {
         if (!IsWorking) return;

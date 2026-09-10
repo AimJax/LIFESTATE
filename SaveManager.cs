@@ -69,11 +69,13 @@ public static class SaveManager
                 return false;
             }
 
-            // Transactional Restore
-            clock.Restore(saveData.Day, saveData.Hour, saveData.Minute);
-            player.Restore(saveData.Money, saveData.Energy, saveData.Hunger, saveData.Thirst, saveData.StudyXP, saveData.IsSleeping, saveData.IsWorking, saveData.IsStudying, saveData.WorkMinutesAccumulator, saveData.StudyMinutesAccumulator);
-            
-            // Offline Progression
+            // Transactional Load: Create clones for validation
+            var tempClock = new GameClock();
+            tempClock.Restore(saveData.Day, saveData.Hour, saveData.Minute);
+            var tempPlayer = new PlayerState(tempClock);
+            tempPlayer.Restore(saveData.Money, saveData.Energy, saveData.Hunger, saveData.Thirst, saveData.StudyXP, saveData.IsSleeping, saveData.IsWorking, saveData.IsStudying, saveData.WorkMinutesAccumulator, saveData.StudyMinutesAccumulator);
+
+            // Offline Progression Calculation
             DateTimeOffset currentTime = nowUtc ?? DateTimeOffset.UtcNow;
             long elapsedSeconds = (long)(currentTime - saveData.SavedAtUtc).TotalSeconds;
             if (elapsedSeconds < 0) elapsedSeconds = 0;
@@ -82,29 +84,30 @@ public static class SaveManager
             {
                 long elapsedMinutes = elapsedSeconds * GameClock.MinutesPerRealSecond;
 
-                // Validate representability BEFORE mutation
-                long totalMinutes = (long)saveData.Minute + elapsedMinutes;
-                long hoursToAdd = totalMinutes / 60;
-                long totalHours = (long)saveData.Hour + hoursToAdd;
-                long daysToAdd = totalHours / 24;
-                long resultingDay = (long)saveData.Day + daysToAdd;
-
-                if (resultingDay > int.MaxValue) return false;
-
-                // Bulk chunking to avoid huge simulation ticks
-                const int MaxMinutesPerTick = 60 * 24; // 1 day chunk
-                
-                long remainingMinutes = elapsedMinutes;
-                while (remainingMinutes > 0)
+                // Preflight clock overflow
+                try
                 {
-                    int chunk = (int)Math.Min(remainingMinutes, MaxMinutesPerTick);
-                    player.AdvanceSimulation(chunk);
-                    remainingMinutes -= chunk;
+                    tempClock.AdvanceGameMinutes(elapsedMinutes);
                 }
-                
-                // Clock handles rollover logic using long-safe method
-                clock.AdvanceGameMinutes(elapsedMinutes);
+                catch (OverflowException)
+                {
+                    return false;
+                }
+
+                // Preflight Money/XP overflow
+                if (!tempPlayer.PreflightWorkAndStudy(elapsedMinutes, out _, out _))
+                {
+                    return false;
+                }
+
+                // Apply offline progression to temp objects
+                tempPlayer.BulkAdvanceSimulation(elapsedMinutes, out long moneyEarned, out long xpEarned);
+                tempPlayer.ApplyRewards(moneyEarned, xpEarned);
             }
+
+            // Only if we get here do we modify the actual objects
+            clock.Restore(tempClock.Day, tempClock.Hour, tempClock.Minute);
+            player.Restore(tempPlayer.Money, tempPlayer.Energy, tempPlayer.Hunger, tempPlayer.Thirst, tempPlayer.StudyXP, tempPlayer.IsSleeping, tempPlayer.IsWorking, tempPlayer.IsStudying, tempPlayer.GetWorkMinutesAccumulator(), tempPlayer.GetStudyMinutesAccumulator());
 
             return true;
         }

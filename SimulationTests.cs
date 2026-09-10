@@ -661,6 +661,7 @@ public static class SimulationTests
         Console.WriteLine("\n--- LIFESTATE Save/Load Tests ---");
 
         RunSaveLoadTests();
+        RunHardenedOfflineTests();
     }
 
     private static void RunSaveLoadTests()
@@ -1142,5 +1143,196 @@ public static class SimulationTests
         });
 
 
+    }
+
+    private static void RunHardenedOfflineTests()
+    {
+        Console.WriteLine("\n--- LIFESTATE Hardened Offline Regression Tests ---");
+
+        void RunWithTempSave(Action<string> testAction)
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), "LIFESTATE-tests-H", Guid.NewGuid().ToString());
+            string tempSavePath = Path.Combine(tempDir, "save.json");
+            try
+            {
+                Directory.CreateDirectory(tempDir);
+                testAction(tempSavePath);
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+            }
+        }
+
+        DateTimeOffset baseTime = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+
+        // Offline-H1 — large idle duration completes correctly
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            SaveManager.Save(clock, player, path, baseTime);
+
+            // 1000 days = 1000 * 24 * 60 = 1,440,000 game minutes
+            // Real seconds = 1,440,000 / 4 = 360,000 seconds
+            DateTimeOffset loadTime = baseTime.AddSeconds(360000);
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+
+            bool pass = loaded && loadClock.Day == 1000 && loadClock.Hour == 0 && loadClock.Minute == 0 &&
+                        loadPlayer.Energy == 0 && loadPlayer.Hunger == 0 && loadPlayer.Thirst == 0 &&
+                        loadPlayer.Money == 1000 && loadPlayer.StudyXP == 0;
+            if (!pass) Console.WriteLine($"DEBUG H1: loaded={loaded}, Day={loadClock.Day}, Energy={loadPlayer.Energy}");
+            Console.WriteLine($"Offline-H1: {pass} (Expected: True)");
+        });
+
+        // Offline-H2 — large Work progression exact reward
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(20 * 365); // Adult
+            player.StartWorking();
+            SaveManager.Save(clock, player, path, baseTime);
+
+            // 100 hours = 6000 game minutes = 1500 real seconds
+            DateTimeOffset loadTime = baseTime.AddSeconds(1500);
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+
+            // 100 hours = 4 days and 4 hours
+            bool pass = loaded && loadClock.Day == (20 * 365) + 4 && loadClock.Hour == 4 && loadClock.Minute == 0 &&
+                        loadPlayer.Money == 2000 && loadPlayer.Energy == 0 &&
+                        loadPlayer.Hunger == 0 && loadPlayer.Thirst == 0 && loadPlayer.IsWorking;
+            if (!pass) Console.WriteLine($"DEBUG H2: loaded={loaded}, Day={loadClock.Day}, Hour={loadClock.Hour}, Money={loadPlayer.Money}");
+            Console.WriteLine($"Offline-H2: {pass} (Expected: True)");
+        });
+
+        // Offline-H3 — large Study progression exact reward
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(10 * 365); // Child
+            player.StartStudying();
+            SaveManager.Save(clock, player, path, baseTime);
+
+            // 50 hours = 3000 game minutes = 750 real seconds
+            DateTimeOffset loadTime = baseTime.AddSeconds(750);
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+
+            // StudyXP: 0 + (50 * 10) = 500
+            bool pass = loaded && loadClock.Hour == 2 && loadClock.Minute == 0 &&
+                        loadPlayer.StudyXP == 500 && loadPlayer.IsStudying;
+            Console.WriteLine($"Offline-H3: {pass} (Expected: True)");
+        });
+
+        // Offline-H4 — Money overflow rejection is transactional
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(20 * 365);
+            player.DebugAddMoney(int.MaxValue - 50); 
+            player.StartWorking();
+            SaveManager.Save(clock, player, path, baseTime);
+
+            // 10 hours = 600 game minutes = 150 real seconds
+            // Reward = 10 * 10 = 100. int.MaxValue - 50 + 100 > int.MaxValue
+            DateTimeOffset loadTime = baseTime.AddSeconds(150);
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            // Setup target state to something recognizable
+            loadPlayer.DebugAddMoney(-900); // 1000 -> 100
+            int targetMoney = loadPlayer.Money;
+
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+
+            bool pass = !loaded && loadPlayer.Money == targetMoney && loadClock.Day == 0;
+            Console.WriteLine($"Offline-H4: {pass} (Expected: True)");
+        });
+
+        // Offline-H5 — StudyXP overflow rejection is transactional
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(10 * 365);
+            // Manually set StudyXP near limit (need reflection or internal access)
+            // But we don't have a DebugSetStudyXP. Let's use SaveManager.Load with a custom JSON
+            File.WriteAllText(path, "{\"Version\":2,\"Day\":3650,\"StudyXP\":2147483600,\"IsStudying\":true,\"SavedAtUtc\":\"2026-01-01T12:00:00+00:00\"}");
+
+            // 10 hours = 100 XP. 2147483600 + 100 overflows.
+            DateTimeOffset loadTime = baseTime.AddSeconds(150);
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+
+            bool pass = !loaded && loadPlayer.StudyXP == 0 && loadClock.Day == 0;
+            Console.WriteLine($"Offline-H5: {pass} (Expected: True)");
+        });
+
+        // Offline-H6 — clock overflow rejection remains transactional
+        RunWithTempSave(path => {
+            // Save with Day = int.MaxValue - 100
+            File.WriteAllText(path, "{\"Version\":2,\"Day\":2147483547,\"SavedAtUtc\":\"2026-01-01T12:00:00+00:00\"}");
+
+            // Add 1000 days
+            DateTimeOffset loadTime = baseTime.AddDays(1);
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            int targetDay = loadClock.Day;
+
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+
+            bool pass = !loaded && loadClock.Day == targetDay;
+            Console.WriteLine($"Offline-H6: {pass} (Expected: True)");
+        });
+
+        // Offline-H7 — future timestamp semantics unchanged
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.DebugAddMoney(500);
+            SaveManager.Save(clock, player, path, baseTime.AddHours(1));
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, baseTime);
+
+            bool pass = loaded && loadPlayer.Money == 1500 && loadClock.Day == 0 && loadClock.Hour == 0;
+            Console.WriteLine($"Offline-H7: {pass} (Expected: True)");
+        });
+
+        // Offline-H8 — fractional real seconds remain truncated
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            SaveManager.Save(clock, player, path, baseTime);
+
+            // 15.9 seconds -> should be treated as 15 seconds (60 mins)
+            DateTimeOffset loadTime = baseTime.AddSeconds(15.9);
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+
+            bool pass = loaded && loadClock.Hour == 1 && loadClock.Minute == 0;
+            Console.WriteLine($"Offline-H8: {pass} (Expected: True)");
+        });
     }
 }
