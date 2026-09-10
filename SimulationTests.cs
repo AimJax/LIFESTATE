@@ -664,6 +664,7 @@ public static class SimulationTests
         RunHardenedOfflineTests();
         RunBulkNeedSemanticsTests();
         RunAttributeTests();
+        RunNeedPersistTests();
     }
 
     private static void RunSaveLoadTests()
@@ -1508,26 +1509,21 @@ public static class SimulationTests
         {
             var clock = new GameClock();
             var player = new PlayerState(clock);
+            player.Attributes.AddIntelligence(50.0);
+            player.Attributes.AddFitness(50.0);
+            player.Attributes.AddSocial(50.0);
+            player.Attributes.AddDiscipline(50.0);
+            player.Attributes.AddCreativity(50.0);
             player.Attributes.AddIntelligence(double.NaN);
             player.Attributes.AddFitness(double.PositiveInfinity);
             player.Attributes.AddSocial(double.NegativeInfinity);
             player.Attributes.AddDiscipline(double.NaN);
             player.Attributes.AddCreativity(double.PositiveInfinity);
-            bool pass = !double.IsNaN(player.Attributes.Intelligence) &&
-                        !double.IsInfinity(player.Attributes.Intelligence) &&
-                        player.Attributes.Intelligence >= 0.0 && player.Attributes.Intelligence <= 100.0 &&
-                        !double.IsNaN(player.Attributes.Fitness) &&
-                        !double.IsInfinity(player.Attributes.Fitness) &&
-                        player.Attributes.Fitness >= 0.0 && player.Attributes.Fitness <= 100.0 &&
-                        !double.IsNaN(player.Attributes.Social) &&
-                        !double.IsInfinity(player.Attributes.Social) &&
-                        player.Attributes.Social >= 0.0 && player.Attributes.Social <= 100.0 &&
-                        !double.IsNaN(player.Attributes.Discipline) &&
-                        !double.IsInfinity(player.Attributes.Discipline) &&
-                        player.Attributes.Discipline >= 0.0 && player.Attributes.Discipline <= 100.0 &&
-                        !double.IsNaN(player.Attributes.Creativity) &&
-                        !double.IsInfinity(player.Attributes.Creativity) &&
-                        player.Attributes.Creativity >= 0.0 && player.Attributes.Creativity <= 100.0;
+            bool pass = Math.Abs(player.Attributes.Intelligence - 50.0) < 0.000001 &&
+                        Math.Abs(player.Attributes.Fitness - 50.0) < 0.000001 &&
+                        Math.Abs(player.Attributes.Social - 50.0) < 0.000001 &&
+                        Math.Abs(player.Attributes.Discipline - 50.0) < 0.000001 &&
+                        Math.Abs(player.Attributes.Creativity - 50.0) < 0.000001;
             Console.WriteLine($"Attribute-A7: {pass} (Expected: True)");
         }
 
@@ -1779,5 +1775,232 @@ public static class SimulationTests
                         player.IsStudying == studying;
             Console.WriteLine($"GodMode-Attributes: {pass} (Expected: True)");
         }
+    }
+
+    private static void RunNeedPersistTests()
+    {
+        Console.WriteLine("\n--- LIFESTATE Need Persistence Regression Tests ---");
+
+        void RunWithTempSave(Action<string> testAction)
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), "LIFESTATE-tests-N", Guid.NewGuid().ToString());
+            string tempSavePath = Path.Combine(tempDir, "save.json");
+            try
+            {
+                Directory.CreateDirectory(tempDir);
+                testAction(tempSavePath);
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+            }
+        }
+
+        DateTimeOffset baseTime = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+
+        // --- NeedPersist-N1: Awake Partial Continuity ---
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.AdvanceSimulation(59); // Awake 59, Hunger 59, Thirst 59
+            SaveManager.Save(clock, player, path, baseTime);
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, baseTime);
+            loadPlayer.AdvanceSimulation(1); // 59+1=60 -> Energy -1, Hunger -1, Thirst -2
+
+            bool pass = loaded && loadPlayer.Energy == 99 && loadPlayer.Hunger == 99 && loadPlayer.Thirst == 98;
+            Console.WriteLine($"NeedPersist-N1: {pass} (Expected: True)");
+        });
+
+        // --- NeedPersist-N2: Nontrivial Partial Values ---
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.AdvanceSimulation(15);
+            // Save and verify accumulators restore exactly
+            SaveManager.Save(clock, player, path, baseTime);
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, baseTime);
+
+            bool pass = loaded &&
+                loadPlayer.GetAwakeMinutesAccumulator() == 15 &&
+                loadPlayer.GetHungerMinutesAccumulator() == 15 &&
+                loadPlayer.GetThirstMinutesAccumulator() == 15;
+            Console.WriteLine($"NeedPersist-N2: {pass} (Expected: True)");
+        });
+
+        // --- NeedPersist-N3: Separate Awake/Sleeping Energy Remainders ---
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.AdvanceSimulation(30); // Awake 30
+            player.StartSleeping();
+            player.AdvanceSimulation(20); // Sleeping 20
+            SaveManager.Save(clock, player, path, baseTime);
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, baseTime);
+
+            bool passRestored = loaded &&
+                loadPlayer.GetAwakeMinutesAccumulator() == 30 &&
+                loadPlayer.GetSleepingMinutesAccumulator() == 20;
+
+            // Verify subsequent awake progression uses retained awake remainder
+            loadPlayer.StopSleeping();
+            loadPlayer.AdvanceSimulation(30); // 30+30=60 -> Energy -1
+
+            bool passBehavior = loadPlayer.Energy == 99;
+            Console.WriteLine($"NeedPersist-N3: {passRestored && passBehavior} (Expected: True)");
+        });
+
+        // --- NeedPersist-N4: Hunger/Thirst Persistence ---
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.AdvanceSimulation(45); // Hunger 45, Thirst 45
+            SaveManager.Save(clock, player, path, baseTime);
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, baseTime);
+
+            bool passRestored = loaded &&
+                loadPlayer.GetHungerMinutesAccumulator() == 45 &&
+                loadPlayer.GetThirstMinutesAccumulator() == 45;
+
+            // Advance 15 minutes to cross threshold (45+15=60)
+            loadPlayer.AdvanceSimulation(15);
+
+            bool passBehavior = loadPlayer.Hunger == 99 && loadPlayer.Thirst == 98;
+            Console.WriteLine($"NeedPersist-N4: {passRestored && passBehavior} (Expected: True)");
+        });
+
+        // --- NeedPersist-N5: Old Version 2 Compatibility ---
+        RunWithTempSave(path => {
+            // V2 save WITHOUT need-accumulator fields (simulating pre-this-ticket save)
+            File.WriteAllText(path, "{\"Version\":2,\"Day\":100,\"Hour\":5,\"Minute\":30,\"Money\":1500,\"Energy\":80,\"Hunger\":70,\"Thirst\":60,\"StudyXP\":50,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            DateTimeOffset loadTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+
+            bool pass = loaded &&
+                loadPlayer.GetAwakeMinutesAccumulator() == 0 &&
+                loadPlayer.GetSleepingMinutesAccumulator() == 0 &&
+                loadPlayer.GetHungerMinutesAccumulator() == 0 &&
+                loadPlayer.GetThirstMinutesAccumulator() == 0;
+            Console.WriteLine($"NeedPersist-N5: {pass} (Expected: True)");
+        });
+
+        // --- NeedPersist-N6: Invalid Accumulator Rejection ---
+        RunWithTempSave(path => {
+            // Test -1
+            File.WriteAllText(path, "{\"Version\":2,\"Day\":0,\"Money\":1000,\"Energy\":100,\"Hunger\":100,\"Thirst\":100,\"AwakeMinutesAccumulator\":-1,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+            var clock1 = new GameClock();
+            var player1 = new PlayerState(clock1);
+            player1.DebugAddMoney(-900);
+            int moneyBefore = player1.Money;
+            bool loadedNeg = SaveManager.Load(clock1, player1, path, new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero));
+            bool passNeg = !loadedNeg && player1.Money == moneyBefore;
+
+            // Test 60
+            File.WriteAllText(path, "{\"Version\":2,\"Day\":0,\"Money\":1000,\"Energy\":100,\"Hunger\":100,\"Thirst\":100,\"HungerMinutesAccumulator\":60,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+            var clock2 = new GameClock();
+            var player2 = new PlayerState(clock2);
+            int moneyBefore2 = player2.Money;
+            bool loaded60 = SaveManager.Load(clock2, player2, path, new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero));
+            bool pass60 = !loaded60 && player2.Money == moneyBefore2;
+
+            bool pass = passNeg && pass60;
+            Console.WriteLine($"NeedPersist-N6: {pass} (Expected: True)");
+        });
+
+        // --- NeedPersist-N7: Offline Progression Uses Saved Remainder ---
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.AdvanceSimulation(59); // Awake 59, Hunger 59, Thirst 59
+            SaveManager.Save(clock, player, path, baseTime);
+
+            // 1 game minute offline = 0.25 real seconds
+            DateTimeOffset loadTime = baseTime.AddSeconds(0.25);
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+
+            // 59+1=60 -> Energy -1, Hunger -1, Thirst -2
+            // Remainders: 0, 0, 0
+            bool pass = loaded &&
+                loadPlayer.Energy == 99 && loadPlayer.Hunger == 99 && loadPlayer.Thirst == 98 &&
+                loadPlayer.GetAwakeMinutesAccumulator() == 0 &&
+                loadPlayer.GetHungerMinutesAccumulator() == 0 &&
+                loadPlayer.GetThirstMinutesAccumulator() == 0;
+            Console.WriteLine($"NeedPersist-N7: {pass} (Expected: True)");
+        });
+
+        // --- NeedPersist-N8: Final Commit Preserves Post-Offline Remainder ---
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.AdvanceSimulation(17); // Awake 17, Hunger 17, Thirst 17
+            SaveManager.Save(clock, player, path, baseTime);
+
+            // 100 game minutes offline = 25 real seconds
+            // 17 + 100 = 117 -> completed 1 hour, remainder 57
+            DateTimeOffset loadTime = baseTime.AddSeconds(25);
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+
+            bool pass = loaded &&
+                loadPlayer.GetAwakeMinutesAccumulator() == 57 &&
+                loadPlayer.GetHungerMinutesAccumulator() == 57 &&
+                loadPlayer.GetThirstMinutesAccumulator() == 57;
+            Console.WriteLine($"NeedPersist-N8: {pass} (Expected: True)");
+        });
+
+        // --- NeedPersist-N9: Save/Load Round Trip All Six Accumulators ---
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(20 * 365); // Adult
+            player.StartWorking();
+            player.StartStudying(); // Rejected: mutually exclusive with Work
+            player.StopWorking();
+            player.StartStudying();
+            player.AdvanceSimulation(20); // Study 20, Awake 20, Hunger 20, Thirst 20
+            player.StopStudying();
+            player.StartWorking();
+            player.AdvanceSimulation(15); // Work 15, Awake 15 (35 total), Hunger 15 (35), Thirst 15 (35)
+            // Now: awake=35, hunger=35, thirst=35, work=15, study=20
+            // Set a sleeping remainder: start sleeping
+            player.StopWorking();
+            player.StartSleeping();
+            player.AdvanceSimulation(10); // Sleeping 10
+            player.StopSleeping();
+
+            SaveManager.Save(clock, player, path, baseTime);
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, baseTime);
+
+            bool pass = loaded &&
+                loadPlayer.GetAwakeMinutesAccumulator() == player.GetAwakeMinutesAccumulator() &&
+                loadPlayer.GetSleepingMinutesAccumulator() == player.GetSleepingMinutesAccumulator() &&
+                loadPlayer.GetHungerMinutesAccumulator() == player.GetHungerMinutesAccumulator() &&
+                loadPlayer.GetThirstMinutesAccumulator() == player.GetThirstMinutesAccumulator() &&
+                loadPlayer.GetWorkMinutesAccumulator() == player.GetWorkMinutesAccumulator() &&
+                loadPlayer.GetStudyMinutesAccumulator() == player.GetStudyMinutesAccumulator();
+            Console.WriteLine($"NeedPersist-N9: {pass} (Expected: True)");
+        });
     }
 }

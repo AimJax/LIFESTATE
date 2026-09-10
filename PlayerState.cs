@@ -109,10 +109,6 @@ public class PlayerState
         UpdateStudy(minutes);
     }
 
-    /// <summary>
-    /// Performs a bulk update of player stats for large time spans.
-    /// This avoids linear loops while preserving game semantics (clamping, reward rates).
-    /// </summary>
     internal void BulkAdvanceSimulation(long elapsedMinutes, out long moneyEarned, out long xpEarned)
     {
         moneyEarned = 0;
@@ -252,7 +248,7 @@ public class PlayerState
         Hunger = 100;
         Thirst = 100;
     }
-    internal void Restore(int money, int energy, int hunger, int thirst, int studyXP, bool isSleeping, bool isWorking, bool isStudying, int workMinutesAccumulator, int studyMinutesAccumulator)
+    internal void Restore(int money, int energy, int hunger, int thirst, int studyXP, bool isSleeping, bool isWorking, bool isStudying, int awakeMinutesAccumulator, int sleepingMinutesAccumulator, int hungerMinutesAccumulator, int thirstMinutesAccumulator, int workMinutesAccumulator, int studyMinutesAccumulator)
     {
         Money = money;
         Energy = energy;
@@ -262,11 +258,18 @@ public class PlayerState
         IsSleeping = isSleeping;
         IsWorking = isWorking;
         IsStudying = isStudying;
+        _awakeMinutesAccumulator = awakeMinutesAccumulator;
+        _sleepingMinutesAccumulator = sleepingMinutesAccumulator;
+        _hungerMinutesAccumulator = hungerMinutesAccumulator;
+        _thirstMinutesAccumulator = thirstMinutesAccumulator;
         _workMinutesAccumulator = workMinutesAccumulator;
         _studyMinutesAccumulator = studyMinutesAccumulator;
     }
 
+    internal int GetAwakeMinutesAccumulator() => _awakeMinutesAccumulator;
+    internal int GetSleepingMinutesAccumulator() => _sleepingMinutesAccumulator;
+    internal int GetHungerMinutesAccumulator() => _hungerMinutesAccumulator;
+    internal int GetThirstMinutesAccumulator() => _thirstMinutesAccumulator;
     internal int GetWorkMinutesAccumulator() => _workMinutesAccumulator;
     internal int GetStudyMinutesAccumulator() => _studyMinutesAccumulator;
 }
-

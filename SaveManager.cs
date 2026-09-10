@@ -27,6 +27,10 @@ public static class SaveManager
             IsStudying = player.IsStudying,
             WorkMinutesAccumulator = player.GetWorkMinutesAccumulator(),
             StudyMinutesAccumulator = player.GetStudyMinutesAccumulator(),
+            AwakeMinutesAccumulator = player.GetAwakeMinutesAccumulator(),
+            SleepingMinutesAccumulator = player.GetSleepingMinutesAccumulator(),
+            HungerMinutesAccumulator = player.GetHungerMinutesAccumulator(),
+            ThirstMinutesAccumulator = player.GetThirstMinutesAccumulator(),
             Intelligence = player.Attributes.Intelligence,
             Fitness = player.Attributes.Fitness,
             Social = player.Attributes.Social,
@@ -68,6 +72,10 @@ public static class SaveManager
                 saveData.Money < 0 || saveData.StudyXP < 0 ||
                 saveData.WorkMinutesAccumulator < 0 || saveData.WorkMinutesAccumulator >= 60 ||
                 saveData.StudyMinutesAccumulator < 0 || saveData.StudyMinutesAccumulator >= 60 ||
+                saveData.AwakeMinutesAccumulator < 0 || saveData.AwakeMinutesAccumulator >= 60 ||
+                saveData.SleepingMinutesAccumulator < 0 || saveData.SleepingMinutesAccumulator >= 60 ||
+                saveData.HungerMinutesAccumulator < 0 || saveData.HungerMinutesAccumulator >= 60 ||
+                saveData.ThirstMinutesAccumulator < 0 || saveData.ThirstMinutesAccumulator >= 60 ||
                 (saveData.IsSleeping ? 1 : 0) + (saveData.IsWorking ? 1 : 0) + (saveData.IsStudying ? 1 : 0) > 1 ||
                 saveData.SavedAtUtc == DateTimeOffset.MinValue)
             {
@@ -90,7 +98,11 @@ public static class SaveManager
             var tempClock = new GameClock();
             tempClock.Restore(saveData.Day, saveData.Hour, saveData.Minute);
             var tempPlayer = new PlayerState(tempClock);
-            tempPlayer.Restore(saveData.Money, saveData.Energy, saveData.Hunger, saveData.Thirst, saveData.StudyXP, saveData.IsSleeping, saveData.IsWorking, saveData.IsStudying, saveData.WorkMinutesAccumulator, saveData.StudyMinutesAccumulator);
+            tempPlayer.Restore(saveData.Money, saveData.Energy, saveData.Hunger, saveData.Thirst, saveData.StudyXP,
+                saveData.IsSleeping, saveData.IsWorking, saveData.IsStudying,
+                saveData.AwakeMinutesAccumulator, saveData.SleepingMinutesAccumulator,
+                saveData.HungerMinutesAccumulator, saveData.ThirstMinutesAccumulator,
+                saveData.WorkMinutesAccumulator, saveData.StudyMinutesAccumulator);
             tempPlayer.Attributes.Restore(attrIntelligence, attrFitness, attrSocial, attrDiscipline, attrCreativity);
 
             // Offline Progression Calculation
@@ -125,7 +137,11 @@ public static class SaveManager
 
             // Only if we get here do we modify the actual objects
             clock.Restore(tempClock.Day, tempClock.Hour, tempClock.Minute);
-            player.Restore(tempPlayer.Money, tempPlayer.Energy, tempPlayer.Hunger, tempPlayer.Thirst, tempPlayer.StudyXP, tempPlayer.IsSleeping, tempPlayer.IsWorking, tempPlayer.IsStudying, tempPlayer.GetWorkMinutesAccumulator(), tempPlayer.GetStudyMinutesAccumulator());
+            player.Restore(tempPlayer.Money, tempPlayer.Energy, tempPlayer.Hunger, tempPlayer.Thirst, tempPlayer.StudyXP,
+                tempPlayer.IsSleeping, tempPlayer.IsWorking, tempPlayer.IsStudying,
+                tempPlayer.GetAwakeMinutesAccumulator(), tempPlayer.GetSleepingMinutesAccumulator(),
+                tempPlayer.GetHungerMinutesAccumulator(), tempPlayer.GetThirstMinutesAccumulator(),
+                tempPlayer.GetWorkMinutesAccumulator(), tempPlayer.GetStudyMinutesAccumulator());
             player.Attributes.Restore(tempPlayer.Attributes.Intelligence, tempPlayer.Attributes.Fitness, tempPlayer.Attributes.Social, tempPlayer.Attributes.Discipline, tempPlayer.Attributes.Creativity);
 
             return true;

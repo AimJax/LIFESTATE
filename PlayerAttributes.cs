@@ -8,11 +8,26 @@ public sealed class PlayerAttributes
     public double Discipline { get; private set; } = 10.0;
     public double Creativity { get; private set; } = 10.0;
 
-    public void AddIntelligence(double amount) => Intelligence = Clamp(Intelligence + amount);
-    public void AddFitness(double amount) => Fitness = Clamp(Fitness + amount);
-    public void AddSocial(double amount) => Social = Clamp(Social + amount);
-    public void AddDiscipline(double amount) => Discipline = Clamp(Discipline + amount);
-    public void AddCreativity(double amount) => Creativity = Clamp(Creativity + amount);
+    public void AddIntelligence(double amount)
+    {
+        if (IsValidInput(amount)) Intelligence = Clamp(Intelligence + amount);
+    }
+    public void AddFitness(double amount)
+    {
+        if (IsValidInput(amount)) Fitness = Clamp(Fitness + amount);
+    }
+    public void AddSocial(double amount)
+    {
+        if (IsValidInput(amount)) Social = Clamp(Social + amount);
+    }
+    public void AddDiscipline(double amount)
+    {
+        if (IsValidInput(amount)) Discipline = Clamp(Discipline + amount);
+    }
+    public void AddCreativity(double amount)
+    {
+        if (IsValidInput(amount)) Creativity = Clamp(Creativity + amount);
+    }
 
     public void SetAllMax()
     {
@@ -23,9 +38,13 @@ public sealed class PlayerAttributes
         Creativity = 100.0;
     }
 
+    private static bool IsValidInput(double amount)
+    {
+        return !double.IsNaN(amount) && !double.IsInfinity(amount);
+    }
+
     private static double Clamp(double value)
     {
-        if (double.IsNaN(value) || double.IsInfinity(value)) return 0.0;
         return Math.Clamp(value, 0.0, 100.0);
     }
 
