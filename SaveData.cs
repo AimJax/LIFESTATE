@@ -19,5 +19,10 @@ public class SaveData
     public bool IsStudying { get; set; }
     public int WorkMinutesAccumulator { get; set; }
     public int StudyMinutesAccumulator { get; set; }
+    public double? Intelligence { get; set; }
+    public double? Fitness { get; set; }
+    public double? Social { get; set; }
+    public double? Discipline { get; set; }
+    public double? Creativity { get; set; }
     public DateTimeOffset SavedAtUtc { get; set; }
 }

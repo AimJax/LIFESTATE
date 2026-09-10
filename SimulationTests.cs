@@ -663,6 +663,7 @@ public static class SimulationTests
         RunSaveLoadTests();
         RunHardenedOfflineTests();
         RunBulkNeedSemanticsTests();
+        RunAttributeTests();
     }
 
     private static void RunSaveLoadTests()
@@ -1413,6 +1414,370 @@ public static class SimulationTests
             pass &= player.Energy == refPlayer.Energy && player.Hunger == refPlayer.Hunger && player.Thirst == refPlayer.Thirst;
             
             Console.WriteLine($"BulkNeed-R3: {pass} (Expected: True)");
+        }
+    }
+
+    private static void RunAttributeTests()
+    {
+        Console.WriteLine("\n--- LIFESTATE Core Attribute Regression Tests ---");
+
+        // --- Attribute-A1: Defaults ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            bool pass = Math.Abs(player.Attributes.Intelligence - 10.0) < 0.000001 &&
+                        Math.Abs(player.Attributes.Fitness - 10.0) < 0.000001 &&
+                        Math.Abs(player.Attributes.Social - 10.0) < 0.000001 &&
+                        Math.Abs(player.Attributes.Discipline - 10.0) < 0.000001 &&
+                        Math.Abs(player.Attributes.Creativity - 10.0) < 0.000001;
+            Console.WriteLine($"Attribute-A1: {pass} (Expected: True)");
+        }
+
+        // --- Attribute-A2: Study 59 Minutes ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(10 * 365);
+            player.StartStudying();
+            player.AdvanceSimulation(59);
+            bool pass = player.StudyXP == 0 && Math.Abs(player.Attributes.Intelligence - 10.0) < 0.000001;
+            Console.WriteLine($"Attribute-A2: {pass} (Expected: True)");
+        }
+
+        // --- Attribute-A3: Study Completes One Hour ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(10 * 365);
+            player.StartStudying();
+            player.AdvanceSimulation(60);
+            bool pass = player.StudyXP == 10 && Math.Abs(player.Attributes.Intelligence - 10.05) < 0.000001;
+            Console.WriteLine($"Attribute-A3: {pass} (Expected: True)");
+        }
+
+        // --- Attribute-A4: Study Partial Stop/Resume ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(10 * 365);
+            player.StartStudying();
+            player.AdvanceSimulation(35);
+            player.StopStudying();
+            player.AdvanceSimulation(30);
+            player.StartStudying();
+            player.AdvanceSimulation(25);
+            bool pass = player.StudyXP == 10 && Math.Abs(player.Attributes.Intelligence - 10.05) < 0.000001;
+            Console.WriteLine($"Attribute-A4: {pass} (Expected: True)");
+        }
+
+        // --- Attribute-A5: Intelligence Cap ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(10 * 365);
+            player.Attributes.AddIntelligence(89.98);
+            player.StartStudying();
+            player.AdvanceSimulation(60);
+            bool capAfterFirst = Math.Abs(player.Attributes.Intelligence - 100.0) < 0.000001 && player.StudyXP == 10;
+            player.AdvanceSimulation(120);
+            bool capSustained = Math.Abs(player.Attributes.Intelligence - 100.0) < 0.000001 && player.StudyXP == 30;
+            bool pass = capAfterFirst && capSustained;
+            Console.WriteLine($"Attribute-A5: {pass} (Expected: True)");
+        }
+
+        // --- Attribute-A6: Controlled Mutation Clamp ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.Attributes.AddIntelligence(200.0);
+            bool clampPos = Math.Abs(player.Attributes.Intelligence - 100.0) < 0.000001;
+            player.Attributes.AddIntelligence(-300.0);
+            bool clampNeg = Math.Abs(player.Attributes.Intelligence - 0.0) < 0.000001;
+            Console.WriteLine($"Attribute-A6: {clampPos && clampNeg} (Expected: True)");
+        }
+
+        // --- Attribute-A7: Invalid Floating-Point Mutation ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.Attributes.AddIntelligence(double.NaN);
+            player.Attributes.AddFitness(double.PositiveInfinity);
+            player.Attributes.AddSocial(double.NegativeInfinity);
+            player.Attributes.AddDiscipline(double.NaN);
+            player.Attributes.AddCreativity(double.PositiveInfinity);
+            bool pass = !double.IsNaN(player.Attributes.Intelligence) &&
+                        !double.IsInfinity(player.Attributes.Intelligence) &&
+                        player.Attributes.Intelligence >= 0.0 && player.Attributes.Intelligence <= 100.0 &&
+                        !double.IsNaN(player.Attributes.Fitness) &&
+                        !double.IsInfinity(player.Attributes.Fitness) &&
+                        player.Attributes.Fitness >= 0.0 && player.Attributes.Fitness <= 100.0 &&
+                        !double.IsNaN(player.Attributes.Social) &&
+                        !double.IsInfinity(player.Attributes.Social) &&
+                        player.Attributes.Social >= 0.0 && player.Attributes.Social <= 100.0 &&
+                        !double.IsNaN(player.Attributes.Discipline) &&
+                        !double.IsInfinity(player.Attributes.Discipline) &&
+                        player.Attributes.Discipline >= 0.0 && player.Attributes.Discipline <= 100.0 &&
+                        !double.IsNaN(player.Attributes.Creativity) &&
+                        !double.IsInfinity(player.Attributes.Creativity) &&
+                        player.Attributes.Creativity >= 0.0 && player.Attributes.Creativity <= 100.0;
+            Console.WriteLine($"Attribute-A7: {pass} (Expected: True)");
+        }
+
+        // --- Attribute-A8: Save/Load Round Trip ---
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), "LIFESTATE-tests-A", Guid.NewGuid().ToString());
+            string tempPath = Path.Combine(tempDir, "save.json");
+            try
+            {
+                Directory.CreateDirectory(tempDir);
+                var clock = new GameClock();
+                var player = new PlayerState(clock);
+                player.Attributes.AddIntelligence(42.0);
+                player.Attributes.AddFitness(67.0);
+                player.Attributes.AddSocial(15.5);
+                player.Attributes.AddDiscipline(88.0);
+                player.Attributes.AddCreativity(31.25);
+                SaveManager.Save(clock, player, tempPath);
+
+                var loadClock = new GameClock();
+                var loadPlayer = new PlayerState(loadClock);
+                bool loaded = SaveManager.Load(loadClock, loadPlayer, tempPath);
+                bool pass = loaded &&
+                    Math.Abs(loadPlayer.Attributes.Intelligence - 52.0) < 0.000001 &&
+                    Math.Abs(loadPlayer.Attributes.Fitness - 77.0) < 0.000001 &&
+                    Math.Abs(loadPlayer.Attributes.Social - 25.5) < 0.000001 &&
+                    Math.Abs(loadPlayer.Attributes.Discipline - 98.0) < 0.000001 &&
+                    Math.Abs(loadPlayer.Attributes.Creativity - 41.25) < 0.000001 &&
+                    loadPlayer.Money == player.Money;
+                Console.WriteLine($"Attribute-A8: {pass} (Expected: True)");
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+            }
+        }
+
+        // --- Attribute-A9: Explicit Zero Persistence ---
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), "LIFESTATE-tests-A9", Guid.NewGuid().ToString());
+            string tempPath = Path.Combine(tempDir, "save.json");
+            try
+            {
+                Directory.CreateDirectory(tempDir);
+                var clock = new GameClock();
+                var player = new PlayerState(clock);
+                player.Attributes.AddIntelligence(-10.0);
+                SaveManager.Save(clock, player, tempPath);
+
+                var loadClock = new GameClock();
+                var loadPlayer = new PlayerState(loadClock);
+                bool loaded = SaveManager.Load(loadClock, loadPlayer, tempPath);
+                bool pass = loaded && Math.Abs(loadPlayer.Attributes.Intelligence - 0.0) < 0.000001;
+                Console.WriteLine($"Attribute-A9: {pass} (Expected: True)");
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+            }
+        }
+
+        // --- Attribute-A10: Old Version 2 Compatibility ---
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), "LIFESTATE-tests-A10", Guid.NewGuid().ToString());
+            string tempPath = Path.Combine(tempDir, "save.json");
+            try
+            {
+                Directory.CreateDirectory(tempDir);
+                DateTimeOffset baseTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+                File.WriteAllText(tempPath, "{\"Version\":2,\"Day\":1000,\"Hour\":5,\"Minute\":30,\"Money\":1500,\"Energy\":80,\"Hunger\":70,\"Thirst\":60,\"StudyXP\":50,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+
+                var loadClock = new GameClock();
+                var loadPlayer = new PlayerState(loadClock);
+                bool loaded = SaveManager.Load(loadClock, loadPlayer, tempPath, baseTime);
+                bool pass = loaded &&
+                    Math.Abs(loadPlayer.Attributes.Intelligence - 10.0) < 0.000001 &&
+                    Math.Abs(loadPlayer.Attributes.Fitness - 10.0) < 0.000001 &&
+                    Math.Abs(loadPlayer.Attributes.Social - 10.0) < 0.000001 &&
+                    Math.Abs(loadPlayer.Attributes.Discipline - 10.0) < 0.000001 &&
+                    Math.Abs(loadPlayer.Attributes.Creativity - 10.0) < 0.000001 &&
+                    loadClock.Day == 1000 && loadPlayer.Money == 1500;
+                Console.WriteLine($"Attribute-A10: {pass} (Expected: True)");
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+            }
+        }
+
+        // --- Attribute-A11: Invalid Saved Attribute Rejection ---
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), "LIFESTATE-tests-A11", Guid.NewGuid().ToString());
+            string tempPath = Path.Combine(tempDir, "save.json");
+            try
+            {
+                Directory.CreateDirectory(tempDir);
+                File.WriteAllText(tempPath, "{\"Version\":2,\"Day\":100,\"Hour\":5,\"Minute\":30,\"Money\":1500,\"Energy\":80,\"Hunger\":70,\"Thirst\":60,\"StudyXP\":50,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"Intelligence\":101.0,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+
+                var loadClock = new GameClock();
+                var loadPlayer = new PlayerState(loadClock);
+                loadPlayer.DebugAddMoney(-900);
+                int moneyBefore = loadPlayer.Money;
+                int dayBefore = loadClock.Day;
+
+                bool loaded = SaveManager.Load(loadClock, loadPlayer, tempPath);
+                bool pass = !loaded && loadPlayer.Money == moneyBefore && loadClock.Day == dayBefore &&
+                            Math.Abs(loadPlayer.Attributes.Intelligence - 10.0) < 0.000001;
+                Console.WriteLine($"Attribute-A11: {pass} (Expected: True)");
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+            }
+        }
+
+        // --- Attribute-A12: Offline Study Progression ---
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), "LIFESTATE-tests-A12", Guid.NewGuid().ToString());
+            string tempPath = Path.Combine(tempDir, "save.json");
+            try
+            {
+                Directory.CreateDirectory(tempDir);
+                DateTimeOffset baseTime = new DateTimeOffset(2026, 9, 9, 12, 0, 0, TimeSpan.Zero);
+
+                var clock = new GameClock();
+                var player = new PlayerState(clock);
+                var gm = new GodMode(clock, player);
+                gm.SetEnabled(true);
+                gm.AdvanceDays(10 * 365);
+                player.StartStudying();
+                SaveManager.Save(clock, player, tempPath, baseTime);
+
+                DateTimeOffset loadTime = baseTime.AddSeconds(150);
+                var loadClock = new GameClock();
+                var loadPlayer = new PlayerState(loadClock);
+                bool loaded = SaveManager.Load(loadClock, loadPlayer, tempPath, loadTime);
+
+                bool pass = loaded &&
+                    loadPlayer.StudyXP == 100 &&
+                    Math.Abs(loadPlayer.Attributes.Intelligence - 10.50) < 0.000001 &&
+                    loadPlayer.IsStudying;
+                Console.WriteLine($"Attribute-A12: {pass} (Expected: True)");
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+            }
+        }
+
+        // --- Attribute-A13: Bulk vs Normal Study Equivalence ---
+        {
+            var clock1 = new GameClock();
+            var p1 = new PlayerState(clock1);
+            var gm1 = new GodMode(clock1, p1);
+            gm1.SetEnabled(true);
+            gm1.AdvanceDays(10 * 365);
+            p1.StartStudying();
+            p1.AdvanceSimulation(17);
+
+            var clock2 = new GameClock();
+            var p2 = new PlayerState(clock2);
+            var gm2 = new GodMode(clock2, p2);
+            gm2.SetEnabled(true);
+            gm2.AdvanceDays(10 * 365);
+            p2.StartStudying();
+            p2.AdvanceSimulation(17);
+
+            long remaining = 10001;
+            while (remaining > 0)
+            {
+                int chunk = (int)Math.Min(remaining, 60);
+                p1.AdvanceSimulation(chunk);
+                remaining -= chunk;
+            }
+
+            p2.BulkAdvanceSimulation(10001, out long moneyEarned, out long xpEarned);
+            p2.ApplyRewards(moneyEarned, xpEarned);
+
+            bool pass = p1.StudyXP == p2.StudyXP &&
+                Math.Abs(p1.Attributes.Intelligence - p2.Attributes.Intelligence) < 0.000001 &&
+                p1.GetStudyMinutesAccumulator() == p2.GetStudyMinutesAccumulator() &&
+                p1.Energy == p2.Energy &&
+                p1.Hunger == p2.Hunger &&
+                p1.Thirst == p2.Thirst &&
+                p1.IsStudying == p2.IsStudying;
+            Console.WriteLine($"Attribute-A13: {pass} (Expected: True)");
+        }
+
+        // --- Attribute-A14: Offline Intelligence Cap ---
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), "LIFESTATE-tests-A14", Guid.NewGuid().ToString());
+            string tempPath = Path.Combine(tempDir, "save.json");
+            try
+            {
+                Directory.CreateDirectory(tempDir);
+                DateTimeOffset baseTime = new DateTimeOffset(2026, 9, 9, 12, 0, 0, TimeSpan.Zero);
+
+                var clock = new GameClock();
+                var player = new PlayerState(clock);
+                var gm = new GodMode(clock, player);
+                gm.SetEnabled(true);
+                gm.AdvanceDays(10 * 365);
+                player.Attributes.AddIntelligence(89.98);
+                player.StartStudying();
+                SaveManager.Save(clock, player, tempPath, baseTime);
+
+                DateTimeOffset loadTime = baseTime.AddSeconds(1650);
+                var loadClock = new GameClock();
+                var loadPlayer = new PlayerState(loadClock);
+                bool loaded = SaveManager.Load(loadClock, loadPlayer, tempPath, loadTime);
+
+                bool pass = loaded &&
+                    Math.Abs(loadPlayer.Attributes.Intelligence - 100.0) < 0.000001 &&
+                    loadPlayer.StudyXP >= 1000;
+                Console.WriteLine($"Attribute-A14: {pass} (Expected: True)");
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+            }
+        }
+
+        // --- GodMode-Attributes ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            player.Attributes.AddIntelligence(20.0);
+            player.Attributes.AddFitness(30.0);
+            player.Attributes.AddSocial(15.0);
+            player.Attributes.AddDiscipline(5.0);
+            player.Attributes.AddCreativity(25.0);
+            int moneyBefore = player.Money;
+            int xpBefore = player.StudyXP;
+            int dayBefore = clock.Day;
+            bool studying = player.IsStudying;
+
+            gm.MaxAttributes();
+
+            bool pass = Math.Abs(player.Attributes.Intelligence - 100.0) < 0.000001 &&
+                        Math.Abs(player.Attributes.Fitness - 100.0) < 0.000001 &&
+                        Math.Abs(player.Attributes.Social - 100.0) < 0.000001 &&
+                        Math.Abs(player.Attributes.Discipline - 100.0) < 0.000001 &&
+                        Math.Abs(player.Attributes.Creativity - 100.0) < 0.000001 &&
+                        player.Money == moneyBefore &&
+                        player.StudyXP == xpBefore &&
+                        clock.Day == dayBefore &&
+                        player.IsStudying == studying;
+            Console.WriteLine($"GodMode-Attributes: {pass} (Expected: True)");
         }
     }
 }

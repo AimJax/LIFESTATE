@@ -27,6 +27,11 @@ public static class SaveManager
             IsStudying = player.IsStudying,
             WorkMinutesAccumulator = player.GetWorkMinutesAccumulator(),
             StudyMinutesAccumulator = player.GetStudyMinutesAccumulator(),
+            Intelligence = player.Attributes.Intelligence,
+            Fitness = player.Attributes.Fitness,
+            Social = player.Attributes.Social,
+            Discipline = player.Attributes.Discipline,
+            Creativity = player.Attributes.Creativity,
             SavedAtUtc = nowUtc ?? DateTimeOffset.UtcNow
         };
 
@@ -53,7 +58,7 @@ public static class SaveManager
 
             if (saveData == null || saveData.Version != 2) return false;
 
-            // Strict Validation
+            // Strict Validation — basic fields
             if (saveData.Day < 0 ||
                 saveData.Hour < 0 || saveData.Hour > 23 ||
                 saveData.Minute < 0 || saveData.Minute > 59 ||
@@ -69,11 +74,24 @@ public static class SaveManager
                 return false;
             }
 
+            // Validate attribute values — nulls are acceptable (old V2 compat), present values must be finite and in [0, 100]
+            double attrIntelligence = GetValidatedAttribute(saveData.Intelligence, out bool attrValid);
+            if (!attrValid) return false;
+            double attrFitness = GetValidatedAttribute(saveData.Fitness, out attrValid);
+            if (!attrValid) return false;
+            double attrSocial = GetValidatedAttribute(saveData.Social, out attrValid);
+            if (!attrValid) return false;
+            double attrDiscipline = GetValidatedAttribute(saveData.Discipline, out attrValid);
+            if (!attrValid) return false;
+            double attrCreativity = GetValidatedAttribute(saveData.Creativity, out attrValid);
+            if (!attrValid) return false;
+
             // Transactional Load: Create clones for validation
             var tempClock = new GameClock();
             tempClock.Restore(saveData.Day, saveData.Hour, saveData.Minute);
             var tempPlayer = new PlayerState(tempClock);
             tempPlayer.Restore(saveData.Money, saveData.Energy, saveData.Hunger, saveData.Thirst, saveData.StudyXP, saveData.IsSleeping, saveData.IsWorking, saveData.IsStudying, saveData.WorkMinutesAccumulator, saveData.StudyMinutesAccumulator);
+            tempPlayer.Attributes.Restore(attrIntelligence, attrFitness, attrSocial, attrDiscipline, attrCreativity);
 
             // Offline Progression Calculation
             DateTimeOffset currentTime = nowUtc ?? DateTimeOffset.UtcNow;
@@ -108,6 +126,7 @@ public static class SaveManager
             // Only if we get here do we modify the actual objects
             clock.Restore(tempClock.Day, tempClock.Hour, tempClock.Minute);
             player.Restore(tempPlayer.Money, tempPlayer.Energy, tempPlayer.Hunger, tempPlayer.Thirst, tempPlayer.StudyXP, tempPlayer.IsSleeping, tempPlayer.IsWorking, tempPlayer.IsStudying, tempPlayer.GetWorkMinutesAccumulator(), tempPlayer.GetStudyMinutesAccumulator());
+            player.Attributes.Restore(tempPlayer.Attributes.Intelligence, tempPlayer.Attributes.Fitness, tempPlayer.Attributes.Social, tempPlayer.Attributes.Discipline, tempPlayer.Attributes.Creativity);
 
             return true;
         }
@@ -115,5 +134,18 @@ public static class SaveManager
         {
             return false;
         }
+    }
+
+    private static double GetValidatedAttribute(double? value, out bool valid)
+    {
+        valid = true;
+        if (value == null) return 10.0;
+        double v = value.Value;
+        if (double.IsNaN(v) || double.IsInfinity(v) || v < 0.0 || v > 100.0)
+        {
+            valid = false;
+            return 0.0;
+        }
+        return v;
     }
 }

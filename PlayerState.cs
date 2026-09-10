@@ -21,6 +21,7 @@ public class PlayerState
         _ => LifeStage.Elder
     };
 
+    public PlayerAttributes Attributes { get; } = new();
     public int Money { get; set; } = 1000;
     public int Energy { get; private set; } = 100;
     public int Hunger { get; private set; } = 100;
@@ -158,7 +159,9 @@ public class PlayerState
         if (IsStudying)
         {
             long totalStudyMinutes = (long)_studyMinutesAccumulator + elapsedMinutes;
-            xpEarned = (totalStudyMinutes / 60) * 10;
+            long hoursStudied = totalStudyMinutes / 60;
+            xpEarned = hoursStudied * 10;
+            Attributes.AddIntelligence(hoursStudied * 0.05);
             _studyMinutesAccumulator = (int)(totalStudyMinutes % 60);
         }
     }
@@ -213,6 +216,7 @@ public class PlayerState
         if (hoursStudied > 0)
         {
             StudyXP += (hoursStudied * 10);
+            Attributes.AddIntelligence(hoursStudied * 0.05);
             _studyMinutesAccumulator %= 60;
         }
     }

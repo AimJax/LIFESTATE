@@ -35,4 +35,10 @@ public class GodMode
         if (!IsEnabled) return;
         _player.DebugRestoreNeeds();
     }
+
+    public void MaxAttributes()
+    {
+        if (!IsEnabled) return;
+        _player.Attributes.SetAllMax();
+    }
 }

@@ -19,6 +19,11 @@ public class MainForm : Form
     private Label _lblThirst = new();
     private Label _lblMoney = new();
     private Label _lblStudyXP = new();
+    private Label _lblIntelligence = new();
+    private Label _lblFitness = new();
+    private Label _lblSocial = new();
+    private Label _lblDiscipline = new();
+    private Label _lblCreativity = new();
     private Label _lblFeedback = new();
 
     private FlowLayoutPanel _debugPanel = new();
@@ -54,6 +59,11 @@ public class MainForm : Form
         _lblThirst = new Label { AutoSize = true };
         _lblMoney = new Label { AutoSize = true };
         _lblStudyXP = new Label { AutoSize = true };
+        _lblIntelligence = new Label { AutoSize = true };
+        _lblFitness = new Label { AutoSize = true };
+        _lblSocial = new Label { AutoSize = true };
+        _lblDiscipline = new Label { AutoSize = true };
+        _lblCreativity = new Label { AutoSize = true };
         _lblFeedback = new Label { AutoSize = true, ForeColor = System.Drawing.Color.Red };
 
         panel.Controls.Add(_lblAge);
@@ -64,6 +74,11 @@ public class MainForm : Form
         panel.Controls.Add(_lblThirst);
         panel.Controls.Add(_lblMoney);
         panel.Controls.Add(_lblStudyXP);
+        panel.Controls.Add(_lblIntelligence);
+        panel.Controls.Add(_lblFitness);
+        panel.Controls.Add(_lblSocial);
+        panel.Controls.Add(_lblDiscipline);
+        panel.Controls.Add(_lblCreativity);
         panel.Controls.Add(_lblFeedback);
 
         var btnStart = new Button { Text = "Start Time" };
@@ -213,6 +228,10 @@ public class MainForm : Form
         btnNeeds.Click += (s, e) => { _godMode.RestoreNeeds(); RefreshUI(); };
         _debugPanel.Controls.Add(btnNeeds);
 
+        var btnMaxAttrs = new Button { Text = "Max Attributes" };
+        btnMaxAttrs.Click += (s, e) => { _godMode.MaxAttributes(); RefreshUI(); };
+        _debugPanel.Controls.Add(btnMaxAttrs);
+
         panel.Controls.Add(_debugPanel);
 
         Controls.Add(panel);
@@ -229,5 +248,10 @@ public class MainForm : Form
         _lblThirst.Text = $"Thirst: {_player.Thirst}";
         _lblMoney.Text = $"Money: {_player.Money}";
         _lblStudyXP.Text = $"Study XP: {_player.StudyXP}";
+        _lblIntelligence.Text = $"Intelligence: {_player.Attributes.Intelligence:F2}";
+        _lblFitness.Text = $"Fitness: {_player.Attributes.Fitness:F2}";
+        _lblSocial.Text = $"Social: {_player.Attributes.Social:F2}";
+        _lblDiscipline.Text = $"Discipline: {_player.Attributes.Discipline:F2}";
+        _lblCreativity.Text = $"Creativity: {_player.Attributes.Creativity:F2}";
     }
 }
