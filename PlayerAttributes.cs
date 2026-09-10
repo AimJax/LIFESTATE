@@ -50,10 +50,10 @@ public sealed class PlayerAttributes
 
     internal void Restore(double intelligence, double fitness, double social, double discipline, double creativity)
     {
-        Intelligence = Clamp(intelligence);
-        Fitness = Clamp(fitness);
-        Social = Clamp(social);
-        Discipline = Clamp(discipline);
-        Creativity = Clamp(creativity);
+        if (IsValidInput(intelligence)) Intelligence = Clamp(intelligence);
+        if (IsValidInput(fitness)) Fitness = Clamp(fitness);
+        if (IsValidInput(social)) Social = Clamp(social);
+        if (IsValidInput(discipline)) Discipline = Clamp(discipline);
+        if (IsValidInput(creativity)) Creativity = Clamp(creativity);
     }
 }

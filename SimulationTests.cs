@@ -1814,6 +1814,31 @@ public static class SimulationTests
                         player.IsStudying == studying;
             Console.WriteLine($"GodMode-Attributes: {pass} (Expected: True)");
         }
+
+        // --- Attribute-RestoreInvariant: Controlled Restore Invariant ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            // Non-default valid
+            player.Attributes.Restore(50, 50, 50, 50, 50);
+
+            // Invalid (NaN/Infinity)
+            player.Attributes.Restore(double.NaN, double.PositiveInfinity, double.NegativeInfinity, 25.0, 75.0);
+            
+            // Expected: Only valid finite ones changed, non-finite were no-ops
+            bool passInvalid = Math.Abs(player.Attributes.Intelligence - 50.0) < 0.000001 &&
+                               Math.Abs(player.Attributes.Fitness - 50.0) < 0.000001 &&
+                               Math.Abs(player.Attributes.Social - 50.0) < 0.000001 &&
+                               Math.Abs(player.Attributes.Discipline - 25.0) < 0.000001 &&
+                               Math.Abs(player.Attributes.Creativity - 75.0) < 0.000001;
+
+            // Finite clamping check
+            player.Attributes.Restore(150.0, -50.0, 10.0, 10.0, 10.0);
+            bool passClamp = Math.Abs(player.Attributes.Intelligence - 100.0) < 0.000001 &&
+                             Math.Abs(player.Attributes.Fitness - 0.0) < 0.000001;
+
+            Console.WriteLine($"Attribute-RestoreInvariant: {passInvalid && passClamp} (Expected: True)");
+        }
     }
 
     private static void RunNeedPersistTests()
@@ -1937,27 +1962,128 @@ public static class SimulationTests
             Console.WriteLine($"NeedPersist-N5: {pass} (Expected: True)");
         });
 
-        // --- NeedPersist-N6: Invalid Accumulator Rejection ---
+        // --- NeedPersist-N6: Invalid Accumulator Rejection (transactional) ---
         RunWithTempSave(path => {
-            // Test -1
-            File.WriteAllText(path, "{\"Version\":2,\"Day\":0,\"Money\":1000,\"Energy\":100,\"Hunger\":100,\"Thirst\":100,\"AwakeMinutesAccumulator\":-1,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+            // Test -1 (AwakeMinutesAccumulator)
+            // Use a deliberately non-default runtime state to prove transactional rejection
             var clock1 = new GameClock();
             var player1 = new PlayerState(clock1);
-            player1.DebugAddMoney(-900);
-            int moneyBefore = player1.Money;
-            bool loadedNeg = SaveManager.Load(clock1, player1, path, new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero));
-            bool passNeg = !loadedNeg && player1.Money == moneyBefore;
+            var gm1 = new GodMode(clock1, player1);
+            gm1.SetEnabled(true);
+            gm1.AdvanceDays(20 * 365); // Adult
+            player1.StartStudying();
+            player1.AdvanceSimulation(35); // Awake=35, Hunger=35, Thirst=35, StudyAcc=35
+            player1.StopStudying();
+            player1.StartSleeping();
+            player1.AdvanceSimulation(20); // SleepAcc=20
+            player1.StopSleeping();
+            player1.StartWorking();
+            player1.AdvanceSimulation(15); // WorkAcc=15
+            player1.Attributes.Restore(52.0, 77.0, 25.5, 98.0, 41.25);
+            int dayBefore1 = clock1.Day;
+            int hourBefore1 = clock1.Hour;
+            int minuteBefore1 = clock1.Minute;
+            int moneyBefore1 = player1.Money;
+            int energyBefore1 = player1.Energy;
+            int hungerBefore1 = player1.Hunger;
+            int thirstBefore1 = player1.Thirst;
+            int xpBefore1 = player1.StudyXP;
+            bool sleepingBefore1 = player1.IsSleeping;
+            bool workingBefore1 = player1.IsWorking;
+            bool studyingBefore1 = player1.IsStudying;
+            int awakeBefore1 = player1.GetAwakeMinutesAccumulator();
+            int sleepBefore1 = player1.GetSleepingMinutesAccumulator();
+            int hungerAccBefore1 = player1.GetHungerMinutesAccumulator();
+            int thirstAccBefore1 = player1.GetThirstMinutesAccumulator();
+            int workAccBefore1 = player1.GetWorkMinutesAccumulator();
+            int studyAccBefore1 = player1.GetStudyMinutesAccumulator();
+            double intelBefore1 = player1.Attributes.Intelligence;
+            double fitBefore1 = player1.Attributes.Fitness;
+            double socBefore1 = player1.Attributes.Social;
+            double discBefore1 = player1.Attributes.Discipline;
+            double creatBefore1 = player1.Attributes.Creativity;
 
-            // Test 60
-            File.WriteAllText(path, "{\"Version\":2,\"Day\":0,\"Money\":1000,\"Energy\":100,\"Hunger\":100,\"Thirst\":100,\"HungerMinutesAccumulator\":60,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+            File.WriteAllText(path, "{\"Version\":2,\"Day\":0,\"Money\":1000,\"Energy\":100,\"Hunger\":100,\"Thirst\":100,\"StudyXP\":0,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"AwakeMinutesAccumulator\":-1,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+            DateTimeOffset baseTime1 = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            bool loadedNeg = SaveManager.Load(clock1, player1, path, baseTime1);
+            bool passNeg = !loadedNeg &&
+                           clock1.Day == dayBefore1 && clock1.Hour == hourBefore1 && clock1.Minute == minuteBefore1 &&
+                           player1.Money == moneyBefore1 && player1.Energy == energyBefore1 &&
+                           player1.Hunger == hungerBefore1 && player1.Thirst == thirstBefore1 &&
+                           player1.StudyXP == xpBefore1 && player1.IsSleeping == sleepingBefore1 &&
+                           player1.IsWorking == workingBefore1 && player1.IsStudying == studyingBefore1 &&
+                           player1.GetAwakeMinutesAccumulator() == awakeBefore1 &&
+                           player1.GetSleepingMinutesAccumulator() == sleepBefore1 &&
+                           player1.GetHungerMinutesAccumulator() == hungerAccBefore1 &&
+                           player1.GetThirstMinutesAccumulator() == thirstAccBefore1 &&
+                           player1.GetWorkMinutesAccumulator() == workAccBefore1 &&
+                           player1.GetStudyMinutesAccumulator() == studyAccBefore1 &&
+                           Math.Abs(player1.Attributes.Intelligence - intelBefore1) < 0.000001 &&
+                           Math.Abs(player1.Attributes.Fitness - fitBefore1) < 0.000001 &&
+                           Math.Abs(player1.Attributes.Social - socBefore1) < 0.000001 &&
+                           Math.Abs(player1.Attributes.Discipline - discBefore1) < 0.000001 &&
+                           Math.Abs(player1.Attributes.Creativity - creatBefore1) < 0.000001;
+
+            // Test 60 (HungerMinutesAccumulator) with different non-default state
             var clock2 = new GameClock();
             var player2 = new PlayerState(clock2);
+            var gm2 = new GodMode(clock2, player2);
+            gm2.SetEnabled(true);
+            gm2.AdvanceDays(10 * 365);
+            player2.StartWorking();
+            player2.AdvanceSimulation(25); // WorkAcc=25, Awake=25, Hunger=25, Thirst=25
+            player2.StopWorking();
+            player2.StartSleeping();
+            player2.AdvanceSimulation(15); // SleepAcc=15
+            player2.StopSleeping();
+            player2.StartStudying();
+            player2.AdvanceSimulation(10); // StudyAcc=10, Awake=35, Hunger=35, Thirst=35
+            player2.Attributes.Restore(30.0, 60.0, 40.0, 80.0, 20.0);
+            int dayBefore2 = clock2.Day;
+            int hourBefore2 = clock2.Hour;
+            int minuteBefore2 = clock2.Minute;
             int moneyBefore2 = player2.Money;
-            bool loaded60 = SaveManager.Load(clock2, player2, path, new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero));
-            bool pass60 = !loaded60 && player2.Money == moneyBefore2;
+            int energyBefore2 = player2.Energy;
+            int hungerBefore2 = player2.Hunger;
+            int thirstBefore2 = player2.Thirst;
+            int xpBefore2 = player2.StudyXP;
+            bool sleepingBefore2 = player2.IsSleeping;
+            bool workingBefore2 = player2.IsWorking;
+            bool studyingBefore2 = player2.IsStudying;
+            int awakeBefore2 = player2.GetAwakeMinutesAccumulator();
+            int sleepBefore2 = player2.GetSleepingMinutesAccumulator();
+            int hungerAccBefore2 = player2.GetHungerMinutesAccumulator();
+            int thirstAccBefore2 = player2.GetThirstMinutesAccumulator();
+            int workAccBefore2 = player2.GetWorkMinutesAccumulator();
+            int studyAccBefore2 = player2.GetStudyMinutesAccumulator();
+            double intelBefore2 = player2.Attributes.Intelligence;
+            double fitBefore2 = player2.Attributes.Fitness;
+            double socBefore2 = player2.Attributes.Social;
+            double discBefore2 = player2.Attributes.Discipline;
+            double creatBefore2 = player2.Attributes.Creativity;
 
-            bool pass = passNeg && pass60;
-            Console.WriteLine($"NeedPersist-N6: {pass} (Expected: True)");
+            File.WriteAllText(path, "{\"Version\":2,\"Day\":0,\"Money\":1000,\"Energy\":100,\"Hunger\":100,\"Thirst\":100,\"StudyXP\":0,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"HungerMinutesAccumulator\":60,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+            DateTimeOffset baseTime2 = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            bool loaded60 = SaveManager.Load(clock2, player2, path, baseTime2);
+            bool pass60 = !loaded60 &&
+                           clock2.Day == dayBefore2 && clock2.Hour == hourBefore2 && clock2.Minute == minuteBefore2 &&
+                           player2.Money == moneyBefore2 && player2.Energy == energyBefore2 &&
+                           player2.Hunger == hungerBefore2 && player2.Thirst == thirstBefore2 &&
+                           player2.StudyXP == xpBefore2 && player2.IsSleeping == sleepingBefore2 &&
+                           player2.IsWorking == workingBefore2 && player2.IsStudying == studyingBefore2 &&
+                           player2.GetAwakeMinutesAccumulator() == awakeBefore2 &&
+                           player2.GetSleepingMinutesAccumulator() == sleepBefore2 &&
+                           player2.GetHungerMinutesAccumulator() == hungerAccBefore2 &&
+                           player2.GetThirstMinutesAccumulator() == thirstAccBefore2 &&
+                           player2.GetWorkMinutesAccumulator() == workAccBefore2 &&
+                           player2.GetStudyMinutesAccumulator() == studyAccBefore2 &&
+                           Math.Abs(player2.Attributes.Intelligence - intelBefore2) < 0.000001 &&
+                           Math.Abs(player2.Attributes.Fitness - fitBefore2) < 0.000001 &&
+                           Math.Abs(player2.Attributes.Social - socBefore2) < 0.000001 &&
+                           Math.Abs(player2.Attributes.Discipline - discBefore2) < 0.000001 &&
+                           Math.Abs(player2.Attributes.Creativity - creatBefore2) < 0.000001;
+
+            Console.WriteLine($"NeedPersist-N6: {passNeg && pass60} (Expected: True)");
         });
 
         // --- NeedPersist-N7: Offline Progression Uses Saved Remainder ---
