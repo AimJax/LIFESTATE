@@ -1505,25 +1505,64 @@ public static class SimulationTests
             Console.WriteLine($"Attribute-A6: {clampPos && clampNeg} (Expected: True)");
         }
 
-        // --- Attribute-A7: Invalid Floating-Point Mutation ---
+        // --- Attribute-A7: Invalid Floating-Point Mutation (strengthened: no-op) ---
         {
             var clock = new GameClock();
             var player = new PlayerState(clock);
-            player.Attributes.AddIntelligence(50.0);
-            player.Attributes.AddFitness(50.0);
-            player.Attributes.AddSocial(50.0);
-            player.Attributes.AddDiscipline(50.0);
-            player.Attributes.AddCreativity(50.0);
+
+            // Set non-default known values for all five attributes
+            player.Attributes.AddIntelligence(42.0);   // 10 + 42 = 52
+            player.Attributes.AddFitness(67.0);        // 10 + 67 = 77
+            player.Attributes.AddSocial(15.5);         // 10 + 15.5 = 25.5
+            player.Attributes.AddDiscipline(88.0);     // 10 + 88 = 98
+            player.Attributes.AddCreativity(31.25);    // 10 + 31.25 = 41.25
+
+            double intelBefore = player.Attributes.Intelligence;
+            double fitnessBefore = player.Attributes.Fitness;
+            double socialBefore = player.Attributes.Social;
+            double disciplineBefore = player.Attributes.Discipline;
+            double creativityBefore = player.Attributes.Creativity;
+
+            // Attempt NaN mutations — all must be no-op
             player.Attributes.AddIntelligence(double.NaN);
-            player.Attributes.AddFitness(double.PositiveInfinity);
-            player.Attributes.AddSocial(double.NegativeInfinity);
+            player.Attributes.AddFitness(double.NaN);
+            player.Attributes.AddSocial(double.NaN);
             player.Attributes.AddDiscipline(double.NaN);
+            player.Attributes.AddCreativity(double.NaN);
+
+            bool nanNoop = Math.Abs(player.Attributes.Intelligence - intelBefore) < 0.000001 &&
+                           Math.Abs(player.Attributes.Fitness - fitnessBefore) < 0.000001 &&
+                           Math.Abs(player.Attributes.Social - socialBefore) < 0.000001 &&
+                           Math.Abs(player.Attributes.Discipline - disciplineBefore) < 0.000001 &&
+                           Math.Abs(player.Attributes.Creativity - creativityBefore) < 0.000001;
+
+            // Attempt +Infinity mutations — all must be no-op
+            player.Attributes.AddIntelligence(double.PositiveInfinity);
+            player.Attributes.AddFitness(double.PositiveInfinity);
+            player.Attributes.AddSocial(double.PositiveInfinity);
+            player.Attributes.AddDiscipline(double.PositiveInfinity);
             player.Attributes.AddCreativity(double.PositiveInfinity);
-            bool pass = Math.Abs(player.Attributes.Intelligence - 50.0) < 0.000001 &&
-                        Math.Abs(player.Attributes.Fitness - 50.0) < 0.000001 &&
-                        Math.Abs(player.Attributes.Social - 50.0) < 0.000001 &&
-                        Math.Abs(player.Attributes.Discipline - 50.0) < 0.000001 &&
-                        Math.Abs(player.Attributes.Creativity - 50.0) < 0.000001;
+
+            bool posInfNoop = Math.Abs(player.Attributes.Intelligence - intelBefore) < 0.000001 &&
+                              Math.Abs(player.Attributes.Fitness - fitnessBefore) < 0.000001 &&
+                              Math.Abs(player.Attributes.Social - socialBefore) < 0.000001 &&
+                              Math.Abs(player.Attributes.Discipline - disciplineBefore) < 0.000001 &&
+                              Math.Abs(player.Attributes.Creativity - creativityBefore) < 0.000001;
+
+            // Attempt -Infinity mutations — all must be no-op
+            player.Attributes.AddIntelligence(double.NegativeInfinity);
+            player.Attributes.AddFitness(double.NegativeInfinity);
+            player.Attributes.AddSocial(double.NegativeInfinity);
+            player.Attributes.AddDiscipline(double.NegativeInfinity);
+            player.Attributes.AddCreativity(double.NegativeInfinity);
+
+            bool negInfNoop = Math.Abs(player.Attributes.Intelligence - intelBefore) < 0.000001 &&
+                              Math.Abs(player.Attributes.Fitness - fitnessBefore) < 0.000001 &&
+                              Math.Abs(player.Attributes.Social - socialBefore) < 0.000001 &&
+                              Math.Abs(player.Attributes.Discipline - disciplineBefore) < 0.000001 &&
+                              Math.Abs(player.Attributes.Creativity - creativityBefore) < 0.000001;
+
+            bool pass = nanNoop && posInfNoop && negInfNoop;
             Console.WriteLine($"Attribute-A7: {pass} (Expected: True)");
         }
 
@@ -1925,16 +1964,16 @@ public static class SimulationTests
         RunWithTempSave(path => {
             var clock = new GameClock();
             var player = new PlayerState(clock);
-            player.AdvanceSimulation(59); // Awake 59, Hunger 59, Thirst 59
+            player.AdvanceSimulation(56); // Awake 56, Hunger 56, Thirst 56
             SaveManager.Save(clock, player, path, baseTime);
 
-            // 1 game minute offline = 0.25 real seconds
-            DateTimeOffset loadTime = baseTime.AddSeconds(0.25);
+            // 4 game minutes offline = 1.0 real second
+            DateTimeOffset loadTime = baseTime.AddSeconds(1.0);
             var loadClock = new GameClock();
             var loadPlayer = new PlayerState(loadClock);
             bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
 
-            // 59+1=60 -> Energy -1, Hunger -1, Thirst -2
+            // 56+4=60 -> Energy -1, Hunger -1, Thirst -2
             // Remainders: 0, 0, 0
             bool pass = loaded &&
                 loadPlayer.Energy == 99 && loadPlayer.Hunger == 99 && loadPlayer.Thirst == 98 &&
