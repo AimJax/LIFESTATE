@@ -119,12 +119,33 @@ public class PlayerState
 
         if (elapsedMinutes <= 0) return;
 
-        // Needs always decay/recover toward their clamps.
-        // For very large time spans, they simply hit their limits.
-        // 10,000 minutes (~166 hours) is enough for any need to reach its clamp from any state.
-        UpdateEnergy((int)Math.Min(elapsedMinutes, 10000));
-        UpdateHunger((int)Math.Min(elapsedMinutes, 10000));
-        UpdateThirst((int)Math.Min(elapsedMinutes, 10000));
+        // Energy
+        if (IsSleeping)
+        {
+            long totalSlept = (long)_sleepingMinutesAccumulator + elapsedMinutes;
+            long hoursSlept = totalSlept / 60;
+            Energy = (int)Math.Min(100, (long)Energy + (hoursSlept * 5));
+            _sleepingMinutesAccumulator = (int)(totalSlept % 60);
+        }
+        else
+        {
+            long totalAwake = (long)_awakeMinutesAccumulator + elapsedMinutes;
+            long hoursAwake = totalAwake / 60;
+            Energy = (int)Math.Max(0, (long)Energy - hoursAwake);
+            _awakeMinutesAccumulator = (int)(totalAwake % 60);
+        }
+
+        // Hunger
+        long totalHunger = (long)_hungerMinutesAccumulator + elapsedMinutes;
+        long hoursHunger = totalHunger / 60;
+        Hunger = (int)Math.Max(0, (long)Hunger - hoursHunger);
+        _hungerMinutesAccumulator = (int)(totalHunger % 60);
+
+        // Thirst
+        long totalThirst = (long)_thirstMinutesAccumulator + elapsedMinutes;
+        long hoursThirst = totalThirst / 60;
+        Thirst = (int)Math.Max(0, (long)Thirst - (hoursThirst * 2));
+        _thirstMinutesAccumulator = (int)(totalThirst % 60);
 
         // Work/Study rewards are linear.
         if (IsWorking)

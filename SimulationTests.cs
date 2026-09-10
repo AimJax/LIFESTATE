@@ -662,6 +662,7 @@ public static class SimulationTests
 
         RunSaveLoadTests();
         RunHardenedOfflineTests();
+        RunBulkNeedSemanticsTests();
     }
 
     private static void RunSaveLoadTests()
@@ -1334,5 +1335,84 @@ public static class SimulationTests
             bool pass = loaded && loadClock.Hour == 1 && loadClock.Minute == 0;
             Console.WriteLine($"Offline-H8: {pass} (Expected: True)");
         });
+    }
+
+    private static void RunBulkNeedSemanticsTests()
+    {
+        Console.WriteLine("\n--- LIFESTATE BulkNeed-Semantics Regression Tests ---");
+
+        // BulkNeed-R1: Awake 10,001 minute exactness
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            // Reference
+            var refPlayer = new PlayerState(new GameClock());
+            // Bulk
+            player.BulkAdvanceSimulation(10001, out _, out _);
+            refPlayer.AdvanceSimulation(10001);
+
+            bool pass = player.Energy == refPlayer.Energy && player.Hunger == refPlayer.Hunger && player.Thirst == refPlayer.Thirst;
+            
+            // Follow up 19 mins
+            player.BulkAdvanceSimulation(19, out _, out _);
+            refPlayer.AdvanceSimulation(19);
+            pass &= player.Energy == refPlayer.Energy && player.Hunger == refPlayer.Hunger && player.Thirst == refPlayer.Thirst;
+
+            // Follow up 1 min
+            player.BulkAdvanceSimulation(1, out _, out _);
+            refPlayer.AdvanceSimulation(1);
+            pass &= player.Energy == refPlayer.Energy && player.Hunger == refPlayer.Hunger && player.Thirst == refPlayer.Thirst;
+            
+            Console.WriteLine($"BulkNeed-R1: {pass} (Expected: True)");
+        }
+
+        // BulkNeed-R2: Sleeping 10,001 minute exactness
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.StartSleeping();
+            var refPlayer = new PlayerState(new GameClock());
+            refPlayer.StartSleeping();
+            
+            player.BulkAdvanceSimulation(10001, out _, out _);
+            refPlayer.AdvanceSimulation(10001);
+            
+            bool pass = player.Energy == refPlayer.Energy && player.Hunger == refPlayer.Hunger && player.Thirst == refPlayer.Thirst && player.IsSleeping == refPlayer.IsSleeping;
+            
+            // Follow up 19 mins
+            player.BulkAdvanceSimulation(19, out _, out _);
+            refPlayer.AdvanceSimulation(19);
+            pass &= player.Energy == refPlayer.Energy && player.Hunger == refPlayer.Hunger && player.Thirst == refPlayer.Thirst;
+
+            // Follow up 1 min
+            player.BulkAdvanceSimulation(1, out _, out _);
+            refPlayer.AdvanceSimulation(1);
+            pass &= player.Energy == refPlayer.Energy && player.Hunger == refPlayer.Hunger && player.Thirst == refPlayer.Thirst;
+            
+            Console.WriteLine($"BulkNeed-R2: {pass} (Expected: True)");
+        }
+
+        // BulkNeed-R3: Non-zero existing partial remainder
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            
+            player.AdvanceSimulation(17);
+            
+            var refPlayer = new PlayerState(new GameClock());
+            refPlayer.AdvanceSimulation(17);
+            
+            player.BulkAdvanceSimulation(10001, out _, out _);
+            refPlayer.AdvanceSimulation(10001);
+            
+            bool pass = player.Energy == refPlayer.Energy && player.Hunger == refPlayer.Hunger && player.Thirst == refPlayer.Thirst;
+            
+            // Crossing hourly threshold
+            player.AdvanceSimulation(60);
+            refPlayer.AdvanceSimulation(60);
+            pass &= player.Energy == refPlayer.Energy && player.Hunger == refPlayer.Hunger && player.Thirst == refPlayer.Thirst;
+            
+            Console.WriteLine($"BulkNeed-R3: {pass} (Expected: True)");
+        }
     }
 }
