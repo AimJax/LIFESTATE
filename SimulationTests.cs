@@ -936,132 +936,209 @@ public static class SimulationTests
         // --- Offline Progression Regression Tests ---
         DateTimeOffset offlineT = new DateTimeOffset(2026, 9, 9, 12, 0, 0, TimeSpan.Zero);
 
-        // Test 1: Zero offline time
+        // Offline-T1: ZERO OFFLINE TIME
         RunWithTempSave(path => {
             var clock = new GameClock();
             var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(20 * 365); // Adult
+            player.DebugAddMoney(500); // Money 1500
+            player.StartWorking();
+            player.AdvanceSimulation(30); 
+            player.StopWorking();
+            player.StartStudying();
+            player.AdvanceSimulation(15);
+            player.StopStudying();
+            
+            int savedDay = clock.Day;
+            int savedHour = clock.Hour;
+            int savedMinute = clock.Minute;
+            int savedMoney = player.Money;
+            int savedEnergy = player.Energy;
+            int savedHunger = player.Hunger;
+            int savedThirst = player.Thirst;
+            int savedXP = player.StudyXP;
+            bool savedSleep = player.IsSleeping;
+            bool savedWork = player.IsWorking;
+            bool savedStudy = player.IsStudying;
+            int savedWorkAcc = player.GetWorkMinutesAccumulator();
+            int savedStudyAcc = player.GetStudyMinutesAccumulator();
+
             SaveManager.Save(clock, player, path, offlineT);
             var loadClock = new GameClock();
             var loadPlayer = new PlayerState(loadClock);
             bool loaded = SaveManager.Load(loadClock, loadPlayer, path, offlineT);
-            bool match = loaded && loadClock.Day == clock.Day && loadClock.Hour == clock.Hour && loadClock.Minute == clock.Minute;
-            Console.WriteLine($"Offline-T1: Zero offline time: {match} (Expected: True)");
+
+            bool pass = loaded &&
+                        loadClock.Day == savedDay && loadClock.Hour == savedHour && loadClock.Minute == savedMinute &&
+                        loadPlayer.Money == savedMoney && loadPlayer.Energy == savedEnergy &&
+                        loadPlayer.Hunger == savedHunger && loadPlayer.Thirst == savedThirst &&
+                        loadPlayer.StudyXP == savedXP && loadPlayer.IsSleeping == savedSleep &&
+                        loadPlayer.IsWorking == savedWork && loadPlayer.IsStudying == savedStudy &&
+                        loadPlayer.GetWorkMinutesAccumulator() == savedWorkAcc &&
+                        loadPlayer.GetStudyMinutesAccumulator() == savedStudyAcc;
+            
+            Console.WriteLine($"Offline-T1: {pass} (Expected: True)");
         });
 
-        // Test 2: 15 real seconds (1 game hour)
+        // Offline-T2: 15 REAL SECONDS
         RunWithTempSave(path => {
             var clock = new GameClock();
             var player = new PlayerState(clock);
             SaveManager.Save(clock, player, path, offlineT);
             var loadClock = new GameClock();
             var loadPlayer = new PlayerState(loadClock);
-            SaveManager.Load(loadClock, loadPlayer, path, offlineT.AddSeconds(15));
-            bool match = loadClock.Hour == 1 && loadClock.Minute == 0 && loadPlayer.Energy < 100;
-            Console.WriteLine($"Offline-T2: 15 real seconds: {match} (Expected: True)");
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, offlineT.AddSeconds(15));
+            
+            bool pass = loaded &&
+                        loadClock.Day == 0 && loadClock.Hour == 1 && loadClock.Minute == 0 &&
+                        loadPlayer.Energy == 99 && loadPlayer.Hunger == 99 && loadPlayer.Thirst == 98 &&
+                        loadPlayer.Money == 1000 && loadPlayer.StudyXP == 0 &&
+                        !loadPlayer.IsSleeping && !loadPlayer.IsWorking && !loadPlayer.IsStudying;
+            Console.WriteLine($"Offline-T2: {pass} (Expected: True)");
         });
 
-        // Test 3: 6 real minutes (1 game day)
+        // Offline-T3: 6 REAL MINUTES
         RunWithTempSave(path => {
             var clock = new GameClock();
             var player = new PlayerState(clock);
             SaveManager.Save(clock, player, path, offlineT);
             var loadClock = new GameClock();
             var loadPlayer = new PlayerState(loadClock);
-            SaveManager.Load(loadClock, loadPlayer, path, offlineT.AddMinutes(6));
-            bool match = loadClock.Day == 1 && loadClock.Hour == 0 && loadClock.Minute == 0;
-            Console.WriteLine($"Offline-T3: 6 real minutes: {match} (Expected: True)");
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, offlineT.AddMinutes(6));
+            bool pass = loaded && loadClock.Day == 1 && loadClock.Hour == 0 && loadClock.Minute == 0;
+            Console.WriteLine($"Offline-T3: {pass} (Expected: True)");
         });
 
-        // Test 4: One real hour (10 game days)
+        // Offline-T4: ONE REAL HOUR
         RunWithTempSave(path => {
             var clock = new GameClock();
             var player = new PlayerState(clock);
             SaveManager.Save(clock, player, path, offlineT);
             var loadClock = new GameClock();
             var loadPlayer = new PlayerState(loadClock);
-            SaveManager.Load(loadClock, loadPlayer, path, offlineT.AddHours(1));
-            bool match = loadClock.Day == 10 && loadClock.Hour == 0 && loadClock.Minute == 0;
-            Console.WriteLine($"Offline-T4: One real hour: {match} (Expected: True)");
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, offlineT.AddHours(1));
+            bool pass = loaded && loadClock.Day == 10 && loadClock.Hour == 0 && loadClock.Minute == 0;
+            Console.WriteLine($"Offline-T4: {pass} (Expected: True)");
         });
 
-        // Test 5: Future timestamp
+        // Offline-T5: FUTURE TIMESTAMP
         RunWithTempSave(path => {
             var clock = new GameClock();
             var player = new PlayerState(clock);
+            player.DebugAddMoney(100);
+            int sMoney = player.Money;
+            int sEnergy = player.Energy;
             SaveManager.Save(clock, player, path, offlineT.AddHours(1));
             var loadClock = new GameClock();
             var loadPlayer = new PlayerState(loadClock);
             bool loaded = SaveManager.Load(loadClock, loadPlayer, path, offlineT);
-            bool match = loaded && loadClock.Day == clock.Day && loadClock.Hour == clock.Hour && loadClock.Minute == clock.Minute;
-            Console.WriteLine($"Offline-T5: Future timestamp: {match} (Expected: True)");
+            bool pass = loaded && loadClock.Day == 0 && loadClock.Hour == 0 &&
+                        loadPlayer.Money == sMoney && loadPlayer.Energy == sEnergy;
+            Console.WriteLine($"Offline-T5: {pass} (Expected: True)");
         });
 
-        // Test 6: Work offline progression (15s = 60m)
+        // Offline-T6: WORK
         RunWithTempSave(path => {
             var clock = new GameClock();
             var player = new PlayerState(clock);
             var gm = new GodMode(clock, player);
             gm.SetEnabled(true);
-            gm.AdvanceDays(18 * 365); // Adult
+            gm.AdvanceDays(20 * 365);
             player.StartWorking();
             int moneyBefore = player.Money;
+            int energyBefore = player.Energy;
+            int hungerBefore = player.Hunger;
+            int thirstBefore = player.Thirst;
             SaveManager.Save(clock, player, path, offlineT);
             var loadClock = new GameClock();
             var loadPlayer = new PlayerState(loadClock);
-            SaveManager.Load(loadClock, loadPlayer, path, offlineT.AddSeconds(15));
-            bool moneyIncreased = loadPlayer.Money > moneyBefore;
-            Console.WriteLine($"Offline-T6: Work progression: {moneyIncreased} (Expected: True)");
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, offlineT.AddSeconds(15));
+            bool pass = loaded && loadPlayer.IsWorking &&
+                        loadPlayer.Money == moneyBefore + 10 &&
+                        loadPlayer.Energy == energyBefore - 1 &&
+                        loadPlayer.Hunger == hungerBefore - 1 &&
+                        loadPlayer.Thirst == thirstBefore - 2 &&
+                        loadPlayer.StudyXP == 0;
+            Console.WriteLine($"Offline-T6: {pass} (Expected: True)");
         });
 
-        // Test 7: Study offline progression (15s = 60m)
+        // Offline-T7: STUDY
         RunWithTempSave(path => {
             var clock = new GameClock();
             var player = new PlayerState(clock);
             var gm = new GodMode(clock, player);
             gm.SetEnabled(true);
-            gm.AdvanceDays(6 * 365); // School age
+            gm.AdvanceDays(10 * 365);
             player.StartStudying();
             int xpBefore = player.StudyXP;
+            int energyBefore = player.Energy;
+            int hungerBefore = player.Hunger;
+            int thirstBefore = player.Thirst;
             SaveManager.Save(clock, player, path, offlineT);
             var loadClock = new GameClock();
             var loadPlayer = new PlayerState(loadClock);
-            SaveManager.Load(loadClock, loadPlayer, path, offlineT.AddSeconds(15));
-            bool xpIncreased = loadPlayer.StudyXP > xpBefore;
-            Console.WriteLine($"Offline-T7: Study progression: {xpIncreased} (Expected: True)");
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, offlineT.AddSeconds(15));
+            bool pass = loaded && loadPlayer.IsStudying &&
+                        loadPlayer.StudyXP == xpBefore + 10 &&
+                        loadPlayer.Energy == energyBefore - 1 &&
+                        loadPlayer.Hunger == hungerBefore - 1 &&
+                        loadPlayer.Thirst == thirstBefore - 2 &&
+                        loadPlayer.Money == 1000;
+            Console.WriteLine($"Offline-T7: {pass} (Expected: True)");
         });
 
-        // Test 8: Sleep offline progression (15s = 60m)
+        // Offline-T8: SLEEP
         RunWithTempSave(path => {
             var clock = new GameClock();
             var player = new PlayerState(clock);
-            player.UpdateEnergy(20 * 60); // Drain energy
-            int energyBefore = player.Energy;
+            player.UpdateEnergy(20 * 60); // 100 -> 80
             player.StartSleeping();
+            int energyBefore = player.Energy;
             SaveManager.Save(clock, player, path, offlineT);
             var loadClock = new GameClock();
             var loadPlayer = new PlayerState(loadClock);
-            SaveManager.Load(loadClock, loadPlayer, path, offlineT.AddSeconds(15));
-            bool energyRecovered = loadPlayer.Energy > energyBefore;
-            Console.WriteLine($"Offline-T8: Sleep progression: {energyRecovered} (Expected: True)");
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, offlineT.AddSeconds(15));
+            bool pass = loaded && loadPlayer.IsSleeping &&
+                        loadPlayer.Energy == 85 &&
+                        loadPlayer.Hunger == 99 &&
+                        loadPlayer.Thirst == 98 &&
+                        loadPlayer.Money == 1000 &&
+                        loadPlayer.StudyXP == 0;
+            Console.WriteLine($"Offline-T8: {pass} (Expected: True)");
         });
 
-        // Test 9: File version validation (Old version)
+        // Offline-T9: VERSION 1 REJECTION
         RunWithTempSave(path => {
-            File.WriteAllText(path, "{\"Version\":0, \"Energy\":100}");
-            var loadClock = new GameClock();
-            var loadPlayer = new PlayerState(loadClock);
-            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, offlineT);
-            Console.WriteLine($"Offline-T9: Version 0 rejection: {loaded == false} (Expected: True)");
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.DebugAddMoney(50);
+            int m = player.Money;
+            int e = player.Energy;
+            File.WriteAllText(path, "{\"Version\":1, \"Money\":5000, \"Energy\":10}");
+            bool loaded = SaveManager.Load(clock, player, path, offlineT);
+            bool pass = !loaded && player.Money == m && player.Energy == e;
+            Console.WriteLine($"Offline-T9: {pass} (Expected: True)");
         });
 
-        // Test 10: Missing SavedAtUtc (defaults to now, should still load but no offline time)
+        // Offline-T10A/B: SAVEDATUTC VALIDATION
         RunWithTempSave(path => {
-            File.WriteAllText(path, "{\"Version\":1, \"Energy\":50}");
-            var loadClock = new GameClock();
-            var loadPlayer = new PlayerState(loadClock);
-            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, offlineT);
-            bool pass = loaded && loadPlayer.Energy == 50 && loadClock.Hour == 0;
-            Console.WriteLine($"Offline-T10: Missing SavedAtUtc: {pass} (Expected: True)");
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            int m = player.Money;
+
+            // T10A: Missing SavedAtUtc
+            File.WriteAllText(path, "{\"Version\":2, \"Money\":5000}");
+            bool loadedA = SaveManager.Load(clock, player, path, offlineT);
+            bool passA = !loadedA && player.Money == m;
+            Console.WriteLine($"Offline-T10A: {passA} (Expected: True)");
+
+            // T10B: Default SavedAtUtc
+            File.WriteAllText(path, "{\"Version\":2, \"Money\":5000, \"SavedAtUtc\":\"0001-01-01T00:00:00+00:00\"}");
+            bool loadedB = SaveManager.Load(clock, player, path, offlineT);
+            bool passB = !loadedB && player.Money == m;
+            Console.WriteLine($"Offline-T10B: {passB} (Expected: True)");
         });
 
 
