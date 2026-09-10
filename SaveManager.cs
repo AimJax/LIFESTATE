@@ -31,6 +31,7 @@ public static class SaveManager
             SleepingMinutesAccumulator = player.GetSleepingMinutesAccumulator(),
             HungerMinutesAccumulator = player.GetHungerMinutesAccumulator(),
             ThirstMinutesAccumulator = player.GetThirstMinutesAccumulator(),
+            AcademicsExperience = player.Skills.Academics.Experience,
             Intelligence = player.Attributes.Intelligence,
             Fitness = player.Attributes.Fitness,
             Social = player.Attributes.Social,
@@ -82,6 +83,10 @@ public static class SaveManager
                 return false;
             }
 
+            // Validate AcademicsExperience
+            if (saveData.AcademicsExperience < 0 || saveData.AcademicsExperience > SkillProgress.MaxExperience)
+                return false;
+
             // Validate attribute values — nulls are acceptable (old V2 compat), present values must be finite and in [0, 100]
             double attrIntelligence = GetValidatedAttribute(saveData.Intelligence, out bool attrValid);
             if (!attrValid) return false;
@@ -104,6 +109,7 @@ public static class SaveManager
                 saveData.HungerMinutesAccumulator, saveData.ThirstMinutesAccumulator,
                 saveData.WorkMinutesAccumulator, saveData.StudyMinutesAccumulator);
             tempPlayer.Attributes.Restore(attrIntelligence, attrFitness, attrSocial, attrDiscipline, attrCreativity);
+            tempPlayer.Skills.Academics.Restore(saveData.AcademicsExperience);
 
             // Offline Progression Calculation
             DateTimeOffset currentTime = nowUtc ?? DateTimeOffset.UtcNow;
@@ -143,6 +149,7 @@ public static class SaveManager
                 tempPlayer.GetHungerMinutesAccumulator(), tempPlayer.GetThirstMinutesAccumulator(),
                 tempPlayer.GetWorkMinutesAccumulator(), tempPlayer.GetStudyMinutesAccumulator());
             player.Attributes.Restore(tempPlayer.Attributes.Intelligence, tempPlayer.Attributes.Fitness, tempPlayer.Attributes.Social, tempPlayer.Attributes.Discipline, tempPlayer.Attributes.Creativity);
+            player.Skills.Academics.Restore(tempPlayer.Skills.Academics.Experience);
 
             return true;
         }

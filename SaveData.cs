@@ -23,6 +23,7 @@ public class SaveData
     public int SleepingMinutesAccumulator { get; set; }
     public int HungerMinutesAccumulator { get; set; }
     public int ThirstMinutesAccumulator { get; set; }
+    public long AcademicsExperience { get; set; }
     public double? Intelligence { get; set; }
     public double? Fitness { get; set; }
     public double? Social { get; set; }

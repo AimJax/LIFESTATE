@@ -665,6 +665,7 @@ public static class SimulationTests
         RunBulkNeedSemanticsTests();
         RunAttributeTests();
         RunNeedPersistTests();
+        RunSkillTests();
     }
 
     private static void RunSaveLoadTests()
@@ -2167,5 +2168,381 @@ public static class SimulationTests
                 loadPlayer.GetStudyMinutesAccumulator() == player.GetStudyMinutesAccumulator();
             Console.WriteLine($"NeedPersist-N9: {pass} (Expected: True)");
         });
+    }
+
+    private static void RunSkillTests()
+    {
+        Console.WriteLine("\n--- LIFESTATE Skills Regression Tests ---");
+
+        void RunWithTempSave(Action<string> testAction)
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), "LIFESTATE-tests-S", Guid.NewGuid().ToString());
+            string tempSavePath = Path.Combine(tempDir, "save.json");
+            try
+            {
+                Directory.CreateDirectory(tempDir);
+                testAction(tempSavePath);
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+            }
+        }
+
+        DateTimeOffset baseTime = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+
+        // Helper: create an age-10 player (Study-eligible)
+        static PlayerState MakeStudyPlayer(GameClock clock)
+        {
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(10 * 365);
+            return player;
+        }
+
+        // --- Skill-S1: Defaults ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            bool pass = player.Skills.Academics.Experience == 0 && player.Skills.Academics.Level == 0;
+            Console.WriteLine($"Skill-S1: {pass} (Expected: True)");
+        }
+
+        // --- Skill-S2: Study Partial Hour ---
+        {
+            var clock = new GameClock();
+            var player = MakeStudyPlayer(clock);
+            player.StartStudying();
+            player.AdvanceSimulation(59);
+            bool pass = player.Skills.Academics.Experience == 0 && player.Skills.Academics.Level == 0 &&
+                        player.StudyXP == 0;
+            Console.WriteLine($"Skill-S2: {pass} (Expected: True)");
+        }
+
+        // --- Skill-S3: First Completed Study Hour ---
+        {
+            var clock = new GameClock();
+            var player = MakeStudyPlayer(clock);
+            player.StartStudying();
+            player.AdvanceSimulation(60);
+            bool pass = player.StudyXP == 10 &&
+                        Math.Abs(player.Attributes.Intelligence - 10.05) < 0.000001 &&
+                        player.Skills.Academics.Experience == 10 &&
+                        player.Skills.Academics.Level == 0;
+            Console.WriteLine($"Skill-S3: {pass} (Expected: True)");
+        }
+
+        // --- Skill-S4: First Skill Level ---
+        {
+            var clock = new GameClock();
+            var player = MakeStudyPlayer(clock);
+            player.StartStudying();
+            player.AdvanceSimulation(600); // 10 hours
+            bool pass = player.Skills.Academics.Experience == 100 &&
+                        player.Skills.Academics.Level == 1 &&
+                        player.StudyXP == 100 &&
+                        Math.Abs(player.Attributes.Intelligence - 10.50) < 0.000001;
+            Console.WriteLine($"Skill-S4: {pass} (Expected: True)");
+        }
+
+        // --- Skill-S5: Stop / Resume Partial Preservation ---
+        {
+            var clock = new GameClock();
+            var player = MakeStudyPlayer(clock);
+            player.StartStudying();
+            player.AdvanceSimulation(35);
+            player.StopStudying();
+            player.StartStudying();
+            player.AdvanceSimulation(25);
+            bool pass = player.Skills.Academics.Experience == 10 &&
+                        player.StudyXP == 10 &&
+                        Math.Abs(player.Attributes.Intelligence - 10.05) < 0.000001 &&
+                        player.GetStudyMinutesAccumulator() == 0;
+            Console.WriteLine($"Skill-S5: {pass} (Expected: True)");
+        }
+
+        // --- Skill-S6: Multiple Hours Plus Remainder ---
+        {
+            var clock = new GameClock();
+            var player = MakeStudyPlayer(clock);
+            player.StartStudying();
+            player.AdvanceSimulation(187); // 3 hours 7 mins
+            bool pass = player.Skills.Academics.Experience == 30 &&
+                        player.Skills.Academics.Level == 0 &&
+                        player.StudyXP == 30 &&
+                        Math.Abs(player.Attributes.Intelligence - 10.15) < 0.000001 &&
+                        player.GetStudyMinutesAccumulator() == 7;
+            Console.WriteLine($"Skill-S6: {pass} (Expected: True)");
+        }
+
+        // --- Skill-S7: Level Derivation ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            bool pass = true;
+            player.Skills.Academics.Restore(0);
+            pass &= player.Skills.Academics.Level == 0;
+            player.Skills.Academics.Restore(99);
+            pass &= player.Skills.Academics.Level == 0;
+            player.Skills.Academics.Restore(100);
+            pass &= player.Skills.Academics.Level == 1;
+            player.Skills.Academics.Restore(9999);
+            pass &= player.Skills.Academics.Level == 99;
+            player.Skills.Academics.Restore(10000);
+            pass &= player.Skills.Academics.Level == 100;
+            Console.WriteLine($"Skill-S7: {pass} (Expected: True)");
+        }
+
+        // --- Skill-S8: Experience Cap ---
+        {
+            var clock = new GameClock();
+            var player = MakeStudyPlayer(clock);
+            player.Skills.Academics.Restore(9990);
+            player.StartStudying();
+            player.AdvanceSimulation(60); // +10 XP -> 10000
+            bool capPass = player.Skills.Academics.Experience == 10000 &&
+                           player.Skills.Academics.Level == 100;
+            // Continue studying
+            player.AdvanceSimulation(120); // +20 XP, but capped
+            bool contPass = player.Skills.Academics.Experience == 10000 &&
+                            player.Skills.Academics.Level == 100 &&
+                            player.StudyXP == 30; // StudyXP continues
+            Console.WriteLine($"Skill-S8: {capPass && contPass} (Expected: True)");
+        }
+
+        // --- Skill-S9: Invalid Direct Mutation ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.Skills.Academics.Restore(500);
+            player.Skills.Academics.AddExperience(0);    // no-op
+            player.Skills.Academics.AddExperience(-50);  // no-op
+            bool noChange = player.Skills.Academics.Experience == 500;
+            player.Skills.Academics.AddExperience(long.MaxValue); // saturate safely
+            bool saturated = player.Skills.Academics.Experience == 10000;
+            Console.WriteLine($"Skill-S9: {noChange && saturated} (Expected: True)");
+        }
+
+        // --- Skill-S10: Invalid Direct Restore ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.Skills.Academics.Restore(500);
+            player.Skills.Academics.Restore(-1);    // no-op
+            bool passNeg = player.Skills.Academics.Experience == 500;
+            player.Skills.Academics.Restore(10001);  // no-op
+            bool passOver = player.Skills.Academics.Experience == 500;
+            player.Skills.Academics.Restore(250);    // valid
+            bool passValid = player.Skills.Academics.Experience == 250;
+            Console.WriteLine($"Skill-S10: {passNeg && passOver && passValid} (Expected: True)");
+        }
+
+        // --- Skill-S11: Save / Load ---
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = MakeStudyPlayer(clock);
+            player.Skills.Academics.Restore(350);
+            SaveManager.Save(clock, player, path, baseTime);
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, baseTime);
+            bool pass = loaded && loadPlayer.Skills.Academics.Experience == 350 &&
+                        loadPlayer.Skills.Academics.Level == 3;
+            Console.WriteLine($"Skill-S11: {pass} (Expected: True)");
+        });
+
+        // --- Skill-S12: Explicit Zero Save ---
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            SaveManager.Save(clock, player, path, baseTime);
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, baseTime);
+            bool pass = loaded && loadPlayer.Skills.Academics.Experience == 0 &&
+                        loadPlayer.Skills.Academics.Level == 0;
+            Console.WriteLine($"Skill-S12: {pass} (Expected: True)");
+        });
+
+        // --- Skill-S13: Old Version 2 Compatibility ---
+        RunWithTempSave(path => {
+            File.WriteAllText(path, "{\"Version\":2,\"Day\":100,\"Hour\":5,\"Minute\":30,\"Money\":1500,\"Energy\":80,\"Hunger\":70,\"Thirst\":60,\"StudyXP\":300,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            DateTimeOffset loadTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+            bool pass = loaded && loadPlayer.Skills.Academics.Experience == 0 &&
+                        loadPlayer.Skills.Academics.Level == 0 &&
+                        loadPlayer.StudyXP == 300;
+            Console.WriteLine($"Skill-S13: {pass} (Expected: True)");
+        });
+
+        // --- Skill-S14: Invalid Persisted Negative XP ---
+        RunWithTempSave(path => {
+            File.WriteAllText(path, "{\"Version\":2,\"Day\":0,\"Money\":1000,\"Energy\":100,\"Hunger\":100,\"Thirst\":100,\"StudyXP\":0,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"AcademicsExperience\":-1,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+
+            var loadClock = new GameClock();
+            var loadPlayer = MakeStudyPlayer(loadClock);
+            loadPlayer.Skills.Academics.Restore(500);
+            int dayBefore = loadClock.Day;
+            int moneyBefore = loadPlayer.Money;
+            int xpBefore = loadPlayer.StudyXP;
+            long acadBefore = loadPlayer.Skills.Academics.Experience;
+
+            DateTimeOffset loadTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+            bool pass = !loaded && loadClock.Day == dayBefore && loadPlayer.Money == moneyBefore &&
+                        loadPlayer.StudyXP == xpBefore && loadPlayer.Skills.Academics.Experience == acadBefore;
+            Console.WriteLine($"Skill-S14: {pass} (Expected: True)");
+        });
+
+        // --- Skill-S15: Invalid Persisted Over-Max XP ---
+        RunWithTempSave(path => {
+            File.WriteAllText(path, "{\"Version\":2,\"Day\":0,\"Money\":1000,\"Energy\":100,\"Hunger\":100,\"Thirst\":100,\"StudyXP\":0,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"AcademicsExperience\":10001,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+
+            var loadClock = new GameClock();
+            var loadPlayer = MakeStudyPlayer(loadClock);
+            loadPlayer.Skills.Academics.Restore(500);
+            int dayBefore = loadClock.Day;
+            int moneyBefore = loadPlayer.Money;
+            long acadBefore = loadPlayer.Skills.Academics.Experience;
+
+            DateTimeOffset loadTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+            bool pass = !loaded && loadClock.Day == dayBefore && loadPlayer.Money == moneyBefore &&
+                        loadPlayer.Skills.Academics.Experience == acadBefore;
+            Console.WriteLine($"Skill-S15: {pass} (Expected: True)");
+        });
+
+        // --- Skill-S16: Offline Study Progression ---
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = MakeStudyPlayer(clock);
+            player.StartStudying();
+            SaveManager.Save(clock, player, path, baseTime);
+
+            // 10 game hours = 600 game minutes = 150 real seconds
+            DateTimeOffset loadTime = baseTime.AddSeconds(150);
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+
+            bool pass = loaded &&
+                        loadPlayer.Skills.Academics.Experience == 100 &&
+                        loadPlayer.Skills.Academics.Level == 1 &&
+                        loadPlayer.StudyXP == 100 &&
+                        Math.Abs(loadPlayer.Attributes.Intelligence - 10.50) < 0.000001 &&
+                        loadPlayer.IsStudying;
+            Console.WriteLine($"Skill-S16: {pass} (Expected: True)");
+        });
+
+        // --- Skill-S17: Offline Existing Remainder ---
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = MakeStudyPlayer(clock);
+            player.StartStudying();
+            player.AdvanceSimulation(32); // Study accumulator = 32
+            SaveManager.Save(clock, player, path, baseTime);
+
+            // 28 game minutes = 7 real seconds; 32 + 28 = 60 = 1 completed hour
+            DateTimeOffset loadTime = baseTime.AddSeconds(7);
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+
+            bool pass = loaded &&
+                        loadPlayer.Skills.Academics.Experience == 10 &&
+                        loadPlayer.StudyXP == 10 &&
+                        Math.Abs(loadPlayer.Attributes.Intelligence - 10.05) < 0.000001 &&
+                        loadPlayer.GetStudyMinutesAccumulator() == 0;
+            Console.WriteLine($"Skill-S17: {pass} (Expected: True)");
+        });
+
+        // --- Skill-S18: Bulk vs Incremental Equivalence ---
+        {
+            var clock1 = new GameClock();
+            var p1 = MakeStudyPlayer(clock1);
+            p1.StartStudying();
+            p1.AdvanceSimulation(17);
+
+            var clock2 = new GameClock();
+            var p2 = MakeStudyPlayer(clock2);
+            p2.StartStudying();
+            p2.AdvanceSimulation(17);
+
+            long remaining = 10001;
+            while (remaining > 0)
+            {
+                int chunk = (int)Math.Min(remaining, 60);
+                p1.AdvanceSimulation(chunk);
+                remaining -= chunk;
+            }
+
+            p2.BulkAdvanceSimulation(10001, out long moneyEarned, out long xpEarned);
+            p2.ApplyRewards(moneyEarned, xpEarned);
+
+            bool pass = p1.Skills.Academics.Experience == p2.Skills.Academics.Experience &&
+                        p1.Skills.Academics.Level == p2.Skills.Academics.Level &&
+                        p1.StudyXP == p2.StudyXP &&
+                        Math.Abs(p1.Attributes.Intelligence - p2.Attributes.Intelligence) < 0.000001 &&
+                        p1.GetStudyMinutesAccumulator() == p2.GetStudyMinutesAccumulator() &&
+                        p1.Energy == p2.Energy &&
+                        p1.Hunger == p2.Hunger &&
+                        p1.Thirst == p2.Thirst &&
+                        p1.IsStudying == p2.IsStudying;
+            Console.WriteLine($"Skill-S18: {pass} (Expected: True)");
+        }
+
+        // --- Skill-S19: Very Large Bulk Study Cap ---
+        {
+            var clock = new GameClock();
+            var player = MakeStudyPlayer(clock);
+            player.StartStudying();
+            // Very large: enough to cap Academics at 10000
+            // 1001 hours = 60060 game minutes
+            player.BulkAdvanceSimulation(60060, out long moneyEarned, out long xpEarned);
+            player.ApplyRewards(moneyEarned, xpEarned);
+
+            bool pass = player.Skills.Academics.Experience == 10000 &&
+                        player.Skills.Academics.Level == 100 &&
+                        player.StudyXP > 0; // StudyXP continues
+            Console.WriteLine($"Skill-S19: {pass} (Expected: True)");
+        }
+
+        // --- Skill-S20: God Mode Max Skills ---
+        {
+            var clock = new GameClock();
+            var player = MakeStudyPlayer(clock);
+            var gm = new GodMode(clock, player);
+
+            // Disabled: no effect
+            player.Skills.Academics.Restore(500);
+            gm.MaxSkills();
+            bool disabledPass = player.Skills.Academics.Experience == 500;
+
+            // Enabled: sets max
+            gm.SetEnabled(true);
+            int moneyBefore = player.Money;
+            int xpBefore = player.StudyXP;
+            int dayBefore = clock.Day;
+            double intelBefore = player.Attributes.Intelligence;
+            bool studying = player.IsStudying;
+
+            gm.MaxSkills();
+
+            bool pass = disabledPass &&
+                        player.Skills.Academics.Experience == 10000 &&
+                        player.Skills.Academics.Level == 100 &&
+                        player.Money == moneyBefore &&
+                        player.StudyXP == xpBefore &&
+                        clock.Day == dayBefore &&
+                        Math.Abs(player.Attributes.Intelligence - intelBefore) < 0.000001 &&
+                        player.IsStudying == studying;
+            Console.WriteLine($"Skill-S20: {pass} (Expected: True)");
+        }
     }
 }

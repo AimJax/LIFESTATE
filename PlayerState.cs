@@ -22,6 +22,7 @@ public class PlayerState
     };
 
     public PlayerAttributes Attributes { get; } = new();
+    public PlayerSkills Skills { get; } = new();
     public int Money { get; set; } = 1000;
     public int Energy { get; private set; } = 100;
     public int Hunger { get; private set; } = 100;
@@ -158,6 +159,7 @@ public class PlayerState
             long hoursStudied = totalStudyMinutes / 60;
             xpEarned = hoursStudied * 10;
             Attributes.AddIntelligence(hoursStudied * 0.05);
+            Skills.Academics.AddExperience(hoursStudied * 10);
             _studyMinutesAccumulator = (int)(totalStudyMinutes % 60);
         }
     }
@@ -213,6 +215,7 @@ public class PlayerState
         {
             StudyXP += (hoursStudied * 10);
             Attributes.AddIntelligence(hoursStudied * 0.05);
+            Skills.Academics.AddExperience(hoursStudied * 10);
             _studyMinutesAccumulator %= 60;
         }
     }

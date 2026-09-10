@@ -24,6 +24,7 @@ public class MainForm : Form
     private Label _lblSocial = new();
     private Label _lblDiscipline = new();
     private Label _lblCreativity = new();
+    private Label _lblAcademics = new();
     private Label _lblFeedback = new();
 
     private FlowLayoutPanel _debugPanel = new();
@@ -64,6 +65,7 @@ public class MainForm : Form
         _lblSocial = new Label { AutoSize = true };
         _lblDiscipline = new Label { AutoSize = true };
         _lblCreativity = new Label { AutoSize = true };
+        _lblAcademics = new Label { AutoSize = true };
         _lblFeedback = new Label { AutoSize = true, ForeColor = System.Drawing.Color.Red };
 
         panel.Controls.Add(_lblAge);
@@ -79,6 +81,7 @@ public class MainForm : Form
         panel.Controls.Add(_lblSocial);
         panel.Controls.Add(_lblDiscipline);
         panel.Controls.Add(_lblCreativity);
+        panel.Controls.Add(_lblAcademics);
         panel.Controls.Add(_lblFeedback);
 
         var btnStart = new Button { Text = "Start Time" };
@@ -232,6 +235,10 @@ public class MainForm : Form
         btnMaxAttrs.Click += (s, e) => { _godMode.MaxAttributes(); RefreshUI(); };
         _debugPanel.Controls.Add(btnMaxAttrs);
 
+        var btnMaxSkills = new Button { Text = "Max Skills" };
+        btnMaxSkills.Click += (s, e) => { _godMode.MaxSkills(); RefreshUI(); };
+        _debugPanel.Controls.Add(btnMaxSkills);
+
         panel.Controls.Add(_debugPanel);
 
         Controls.Add(panel);
@@ -253,5 +260,6 @@ public class MainForm : Form
         _lblSocial.Text = $"Social: {_player.Attributes.Social:F2}";
         _lblDiscipline.Text = $"Discipline: {_player.Attributes.Discipline:F2}";
         _lblCreativity.Text = $"Creativity: {_player.Attributes.Creativity:F2}";
+        _lblAcademics.Text = $"Academics: Lv. {_player.Skills.Academics.Level}  XP: {_player.Skills.Academics.Experience}/{SkillProgress.MaxExperience}";
     }
 }
