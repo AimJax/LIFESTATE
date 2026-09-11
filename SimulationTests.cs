@@ -2845,7 +2845,12 @@ public static class SimulationTests
 
         // --- Education-E18: Study After Completion ---
         {
-            var (clock, player) = MakeEnrolledPlayer();
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(10 * 365);
+            player.EnrollPrimarySchool();
             player.Education.Restore(EducationStatus.CompletedPrimary, 6, 100, 1000);
             player.StartStudying();
             player.AdvanceSimulation(10 * 60); // 10 hours
@@ -2885,7 +2890,7 @@ public static class SimulationTests
             var gm = new GodMode(clock, player);
             gm.SetEnabled(true);
             gm.AdvanceDays(10 * 365);
-            player.Education.Restore(EducationStatus.CompletedPrimary, 6, 100, 5000);
+            player.Education.Restore(EducationStatus.CompletedPrimary, 6, 100, 1000);
             DateTimeOffset saveTime = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
             SaveManager.Save(clock, player, path, saveTime);
 
