@@ -26,6 +26,11 @@ public class MainForm : Form
     private Label _lblCreativity = new();
     private Label _lblAcademics = new();
     private Label _lblEducation = new();
+    private Label _lblConfidence = new();
+    private Label _lblCuriosity = new();
+    private Label _lblPatience = new();
+    private Label _lblAmbition = new();
+    private Label _lblEmpathy = new();
     private Label _lblFeedback = new();
 
     private FlowLayoutPanel _debugPanel = new();
@@ -68,6 +73,11 @@ public class MainForm : Form
         _lblCreativity = new Label { AutoSize = true };
         _lblAcademics = new Label { AutoSize = true };
         _lblEducation = new Label { AutoSize = true };
+        _lblConfidence = new Label { AutoSize = true };
+        _lblCuriosity = new Label { AutoSize = true };
+        _lblPatience = new Label { AutoSize = true };
+        _lblAmbition = new Label { AutoSize = true };
+        _lblEmpathy = new Label { AutoSize = true };
         _lblFeedback = new Label { AutoSize = true, ForeColor = System.Drawing.Color.Red };
 
         panel.Controls.Add(_lblAge);
@@ -85,6 +95,11 @@ public class MainForm : Form
         panel.Controls.Add(_lblCreativity);
         panel.Controls.Add(_lblAcademics);
         panel.Controls.Add(_lblEducation);
+        panel.Controls.Add(_lblConfidence);
+        panel.Controls.Add(_lblCuriosity);
+        panel.Controls.Add(_lblPatience);
+        panel.Controls.Add(_lblAmbition);
+        panel.Controls.Add(_lblEmpathy);
         panel.Controls.Add(_lblFeedback);
 
         var btnStart = new Button { Text = "Start Time" };
@@ -202,6 +217,9 @@ public class MainForm : Form
         var btnMaxSkills = new Button { Text = "Max Skills" };
         btnMaxSkills.Click += (s, e) => { _godMode.MaxSkills(); RefreshUI(); };
         _debugPanel.Controls.Add(btnMaxSkills);
+        var btnMaxTraits = new Button { Text = "Max Traits" };
+        btnMaxTraits.Click += (s, e) => { _godMode.MaxTraits(); RefreshUI(); };
+        _debugPanel.Controls.Add(btnMaxTraits);
 
         panel.Controls.Add(_debugPanel);
         Controls.Add(panel);
@@ -234,5 +252,11 @@ public class MainForm : Form
         }
         else
             _lblEducation.Text = "Education: Primary Completed";
+
+        _lblConfidence.Text = $"Confidence: {_player.Traits.Confidence:F2}";
+        _lblCuriosity.Text = $"Curiosity: {_player.Traits.Curiosity:F2}";
+        _lblPatience.Text = $"Patience: {_player.Traits.Patience:F2}";
+        _lblAmbition.Text = $"Ambition: {_player.Traits.Ambition:F2}";
+        _lblEmpathy.Text = $"Empathy: {_player.Traits.Empathy:F2}";
     }
 }

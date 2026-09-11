@@ -47,4 +47,10 @@ public class GodMode
         if (!IsEnabled) return;
         _player.Skills.Academics.SetMax();
     }
+
+    public void MaxTraits()
+    {
+        if (!IsEnabled) return;
+        _player.Traits.SetAllMax();
+    }
 }

@@ -24,6 +24,7 @@ public class PlayerState
     public PlayerAttributes Attributes { get; } = new();
     public PlayerSkills Skills { get; } = new();
     public EducationState Education { get; } = new();
+    public PlayerTraits Traits { get; } = new();
     public int Money { get; set; } = 1000;
     public int Energy { get; private set; } = 100;
     public int Hunger { get; private set; } = 100;
@@ -173,6 +174,9 @@ public class PlayerState
                 int educationHours = (int)Math.Min(hoursStudied, 100L);
                 Education.AddProgress(educationHours);
             }
+            Traits.AddCuriosity(hoursStudied * 0.02);
+            Traits.AddPatience(hoursStudied * 0.01);
+            Traits.AddAmbition(hoursStudied * 0.01);
             _studyMinutesAccumulator = (int)(totalStudyMinutes % 60);
         }
 
@@ -236,6 +240,9 @@ public class PlayerState
                 Education.AddProgress(hoursStudied);
                 Education.EvaluateProgression(_clock.Day);
             }
+            Traits.AddCuriosity(hoursStudied * 0.02);
+            Traits.AddPatience(hoursStudied * 0.01);
+            Traits.AddAmbition(hoursStudied * 0.01);
             _studyMinutesAccumulator %= 60;
         }
     }

@@ -5,7 +5,7 @@ namespace Lifestate;
 
 public class SaveData
 {
-    public int Version { get; set; } = 3;
+    public int Version { get; set; } = 4;
     public int Day { get; set; }
     public int Hour { get; set; }
     public int Minute { get; set; }
@@ -28,6 +28,11 @@ public class SaveData
     public int PrimaryGrade { get; set; }
     public int EducationProgress { get; set; }
     public long SchoolYearStartDay { get; set; }
+    public double Confidence { get; set; }
+    public double Curiosity { get; set; }
+    public double Patience { get; set; }
+    public double Ambition { get; set; }
+    public double Empathy { get; set; }
     public double? Intelligence { get; set; }
     public double? Fitness { get; set; }
     public double? Social { get; set; }

@@ -13,7 +13,7 @@ public static class SaveManager
     {
         var saveData = new SaveData
         {
-            Version = 3,
+            Version = 4,
             Day = clock.Day,
             Hour = clock.Hour,
             Minute = clock.Minute,
@@ -36,6 +36,11 @@ public static class SaveManager
             PrimaryGrade = player.Education.PrimaryGrade,
             EducationProgress = player.Education.EducationProgress,
             SchoolYearStartDay = player.Education.SchoolYearStartDay,
+            Confidence = player.Traits.Confidence,
+            Curiosity = player.Traits.Curiosity,
+            Patience = player.Traits.Patience,
+            Ambition = player.Traits.Ambition,
+            Empathy = player.Traits.Empathy,
             Intelligence = player.Attributes.Intelligence,
             Fitness = player.Attributes.Fitness,
             Social = player.Attributes.Social,
@@ -65,7 +70,7 @@ public static class SaveManager
             string json = File.ReadAllText(targetPath);
             var saveData = JsonSerializer.Deserialize<SaveData>(json);
 
-            if (saveData == null || (saveData.Version != 2 && saveData.Version != 3)) return false;
+            if (saveData == null || (saveData.Version != 2 && saveData.Version != 3 && saveData.Version != 4)) return false;
 
             // Strict Validation — basic fields
             if (saveData.Day < 0 ||
@@ -103,12 +108,12 @@ public static class SaveManager
             double attrCreativity = GetValidatedAttribute(saveData.Creativity, out attrValid);
             if (!attrValid) return false;
 
-            // Validate Education if version 3
+            // Validate Education if version 3+
             EducationStatus eduStatus = EducationStatus.NotEnrolled;
             int eduGrade = 0;
             int eduProgress = 0;
             long eduStartDay = 0;
-            if (saveData.Version == 3)
+            if (saveData.Version >= 3)
             {
                 eduStatus = (EducationStatus)saveData.EducationStatus;
                 eduGrade = saveData.PrimaryGrade;
@@ -117,6 +122,30 @@ public static class SaveManager
 
                 if (!ValidateEducation(eduStatus, eduGrade, eduProgress, eduStartDay, saveData.Day))
                     return false;
+            }
+
+            // Validate Traits if version 4 (V3/V2 saves have no trait fields; defaults apply)
+            double traitConfidence = 50.0;
+            double traitCuriosity = 50.0;
+            double traitPatience = 50.0;
+            double traitAmbition = 50.0;
+            double traitEmpathy = 50.0;
+            if (saveData.Version == 4)
+            {
+                if (!IsValidTraitValue(saveData.Confidence) ||
+                    !IsValidTraitValue(saveData.Curiosity) ||
+                    !IsValidTraitValue(saveData.Patience) ||
+                    !IsValidTraitValue(saveData.Ambition) ||
+                    !IsValidTraitValue(saveData.Empathy))
+                {
+                    return false;
+                }
+
+                traitConfidence = saveData.Confidence;
+                traitCuriosity = saveData.Curiosity;
+                traitPatience = saveData.Patience;
+                traitAmbition = saveData.Ambition;
+                traitEmpathy = saveData.Empathy;
             }
 
             // Transactional Load: Create clones for validation
@@ -131,6 +160,7 @@ public static class SaveManager
             tempPlayer.Attributes.Restore(attrIntelligence, attrFitness, attrSocial, attrDiscipline, attrCreativity);
             tempPlayer.Skills.Academics.Restore(saveData.AcademicsExperience);
             tempPlayer.Education.Restore(eduStatus, eduGrade, eduProgress, eduStartDay);
+            tempPlayer.Traits.Restore(traitConfidence, traitCuriosity, traitPatience, traitAmbition, traitEmpathy);
 
             // Offline Progression Calculation
             DateTimeOffset currentTime = nowUtc ?? DateTimeOffset.UtcNow;
@@ -171,6 +201,7 @@ public static class SaveManager
             player.Attributes.Restore(tempPlayer.Attributes.Intelligence, tempPlayer.Attributes.Fitness, tempPlayer.Attributes.Social, tempPlayer.Attributes.Discipline, tempPlayer.Attributes.Creativity);
             player.Skills.Academics.Restore(tempPlayer.Skills.Academics.Experience);
             player.Education.Restore(tempPlayer.Education.Status, tempPlayer.Education.PrimaryGrade, tempPlayer.Education.EducationProgress, tempPlayer.Education.SchoolYearStartDay);
+            player.Traits.Restore(tempPlayer.Traits.Confidence, tempPlayer.Traits.Curiosity, tempPlayer.Traits.Patience, tempPlayer.Traits.Ambition, tempPlayer.Traits.Empathy);
 
             return true;
         }
@@ -194,6 +225,11 @@ public static class SaveManager
             return grade == 6 && progress == 100;
 
         return false;
+    }
+
+    private static bool IsValidTraitValue(double value)
+    {
+        return !double.IsNaN(value) && !double.IsInfinity(value) && value >= 0.0 && value <= 100.0;
     }
 
     private static double GetValidatedAttribute(double? value, out bool valid)

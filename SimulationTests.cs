@@ -413,6 +413,7 @@ public static class SimulationTests
         Console.WriteLine($"9b. Worked another 30m (total 60m): Money {workPlayer.Money} (Expected: 1060)");
 
         // Test 10: Cannot work while sleeping
+        workPlayer.StopWorking();
         workPlayer.StartSleeping();
         workPlayer.StartWorking();
         Console.WriteLine($"10. Cannot work while sleeping: IsSleeping {workPlayer.IsSleeping} (Expected: True), IsWorking {workPlayer.IsWorking} (Expected: False)");
@@ -667,6 +668,7 @@ public static class SimulationTests
         RunNeedPersistTests();
         RunSkillTests();
         RunEducationTests();
+        RunTraitTests();
     }
 
     private static void RunSaveLoadTests()
@@ -3260,6 +3262,622 @@ public static class SimulationTests
             pass &= player.Education.EducationProgress >= 0 && player.Education.EducationProgress <= 100;
 
             Console.WriteLine($"Education-E32: {pass} (Expected: True)");
+        }
+    }
+
+    private static void RunTraitTests()
+    {
+        Console.WriteLine("\n--- LIFESTATE Trait Regression Tests ---");
+
+        void RunWithTempSave(Action<string> testAction)
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), "LIFESTATE-tests-T", Guid.NewGuid().ToString());
+            string tempSavePath = Path.Combine(tempDir, "save.json");
+            try
+            {
+                Directory.CreateDirectory(tempDir);
+                testAction(tempSavePath);
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+            }
+        }
+
+        static bool Close(double a, double b) => Math.Abs(a - b) < 0.000001;
+
+        // --- Trait-T1: Defaults ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            bool pass = Close(player.Traits.Confidence, 50.0) &&
+                        Close(player.Traits.Curiosity, 50.0) &&
+                        Close(player.Traits.Patience, 50.0) &&
+                        Close(player.Traits.Ambition, 50.0) &&
+                        Close(player.Traits.Empathy, 50.0);
+            Console.WriteLine($"Trait-T1: {pass} (Expected: True)");
+        }
+
+        // --- Trait-T2: Positive Mutation ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.Traits.AddConfidence(7.5);
+            player.Traits.AddCuriosity(12.25);
+            player.Traits.AddPatience(3.0);
+            player.Traits.AddAmbition(40.0);
+            player.Traits.AddEmpathy(0.5);
+            bool pass = Close(player.Traits.Confidence, 57.5) &&
+                        Close(player.Traits.Curiosity, 62.25) &&
+                        Close(player.Traits.Patience, 53.0) &&
+                        Close(player.Traits.Ambition, 90.0) &&
+                        Close(player.Traits.Empathy, 50.5);
+            Console.WriteLine($"Trait-T2: {pass} (Expected: True)");
+        }
+
+        // --- Trait-T3: Negative Mutation ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.Traits.AddConfidence(-20.0);
+            player.Traits.AddCuriosity(-0.75);
+            bool pass = Close(player.Traits.Confidence, 30.0) &&
+                        Close(player.Traits.Curiosity, 49.25) &&
+                        Close(player.Traits.Patience, 50.0) &&
+                        Close(player.Traits.Ambition, 50.0) &&
+                        Close(player.Traits.Empathy, 50.0);
+            Console.WriteLine($"Trait-T3: {pass} (Expected: True)");
+        }
+
+        // --- Trait-T4: Upper Clamp ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.Traits.Restore(99.9, 50.0, 50.0, 50.0, 50.0);
+            player.Traits.AddConfidence(10.0);
+            bool pass = Close(player.Traits.Confidence, 100.0);
+            Console.WriteLine($"Trait-T4: {pass} (Expected: True)");
+        }
+
+        // --- Trait-T5: Lower Clamp ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.Traits.Restore(1.0, 50.0, 50.0, 50.0, 50.0);
+            player.Traits.AddConfidence(-10.0);
+            bool pass = Close(player.Traits.Confidence, 0.0);
+            Console.WriteLine($"Trait-T5: {pass} (Expected: True)");
+        }
+
+        // --- Trait-T6: Invalid Mutation No-Op ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.Traits.Restore(11.0, 22.0, 33.0, 44.0, 55.0);
+
+            player.Traits.AddConfidence(double.NaN);
+            player.Traits.AddConfidence(double.PositiveInfinity);
+            player.Traits.AddConfidence(double.NegativeInfinity);
+            player.Traits.AddCuriosity(double.NaN);
+            player.Traits.AddCuriosity(double.PositiveInfinity);
+            player.Traits.AddCuriosity(double.NegativeInfinity);
+            player.Traits.AddPatience(double.NaN);
+            player.Traits.AddPatience(double.PositiveInfinity);
+            player.Traits.AddPatience(double.NegativeInfinity);
+            player.Traits.AddAmbition(double.NaN);
+            player.Traits.AddAmbition(double.PositiveInfinity);
+            player.Traits.AddAmbition(double.NegativeInfinity);
+            player.Traits.AddEmpathy(double.NaN);
+            player.Traits.AddEmpathy(double.PositiveInfinity);
+            player.Traits.AddEmpathy(double.NegativeInfinity);
+
+            bool pass = Close(player.Traits.Confidence, 11.0) &&
+                        Close(player.Traits.Curiosity, 22.0) &&
+                        Close(player.Traits.Patience, 33.0) &&
+                        Close(player.Traits.Ambition, 44.0) &&
+                        Close(player.Traits.Empathy, 55.0);
+            Console.WriteLine($"Trait-T6: {pass} (Expected: True)");
+        }
+
+        // --- Trait-T7: Restore Valid Values ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.Traits.Restore(10.0, 20.0, 30.0, 40.0, 50.0);
+            bool pass = Close(player.Traits.Confidence, 10.0) &&
+                        Close(player.Traits.Curiosity, 20.0) &&
+                        Close(player.Traits.Patience, 30.0) &&
+                        Close(player.Traits.Ambition, 40.0) &&
+                        Close(player.Traits.Empathy, 50.0);
+            Console.WriteLine($"Trait-T7: {pass} (Expected: True)");
+        }
+
+        // --- Trait-T8: Restore Clamp ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.Traits.Restore(150.0, -50.0, 30.0, 40.0, 50.0);
+            bool pass = Close(player.Traits.Confidence, 100.0) &&
+                        Close(player.Traits.Curiosity, 0.0) &&
+                        Close(player.Traits.Patience, 30.0) &&
+                        Close(player.Traits.Ambition, 40.0) &&
+                        Close(player.Traits.Empathy, 50.0);
+            Console.WriteLine($"Trait-T8: {pass} (Expected: True)");
+        }
+
+        // --- Trait-T9: Restore Invalid Per-Field No-Op ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.Traits.Restore(11.0, 22.0, 33.0, 44.0, 55.0);
+            player.Traits.Restore(double.NaN, double.PositiveInfinity, double.NegativeInfinity, 25.0, 75.0);
+            bool pass = Close(player.Traits.Confidence, 11.0) &&
+                        Close(player.Traits.Curiosity, 22.0) &&
+                        Close(player.Traits.Patience, 33.0) &&
+                        Close(player.Traits.Ambition, 25.0) &&
+                        Close(player.Traits.Empathy, 75.0);
+            Console.WriteLine($"Trait-T9: {pass} (Expected: True)");
+        }
+
+        // --- Trait-T10: Study Trait Rewards ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(10 * 365); // Age 10
+            player.StartStudying();
+            player.AdvanceSimulation(10 * 60); // 10 completed Study hours
+            bool pass = Close(player.Traits.Curiosity, 50.20) &&
+                        Close(player.Traits.Patience, 50.10) &&
+                        Close(player.Traits.Ambition, 50.10) &&
+                        Close(player.Traits.Confidence, 50.0) &&
+                        Close(player.Traits.Empathy, 50.0) &&
+                        player.StudyXP == 100 &&
+                        Close(player.Attributes.Intelligence, 10.50) &&
+                        player.Skills.Academics.Experience == 100;
+            Console.WriteLine($"Trait-T10: {pass} (Expected: True)");
+        }
+
+        // --- Trait-T11: Partial Study Hour ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(10 * 365);
+            player.StartStudying();
+            player.AdvanceSimulation(59); // 59 minutes: no completed hour yet
+            bool passPart1 = Close(player.Traits.Curiosity, 50.0) &&
+                             Close(player.Traits.Patience, 50.0) &&
+                             Close(player.Traits.Ambition, 50.0);
+            player.AdvanceSimulation(1); // completes 1 hour
+            bool passPart2 = Close(player.Traits.Curiosity, 50.02) &&
+                             Close(player.Traits.Patience, 50.01) &&
+                             Close(player.Traits.Ambition, 50.01);
+            bool pass = passPart1 && passPart2;
+            Console.WriteLine($"Trait-T11: {pass} (Expected: True)");
+        }
+
+        // --- Trait-T12: Study Clamp ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(10 * 365);
+            player.Traits.Restore(50.0, 99.99, 99.99, 99.99, 50.0);
+            player.StartStudying();
+            player.AdvanceSimulation(10 * 60); // 10 completed Study hours
+            bool pass = Close(player.Traits.Curiosity, 100.0) &&
+                        Close(player.Traits.Patience, 100.0) &&
+                        Close(player.Traits.Ambition, 100.0);
+            Console.WriteLine($"Trait-T12: {pass} (Expected: True)");
+        }
+
+        // --- Trait-T13: Work Does Not Change Traits ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(20 * 365); // Age 20
+            player.Traits.Restore(12.0, 23.0, 34.0, 45.0, 56.0);
+            player.StartWorking();
+            player.AdvanceSimulation(3 * 60); // 3 completed Work hours
+            bool pass = Close(player.Traits.Confidence, 12.0) &&
+                        Close(player.Traits.Curiosity, 23.0) &&
+                        Close(player.Traits.Patience, 34.0) &&
+                        Close(player.Traits.Ambition, 45.0) &&
+                        Close(player.Traits.Empathy, 56.0) &&
+                        player.Money == 1030;
+            Console.WriteLine($"Trait-T13: {pass} (Expected: True)");
+        }
+
+        // --- Trait-T14: Sleep Does Not Change Traits ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.Traits.Restore(12.0, 23.0, 34.0, 45.0, 56.0);
+            player.StartSleeping();
+            player.AdvanceSimulation(8 * 60); // 8 completed Sleep hours
+            bool pass = Close(player.Traits.Confidence, 12.0) &&
+                        Close(player.Traits.Curiosity, 23.0) &&
+                        Close(player.Traits.Patience, 34.0) &&
+                        Close(player.Traits.Ambition, 45.0) &&
+                        Close(player.Traits.Empathy, 56.0);
+            Console.WriteLine($"Trait-T14: {pass} (Expected: True)");
+        }
+
+        // --- Trait-T15: Idle Does Not Change Traits ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.Traits.Restore(12.0, 23.0, 34.0, 45.0, 56.0);
+            player.AdvanceSimulation(5 * 60); // 5 awake idle hours
+            bool pass = Close(player.Traits.Confidence, 12.0) &&
+                        Close(player.Traits.Curiosity, 23.0) &&
+                        Close(player.Traits.Patience, 34.0) &&
+                        Close(player.Traits.Ambition, 45.0) &&
+                        Close(player.Traits.Empathy, 56.0);
+            Console.WriteLine($"Trait-T15: {pass} (Expected: True)");
+        }
+
+        // --- Trait-T16: Bulk Study Trait Rewards ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(10 * 365);
+            player.StartStudying();
+            // 100 completed Study hours = 6000 minutes
+            player.BulkAdvanceSimulation(6000, out long moneyEarned, out long xpEarned);
+            player.ApplyRewards(moneyEarned, xpEarned);
+            bool pass = Close(player.Traits.Curiosity, 52.0) &&
+                        Close(player.Traits.Patience, 51.0) &&
+                        Close(player.Traits.Ambition, 51.0) &&
+                        Close(player.Traits.Confidence, 50.0) &&
+                        Close(player.Traits.Empathy, 50.0) &&
+                        player.StudyXP == 1000 &&
+                        Close(player.Attributes.Intelligence, 15.0) &&
+                        player.Skills.Academics.Experience == 1000;
+            Console.WriteLine($"Trait-T16: {pass} (Expected: True)");
+        }
+
+        // --- Trait-T17: Normal vs Bulk Equivalence ---
+        {
+            var clock1 = new GameClock();
+            var p1 = new PlayerState(clock1);
+            var gm1 = new GodMode(clock1, p1);
+            gm1.SetEnabled(true);
+            gm1.AdvanceDays(10 * 365);
+            p1.StartStudying();
+
+            var clock2 = new GameClock();
+            var p2 = new PlayerState(clock2);
+            var gm2 = new GodMode(clock2, p2);
+            gm2.SetEnabled(true);
+            gm2.AdvanceDays(10 * 365);
+            p2.StartStudying();
+
+            // Advance both by 120 minutes (2 completed Study hours) via different paths.
+            p1.AdvanceSimulation(120);
+            p2.BulkAdvanceSimulation(120, out long moneyEarned, out long xpEarned);
+            p2.ApplyRewards(moneyEarned, xpEarned);
+
+            bool pass = p1.StudyXP == p2.StudyXP &&
+                        Close(p1.Attributes.Intelligence, p2.Attributes.Intelligence) &&
+                        p1.Skills.Academics.Experience == p2.Skills.Academics.Experience &&
+                        Close(p1.Traits.Confidence, p2.Traits.Confidence) &&
+                        Close(p1.Traits.Curiosity, p2.Traits.Curiosity) &&
+                        Close(p1.Traits.Patience, p2.Traits.Patience) &&
+                        Close(p1.Traits.Ambition, p2.Traits.Ambition) &&
+                        Close(p1.Traits.Empathy, p2.Traits.Empathy) &&
+                        p1.GetStudyMinutesAccumulator() == p2.GetStudyMinutesAccumulator() &&
+                        p1.Energy == p2.Energy &&
+                        p1.Hunger == p2.Hunger &&
+                        p1.Thirst == p2.Thirst;
+            Console.WriteLine($"Trait-T17: {pass} (Expected: True)");
+        }
+
+        // --- Trait-T18: Save / Load V4 ---
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.Traits.Restore(12.5, 23.5, 34.5, 45.5, 56.5);
+            DateTimeOffset saveTime = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+            SaveManager.Save(clock, player, path, saveTime);
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, saveTime);
+            bool pass = loaded &&
+                        Close(loadPlayer.Traits.Confidence, 12.5) &&
+                        Close(loadPlayer.Traits.Curiosity, 23.5) &&
+                        Close(loadPlayer.Traits.Patience, 34.5) &&
+                        Close(loadPlayer.Traits.Ambition, 45.5) &&
+                        Close(loadPlayer.Traits.Empathy, 56.5);
+            Console.WriteLine($"Trait-T18: {pass} (Expected: True)");
+        });
+
+        // --- Trait-T19: V3 Compatibility ---
+        RunWithTempSave(path => {
+            File.WriteAllText(path, "{\"Version\":3,\"Day\":100,\"Hour\":5,\"Minute\":30,\"Money\":1500,\"Energy\":80,\"Hunger\":70,\"Thirst\":60,\"StudyXP\":300,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"AwakeMinutesAccumulator\":0,\"SleepingMinutesAccumulator\":0,\"HungerMinutesAccumulator\":0,\"ThirstMinutesAccumulator\":0,\"AcademicsExperience\":500,\"EducationStatus\":0,\"PrimaryGrade\":0,\"EducationProgress\":0,\"SchoolYearStartDay\":0,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            DateTimeOffset loadTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+            bool pass = loaded &&
+                        Close(loadPlayer.Traits.Confidence, 50.0) &&
+                        Close(loadPlayer.Traits.Curiosity, 50.0) &&
+                        Close(loadPlayer.Traits.Patience, 50.0) &&
+                        Close(loadPlayer.Traits.Ambition, 50.0) &&
+                        Close(loadPlayer.Traits.Empathy, 50.0) &&
+                        loadPlayer.StudyXP == 300 &&
+                        loadPlayer.Skills.Academics.Experience == 500;
+            Console.WriteLine($"Trait-T19: {pass} (Expected: True)");
+        });
+
+        // --- Trait-T20: Invalid V4 NaN Reject ---
+        RunWithTempSave(path => {
+            // Crafted JSON: NaN is not valid strict JSON, so use an out-of-range
+            // value that reaches validation (per ticket note). Also test the
+            // transactional unchanged-state guarantee.
+            File.WriteAllText(path, "{\"Version\":4,\"Day\":100,\"Hour\":0,\"Minute\":0,\"Money\":1000,\"Energy\":100,\"Hunger\":100,\"Thirst\":100,\"StudyXP\":0,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"AwakeMinutesAccumulator\":0,\"SleepingMinutesAccumulator\":0,\"HungerMinutesAccumulator\":0,\"ThirstMinutesAccumulator\":0,\"AcademicsExperience\":0,\"EducationStatus\":0,\"PrimaryGrade\":0,\"EducationProgress\":0,\"SchoolYearStartDay\":0,\"Confidence\":50,\"Curiosity\":101,\"Patience\":50,\"Ambition\":50,\"Empathy\":50,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+
+            var setupClock = new GameClock();
+            var setupPlayer = new PlayerState(setupClock);
+            var gm = new GodMode(setupClock, setupPlayer);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(15 * 365);
+            setupPlayer.Traits.Restore(11.0, 22.0, 33.0, 44.0, 55.0);
+
+            DateTimeOffset loadTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            bool loaded = SaveManager.Load(setupClock, setupPlayer, path, loadTime);
+            bool pass = !loaded &&
+                        Close(setupPlayer.Traits.Confidence, 11.0) &&
+                        Close(setupPlayer.Traits.Curiosity, 22.0) &&
+                        Close(setupPlayer.Traits.Patience, 33.0) &&
+                        Close(setupPlayer.Traits.Ambition, 44.0) &&
+                        Close(setupPlayer.Traits.Empathy, 55.0);
+            Console.WriteLine($"Trait-T20: {pass} (Expected: True)");
+        });
+
+        // --- Trait-T21: Invalid V4 Infinity Reject ---
+        RunWithTempSave(path => {
+            // Infinity is likewise not representable in strict JSON; an
+            // out-of-range persisted value must still be rejected by validation.
+            File.WriteAllText(path, "{\"Version\":4,\"Day\":100,\"Hour\":0,\"Minute\":0,\"Money\":1000,\"Energy\":100,\"Hunger\":100,\"Thirst\":100,\"StudyXP\":0,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"AwakeMinutesAccumulator\":0,\"SleepingMinutesAccumulator\":0,\"HungerMinutesAccumulator\":0,\"ThirstMinutesAccumulator\":0,\"AcademicsExperience\":0,\"EducationStatus\":0,\"PrimaryGrade\":0,\"EducationProgress\":0,\"SchoolYearStartDay\":0,\"Confidence\":-1,\"Curiosity\":50,\"Patience\":50,\"Ambition\":50,\"Empathy\":50,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            DateTimeOffset loadTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+            Console.WriteLine($"Trait-T21: {!loaded} (Expected: True)");
+        });
+
+        // --- Trait-T22: Invalid V4 Range Reject ---
+        RunWithTempSave(path => {
+            // Confidence -1
+            File.WriteAllText(path, "{\"Version\":4,\"Day\":100,\"Hour\":0,\"Minute\":0,\"Money\":1000,\"Energy\":100,\"Hunger\":100,\"Thirst\":100,\"StudyXP\":0,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"AwakeMinutesAccumulator\":0,\"SleepingMinutesAccumulator\":0,\"HungerMinutesAccumulator\":0,\"ThirstMinutesAccumulator\":0,\"AcademicsExperience\":0,\"EducationStatus\":0,\"PrimaryGrade\":0,\"EducationProgress\":0,\"SchoolYearStartDay\":0,\"Confidence\":-1,\"Curiosity\":50,\"Patience\":50,\"Ambition\":50,\"Empathy\":50,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+            var loadClock1 = new GameClock();
+            var loadPlayer1 = new PlayerState(loadClock1);
+            DateTimeOffset loadTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            bool loadedNeg = SaveManager.Load(loadClock1, loadPlayer1, path, loadTime);
+
+            // Confidence 101
+            File.WriteAllText(path, "{\"Version\":4,\"Day\":100,\"Hour\":0,\"Minute\":0,\"Money\":1000,\"Energy\":100,\"Hunger\":100,\"Thirst\":100,\"StudyXP\":0,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"AwakeMinutesAccumulator\":0,\"SleepingMinutesAccumulator\":0,\"HungerMinutesAccumulator\":0,\"ThirstMinutesAccumulator\":0,\"AcademicsExperience\":0,\"EducationStatus\":0,\"PrimaryGrade\":0,\"EducationProgress\":0,\"SchoolYearStartDay\":0,\"Confidence\":101,\"Curiosity\":50,\"Patience\":50,\"Ambition\":50,\"Empathy\":50,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+            var loadClock2 = new GameClock();
+            var loadPlayer2 = new PlayerState(loadClock2);
+            bool loadedOver = SaveManager.Load(loadClock2, loadPlayer2, path, loadTime);
+
+            Console.WriteLine($"Trait-T22: {!loadedNeg && !loadedOver} (Expected: True)");
+        });
+
+        // --- Trait-T23: Transactional Rejection ---
+        RunWithTempSave(path => {
+            // Non-default live runtime
+            var setupClock = new GameClock();
+            var setupPlayer = new PlayerState(setupClock);
+            var gm = new GodMode(setupClock, setupPlayer);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(20 * 365);
+            setupPlayer.EnrollPrimarySchool();
+            setupPlayer.StartStudying();
+            setupPlayer.AdvanceSimulation(30);
+            setupPlayer.StopStudying();
+            setupPlayer.Education.Restore(EducationStatus.PrimarySchool, 2, 50, setupClock.Day - 200);
+            setupPlayer.Traits.Restore(11.0, 22.0, 33.0, 44.0, 55.0);
+
+            int dayBefore = setupClock.Day;
+            int hourBefore = setupClock.Hour;
+            int minuteBefore = setupClock.Minute;
+            int moneyBefore = setupPlayer.Money;
+            int energyBefore = setupPlayer.Energy;
+            int hungerBefore = setupPlayer.Hunger;
+            int thirstBefore = setupPlayer.Thirst;
+            int xpBefore = setupPlayer.StudyXP;
+            bool studyBefore = setupPlayer.IsStudying;
+            int studyAccBefore = setupPlayer.GetStudyMinutesAccumulator();
+            double intelBefore = setupPlayer.Attributes.Intelligence;
+            long acadBefore = setupPlayer.Skills.Academics.Experience;
+            var eduStatusBefore = setupPlayer.Education.Status;
+            int eduGradeBefore = setupPlayer.Education.PrimaryGrade;
+            int eduProgressBefore = setupPlayer.Education.EducationProgress;
+            long eduStartBefore = setupPlayer.Education.SchoolYearStartDay;
+            double confBefore = setupPlayer.Traits.Confidence;
+            double curBefore = setupPlayer.Traits.Curiosity;
+            double patBefore = setupPlayer.Traits.Patience;
+            double ambBefore = setupPlayer.Traits.Ambition;
+            double empBefore = setupPlayer.Traits.Empathy;
+
+            File.WriteAllText(path, "{\"Version\":4,\"Day\":5000,\"Hour\":5,\"Minute\":30,\"Money\":9999,\"Energy\":50,\"Hunger\":60,\"Thirst\":70,\"StudyXP\":500,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"AwakeMinutesAccumulator\":0,\"SleepingMinutesAccumulator\":0,\"HungerMinutesAccumulator\":0,\"ThirstMinutesAccumulator\":0,\"AcademicsExperience\":2000,\"EducationStatus\":1,\"PrimaryGrade\":3,\"EducationProgress\":40,\"SchoolYearStartDay\":100,\"Confidence\":150,\"Curiosity\":50,\"Patience\":50,\"Ambition\":50,\"Empathy\":50,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+
+            DateTimeOffset loadTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            bool loaded = SaveManager.Load(setupClock, setupPlayer, path, loadTime);
+            bool pass = !loaded &&
+                        setupClock.Day == dayBefore && setupClock.Hour == hourBefore && setupClock.Minute == minuteBefore &&
+                        setupPlayer.Money == moneyBefore &&
+                        setupPlayer.Energy == energyBefore && setupPlayer.Hunger == hungerBefore && setupPlayer.Thirst == thirstBefore &&
+                        setupPlayer.StudyXP == xpBefore &&
+                        setupPlayer.IsStudying == studyBefore &&
+                        setupPlayer.GetStudyMinutesAccumulator() == studyAccBefore &&
+                        Close(setupPlayer.Attributes.Intelligence, intelBefore) &&
+                        setupPlayer.Skills.Academics.Experience == acadBefore &&
+                        setupPlayer.Education.Status == eduStatusBefore &&
+                        setupPlayer.Education.PrimaryGrade == eduGradeBefore &&
+                        setupPlayer.Education.EducationProgress == eduProgressBefore &&
+                        setupPlayer.Education.SchoolYearStartDay == eduStartBefore &&
+                        Close(setupPlayer.Traits.Confidence, confBefore) &&
+                        Close(setupPlayer.Traits.Curiosity, curBefore) &&
+                        Close(setupPlayer.Traits.Patience, patBefore) &&
+                        Close(setupPlayer.Traits.Ambition, ambBefore) &&
+                        Close(setupPlayer.Traits.Empathy, empBefore);
+            Console.WriteLine($"Trait-T23: {pass} (Expected: True)");
+        });
+
+        // --- Trait-T24: Offline Study ---
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(10 * 365);
+            player.EnrollPrimarySchool();
+            player.StartStudying();
+            DateTimeOffset saveTime = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+            SaveManager.Save(clock, player, path, saveTime);
+
+            // 50 completed Study hours = 3000 game minutes = 750 real seconds offline
+            DateTimeOffset loadTime = saveTime.AddSeconds(750);
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+
+            bool pass = loaded &&
+                        Close(loadPlayer.Traits.Curiosity, 51.0) &&
+                        Close(loadPlayer.Traits.Patience, 50.5) &&
+                        Close(loadPlayer.Traits.Ambition, 50.5) &&
+                        Close(loadPlayer.Traits.Confidence, 50.0) &&
+                        Close(loadPlayer.Traits.Empathy, 50.0) &&
+                        loadPlayer.StudyXP == 500 &&
+                        Close(loadPlayer.Attributes.Intelligence, 12.50) &&
+                        loadPlayer.Skills.Academics.Experience == 500 &&
+                        loadPlayer.Education.EducationProgress == 50;
+            Console.WriteLine($"Trait-T24: {pass} (Expected: True)");
+        });
+
+        // --- Trait-T25: Offline Idle ---
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.Traits.Restore(12.0, 23.0, 34.0, 45.0, 56.0);
+            DateTimeOffset saveTime = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+            SaveManager.Save(clock, player, path, saveTime);
+
+            // Significant offline time while idle (~1 real hour = 240 game minutes = 4 game hours)
+            DateTimeOffset loadTime = saveTime.AddSeconds(3600);
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+
+            bool pass = loaded &&
+                        Close(loadPlayer.Traits.Confidence, 12.0) &&
+                        Close(loadPlayer.Traits.Curiosity, 23.0) &&
+                        Close(loadPlayer.Traits.Patience, 34.0) &&
+                        Close(loadPlayer.Traits.Ambition, 45.0) &&
+                        Close(loadPlayer.Traits.Empathy, 56.0);
+            Console.WriteLine($"Trait-T25: {pass} (Expected: True)");
+        });
+
+        // --- Trait-T26: God Mode Disabled ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            player.Traits.Restore(11.0, 22.0, 33.0, 44.0, 55.0);
+            gm.MaxTraits();
+            bool pass = Close(player.Traits.Confidence, 11.0) &&
+                        Close(player.Traits.Curiosity, 22.0) &&
+                        Close(player.Traits.Patience, 33.0) &&
+                        Close(player.Traits.Ambition, 44.0) &&
+                        Close(player.Traits.Empathy, 55.0);
+            Console.WriteLine($"Trait-T26: {pass} (Expected: True)");
+        }
+
+        // --- Trait-T27: God Mode Enabled ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.MaxTraits();
+            bool pass = Close(player.Traits.Confidence, 100.0) &&
+                        Close(player.Traits.Curiosity, 100.0) &&
+                        Close(player.Traits.Patience, 100.0) &&
+                        Close(player.Traits.Ambition, 100.0) &&
+                        Close(player.Traits.Empathy, 100.0);
+            Console.WriteLine($"Trait-T27: {pass} (Expected: True)");
+        }
+
+        // --- Trait-T28: Traits Independent From Attributes ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.Attributes.AddIntelligence(30.0);
+            player.Attributes.AddSocial(20.0);
+            player.Attributes.AddDiscipline(15.0);
+
+            bool pass = Close(player.Traits.Confidence, 50.0) &&
+                        Close(player.Traits.Curiosity, 50.0) &&
+                        Close(player.Traits.Patience, 50.0) &&
+                        Close(player.Traits.Ambition, 50.0) &&
+                        Close(player.Traits.Empathy, 50.0);
+
+            player.Traits.AddCuriosity(10.0);
+            pass &= Close(player.Attributes.Intelligence, 40.0) &&
+                    Close(player.Attributes.Social, 30.0) &&
+                    Close(player.Attributes.Discipline, 25.0);
+            Console.WriteLine($"Trait-T28: {pass} (Expected: True)");
+        }
+
+        // --- Trait-T29: Traits Independent From Skills ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.Skills.Academics.Restore(4321);
+
+            bool pass = Close(player.Traits.Confidence, 50.0) &&
+                        Close(player.Traits.Curiosity, 50.0) &&
+                        Close(player.Traits.Patience, 50.0) &&
+                        Close(player.Traits.Ambition, 50.0) &&
+                        Close(player.Traits.Empathy, 50.0);
+
+            player.Traits.AddConfidence(5.0);
+            pass &= player.Skills.Academics.Experience == 4321;
+            Console.WriteLine($"Trait-T29: {pass} (Expected: True)");
+        }
+
+        // --- Trait-T30: Traits Independent From Education ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(10 * 365);
+            player.Traits.Restore(12.0, 23.0, 34.0, 45.0, 56.0);
+            player.EnrollPrimarySchool(); // no Studying
+            player.AdvanceSimulation(120); // idle enrollment time
+
+            bool pass = Close(player.Traits.Confidence, 12.0) &&
+                        Close(player.Traits.Curiosity, 23.0) &&
+                        Close(player.Traits.Patience, 34.0) &&
+                        Close(player.Traits.Ambition, 45.0) &&
+                        Close(player.Traits.Empathy, 56.0) &&
+                        player.Education.Status == EducationStatus.PrimarySchool;
+            Console.WriteLine($"Trait-T30: {pass} (Expected: True)");
         }
     }
 }
