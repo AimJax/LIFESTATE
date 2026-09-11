@@ -670,6 +670,7 @@ public static class SimulationTests
         RunEducationTests();
         RunTraitTests();
         RunPlayTests();
+        RunFamilyTests();
     }
 
     private static void RunSaveLoadTests()
@@ -4390,6 +4391,683 @@ public static class SimulationTests
 
             bool pass = workPass && sleepPass && idlePass && studyPass;
             Console.WriteLine($"Play-P25: {pass} (Expected: True)");
+        }
+    }
+
+    private static void RunFamilyTests()
+    {
+        Console.WriteLine("\n--- LIFESTATE Family & Relationship Regression Tests ---");
+
+        void RunWithTempSave(Action<string> testAction)
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), "LIFESTATE-tests-F", Guid.NewGuid().ToString());
+            string tempSavePath = Path.Combine(tempDir, "save.json");
+            try
+            {
+                Directory.CreateDirectory(tempDir);
+                testAction(tempSavePath);
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+            }
+        }
+
+        static bool Close(double a, double b) => Math.Abs(a - b) < 0.000001;
+
+        static (GameClock clock, PlayerState player) MakeAge10Player()
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(10 * 365);
+            return (clock, player);
+        }
+
+        static (GameClock clock, PlayerState player) MakeAge20Player()
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(20 * 365);
+            return (clock, player);
+        }
+
+        // --- Family-F1: Fresh Family Exists ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            bool pass = player.Family != null &&
+                        player.Family.Mother != null &&
+                        player.Family.Father != null;
+            Console.WriteLine($"Family-F1: {pass} (Expected: True)");
+        }
+
+        // --- Family-F2: Parent Roles ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            bool pass = player.Family.Mother.Role == PersonRole.Mother &&
+                        player.Family.Father.Role == PersonRole.Father;
+            Console.WriteLine($"Family-F2: {pass} (Expected: True)");
+        }
+
+        // --- Family-F3: Parent Names ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            bool pass = player.Family.Mother.Name == "Mother" &&
+                        player.Family.Father.Name == "Father";
+            Console.WriteLine($"Family-F3: {pass} (Expected: True)");
+        }
+
+        // --- Family-F4: Unique IDs ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            bool pass = player.Family.Mother.Id != Guid.Empty &&
+                        player.Family.Father.Id != Guid.Empty &&
+                        player.Family.Mother.Id != player.Family.Father.Id;
+            Console.WriteLine($"Family-F4: {pass} (Expected: True)");
+        }
+
+        // --- Family-F5: Starting Ages ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            bool pass = player.Family.Mother.GetAge(clock) == 28 &&
+                        player.Family.Father.GetAge(clock) == 30;
+            Console.WriteLine($"Family-F5: {pass} (Expected: True)");
+        }
+
+        // --- Family-F6: Derived Parent Aging ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(365);
+            bool pass = player.Family.Mother.GetAge(clock) == 29 &&
+                        player.Family.Father.GetAge(clock) == 31;
+            Console.WriteLine($"Family-F6: {pass} (Expected: True)");
+        }
+
+        // --- Family-F7: Relationship Cross References ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            bool pass = player.Relationships.MotherRelationship.PersonId == player.Family.Mother.Id &&
+                        player.Relationships.FatherRelationship.PersonId == player.Family.Father.Id;
+            Console.WriteLine($"Family-F7: {pass} (Expected: True)");
+        }
+
+        // --- Family-F8: Starting Closeness ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            bool pass = Close(player.Relationships.MotherRelationship.Closeness, 50.0) &&
+                        Close(player.Relationships.FatherRelationship.Closeness, 50.0);
+            Console.WriteLine($"Family-F8: {pass} (Expected: True)");
+        }
+
+        // --- Family-F9: Relationship Positive Mutation ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.Relationships.MotherRelationship.AddCloseness(7.5);
+            player.Relationships.FatherRelationship.AddCloseness(2.25);
+            bool pass = Close(player.Relationships.MotherRelationship.Closeness, 57.5) &&
+                        Close(player.Relationships.FatherRelationship.Closeness, 52.25);
+            Console.WriteLine($"Family-F9: {pass} (Expected: True)");
+        }
+
+        // --- Family-F10: Relationship Negative Mutation ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.Relationships.MotherRelationship.AddCloseness(-20.0);
+            bool pass = Close(player.Relationships.MotherRelationship.Closeness, 30.0) &&
+                        Close(player.Relationships.FatherRelationship.Closeness, 50.0);
+            Console.WriteLine($"Family-F10: {pass} (Expected: True)");
+        }
+
+        // --- Family-F11: Relationship Clamp ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.Relationships.MotherRelationship.AddCloseness(200.0); // 50 + 200 -> 100
+            player.Relationships.FatherRelationship.AddCloseness(-200.0); // 50 - 200 -> 0
+            bool pass = Close(player.Relationships.MotherRelationship.Closeness, 100.0) &&
+                        Close(player.Relationships.FatherRelationship.Closeness, 0.0);
+            Console.WriteLine($"Family-F11: {pass} (Expected: True)");
+        }
+
+        // --- Family-F12: Relationship Invalid Mutation ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.Relationships.MotherRelationship.AddCloseness(double.NaN);
+            player.Relationships.MotherRelationship.AddCloseness(double.PositiveInfinity);
+            player.Relationships.MotherRelationship.AddCloseness(double.NegativeInfinity);
+            player.Relationships.FatherRelationship.AddCloseness(double.NaN);
+            player.Relationships.FatherRelationship.AddCloseness(double.PositiveInfinity);
+            player.Relationships.FatherRelationship.AddCloseness(double.NegativeInfinity);
+            bool pass = Close(player.Relationships.MotherRelationship.Closeness, 50.0) &&
+                        Close(player.Relationships.FatherRelationship.Closeness, 50.0);
+            Console.WriteLine($"Family-F12: {pass} (Expected: True)");
+        }
+
+        // --- Family-F13: Family Time Default ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            bool pass = player.IsSpendingFamilyTime == false &&
+                        player.GetFamilyTimeMinutesAccumulator() == 0;
+            Console.WriteLine($"Family-F13: {pass} (Expected: True)");
+        }
+
+        // --- Family-F14: Family Time Available At Birth ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            bool result = player.StartFamilyTime();
+            bool pass = result && player.IsSpendingFamilyTime && player.Age == 0;
+            Console.WriteLine($"Family-F14: {pass} (Expected: True)");
+        }
+
+        // --- Family-F15: Duplicate Family Time Rejected ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            bool first = player.StartFamilyTime();
+            int accBefore = player.GetFamilyTimeMinutesAccumulator();
+            bool second = player.StartFamilyTime();
+            bool pass = first && !second && player.IsSpendingFamilyTime &&
+                        player.GetFamilyTimeMinutesAccumulator() == accBefore;
+            Console.WriteLine($"Family-F15: {pass} (Expected: True)");
+        }
+
+        // --- Family-F16: Stop Family Time ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.StartFamilyTime();
+            player.AdvanceSimulation(30);
+            player.StopFamilyTime();
+            bool pass = player.IsSpendingFamilyTime == false &&
+                        player.GetFamilyTimeMinutesAccumulator() == 30;
+            Console.WriteLine($"Family-F16: {pass} (Expected: True)");
+        }
+
+        // --- Family-F17: Other Activities Block Family Time ---
+        {
+            // Sleep
+            var sClock = new GameClock();
+            var sPlayer = new PlayerState(sClock);
+            sPlayer.StartSleeping();
+            bool sleepBlocks = !sPlayer.StartFamilyTime() && sPlayer.IsSleeping && !sPlayer.IsSpendingFamilyTime;
+
+            // Work
+            var (wClock, wPlayer) = MakeAge20Player();
+            wPlayer.StartWorking();
+            bool workBlocks = !wPlayer.StartFamilyTime() && wPlayer.IsWorking && !wPlayer.IsSpendingFamilyTime;
+
+            // Study
+            var (stClock, stPlayer) = MakeAge10Player();
+            stPlayer.StartStudying();
+            bool studyBlocks = !stPlayer.StartFamilyTime() && stPlayer.IsStudying && !stPlayer.IsSpendingFamilyTime;
+
+            // Play
+            var (pClock, pPlayer) = MakeAge10Player();
+            pPlayer.StopStudying(); // not studying; just ensure clean
+            pPlayer.StartPlaying();
+            bool playBlocks = !pPlayer.StartFamilyTime() && pPlayer.IsPlaying && !pPlayer.IsSpendingFamilyTime;
+
+            bool pass = sleepBlocks && workBlocks && studyBlocks && playBlocks;
+            Console.WriteLine($"Family-F17: {pass} (Expected: True)");
+        }
+
+        // --- Family-F18: Family Time Blocks Other Activities ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(20 * 365); // old enough for work & study
+            player.StartFamilyTime();
+
+            player.StartSleeping();
+            bool sleepRejected = !player.IsSleeping;
+            player.StartWorking();
+            bool workRejected = !player.IsWorking;
+            player.StartStudying();
+            bool studyRejected = !player.IsStudying;
+            player.StartPlaying();
+            bool playRejected = !player.IsPlaying;
+
+            bool pass = player.IsSpendingFamilyTime && sleepRejected && workRejected && studyRejected && playRejected;
+            Console.WriteLine($"Family-F18: {pass} (Expected: True)");
+        }
+
+        // --- Family-F19: 59 Minute Partial ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            double mBefore = player.Relationships.MotherRelationship.Closeness;
+            double fBefore = player.Relationships.FatherRelationship.Closeness;
+            double socialBefore = player.Attributes.Social;
+            double empBefore = player.Traits.Empathy;
+            double confBefore = player.Traits.Confidence;
+            player.StartFamilyTime();
+            player.AdvanceSimulation(59);
+            bool pass = Close(player.Relationships.MotherRelationship.Closeness, mBefore) &&
+                        Close(player.Relationships.FatherRelationship.Closeness, fBefore) &&
+                        Close(player.Attributes.Social, socialBefore) &&
+                        Close(player.Traits.Empathy, empBefore) &&
+                        Close(player.Traits.Confidence, confBefore) &&
+                        player.GetFamilyTimeMinutesAccumulator() == 59;
+            Console.WriteLine($"Family-F19: {pass} (Expected: True)");
+        }
+
+        // --- Family-F20: Complete Hour ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            double mBefore = player.Relationships.MotherRelationship.Closeness;
+            double fBefore = player.Relationships.FatherRelationship.Closeness;
+            double socialBefore = player.Attributes.Social;
+            double empBefore = player.Traits.Empathy;
+            double confBefore = player.Traits.Confidence;
+            player.StartFamilyTime();
+            player.AdvanceSimulation(59);
+            player.AdvanceSimulation(1);
+            bool pass = Close(player.Relationships.MotherRelationship.Closeness - mBefore, 0.25) &&
+                        Close(player.Relationships.FatherRelationship.Closeness - fBefore, 0.25) &&
+                        Close(player.Attributes.Social - socialBefore, 0.02) &&
+                        Close(player.Traits.Empathy - empBefore, 0.02) &&
+                        Close(player.Traits.Confidence - confBefore, 0.01) &&
+                        player.GetFamilyTimeMinutesAccumulator() == 0;
+            Console.WriteLine($"Family-F20: {pass} (Expected: True)");
+        }
+
+        // --- Family-F21: Ten Hours ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            double mBefore = player.Relationships.MotherRelationship.Closeness;
+            double fBefore = player.Relationships.FatherRelationship.Closeness;
+            double socialBefore = player.Attributes.Social;
+            double empBefore = player.Traits.Empathy;
+            double confBefore = player.Traits.Confidence;
+            player.StartFamilyTime();
+            player.AdvanceSimulation(10 * 60);
+            bool pass = Close(player.Relationships.MotherRelationship.Closeness - mBefore, 2.5) &&
+                        Close(player.Relationships.FatherRelationship.Closeness - fBefore, 2.5) &&
+                        Close(player.Attributes.Social - socialBefore, 0.20) &&
+                        Close(player.Traits.Empathy - empBefore, 0.20) &&
+                        Close(player.Traits.Confidence - confBefore, 0.10);
+            Console.WriteLine($"Family-F21: {pass} (Expected: True)");
+        }
+
+        // --- Family-F22: No Unintended Rewards ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(10 * 365);
+            player.EnrollPrimarySchool();
+            double intel = player.Attributes.Intelligence;
+            double fit = player.Attributes.Fitness;
+            double disc = player.Attributes.Discipline;
+            double cre = player.Attributes.Creativity;
+            double cur = player.Traits.Curiosity;
+            double pat = player.Traits.Patience;
+            double amb = player.Traits.Ambition;
+            long acad = player.Skills.Academics.Experience;
+            int xp = player.StudyXP;
+            int money = player.Money;
+            int eduProgress = player.Education.EducationProgress;
+            player.StartFamilyTime();
+            player.AdvanceSimulation(5 * 60);
+            bool pass = Close(player.Attributes.Intelligence, intel) &&
+                        Close(player.Attributes.Fitness, fit) &&
+                        Close(player.Attributes.Discipline, disc) &&
+                        Close(player.Attributes.Creativity, cre) &&
+                        Close(player.Traits.Curiosity, cur) &&
+                        Close(player.Traits.Patience, pat) &&
+                        Close(player.Traits.Ambition, amb) &&
+                        player.Skills.Academics.Experience == acad &&
+                        player.StudyXP == xp &&
+                        player.Money == money &&
+                        player.Education.EducationProgress == eduProgress;
+            Console.WriteLine($"Family-F22: {pass} (Expected: True)");
+        }
+
+        // --- Family-F23: Clamping ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.Relationships.MotherRelationship.RestoreCloseness(99.9);
+            player.Relationships.FatherRelationship.RestoreCloseness(99.9);
+            player.Attributes.Restore(50.0, 50.0, 99.99, 50.0, 50.0); // Social near 100
+            player.Traits.Restore(99.99, 50.0, 50.0, 50.0, 99.99); // Confidence & Empathy near 100
+            player.StartFamilyTime();
+            player.AdvanceSimulation(10 * 60);
+            bool pass = Close(player.Relationships.MotherRelationship.Closeness, 100.0) &&
+                        Close(player.Relationships.FatherRelationship.Closeness, 100.0) &&
+                        Close(player.Attributes.Social, 100.0) &&
+                        Close(player.Traits.Empathy, 100.0) &&
+                        Close(player.Traits.Confidence, 100.0);
+            Console.WriteLine($"Family-F23: {pass} (Expected: True)");
+        }
+
+        // --- Family-F24: Partial Persists Stop/Start ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            double mBefore = player.Relationships.MotherRelationship.Closeness;
+            double fBefore = player.Relationships.FatherRelationship.Closeness;
+            double socialBefore = player.Attributes.Social;
+            double empBefore = player.Traits.Empathy;
+            double confBefore = player.Traits.Confidence;
+            player.StartFamilyTime();
+            player.AdvanceSimulation(30);
+            player.StopFamilyTime();
+            bool partialKept = player.GetFamilyTimeMinutesAccumulator() == 30;
+            player.StartFamilyTime();
+            player.AdvanceSimulation(30);
+            bool pass = partialKept &&
+                        Close(player.Relationships.MotherRelationship.Closeness - mBefore, 0.25) &&
+                        Close(player.Relationships.FatherRelationship.Closeness - fBefore, 0.25) &&
+                        Close(player.Attributes.Social - socialBefore, 0.02) &&
+                        Close(player.Traits.Empathy - empBefore, 0.02) &&
+                        Close(player.Traits.Confidence - confBefore, 0.01) &&
+                        player.GetFamilyTimeMinutesAccumulator() == 0;
+            Console.WriteLine($"Family-F24: {pass} (Expected: True)");
+        }
+
+        // --- Family-F25: Needs While Family Time ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.StartFamilyTime();
+            player.AdvanceSimulation(3 * 60);
+            bool pass = player.Energy == 97 &&
+                        player.Hunger == 97 &&
+                        player.Thirst == 94;
+            Console.WriteLine($"Family-F25: {pass} (Expected: True)");
+        }
+
+        // --- Family-F26: Save/Load V6 Identity ---
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            DateTimeOffset saveTime = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+            SaveManager.Save(clock, player, path, saveTime);
+
+            Guid motherIdBefore = player.Family.Mother.Id;
+            Guid fatherIdBefore = player.Family.Father.Id;
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, saveTime);
+            bool pass = loaded &&
+                        loadPlayer.Family.Mother.Id == motherIdBefore &&
+                        loadPlayer.Family.Father.Id == fatherIdBefore;
+            Console.WriteLine($"Family-F26: {pass} (Expected: True)");
+        });
+
+        // --- Family-F27: Save/Load Relationship ---
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.Relationships.MotherRelationship.RestoreCloseness(72.5);
+            player.Relationships.FatherRelationship.RestoreCloseness(18.25);
+            DateTimeOffset saveTime = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+            SaveManager.Save(clock, player, path, saveTime);
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, saveTime);
+            bool pass = loaded &&
+                        Close(loadPlayer.Relationships.MotherRelationship.Closeness, 72.5) &&
+                        Close(loadPlayer.Relationships.FatherRelationship.Closeness, 18.25) &&
+                        loadPlayer.Relationships.MotherRelationship.PersonId == loadPlayer.Family.Mother.Id &&
+                        loadPlayer.Relationships.FatherRelationship.PersonId == loadPlayer.Family.Father.Id;
+            Console.WriteLine($"Family-F27: {pass} (Expected: True)");
+        });
+
+        // --- Family-F28: Save/Load Active Family Time ---
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.StartFamilyTime();
+            player.AdvanceSimulation(45);
+            DateTimeOffset saveTime = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+            SaveManager.Save(clock, player, path, saveTime);
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, saveTime);
+            bool pass = loaded &&
+                        loadPlayer.IsSpendingFamilyTime &&
+                        loadPlayer.GetFamilyTimeMinutesAccumulator() == 45;
+            Console.WriteLine($"Family-F28: {pass} (Expected: True)");
+        });
+
+        // --- Family-F29: V5 Migration ---
+        RunWithTempSave(path => {
+            // Valid V5 save: traits present, no family fields.
+            File.WriteAllText(path, "{\"Version\":5,\"Day\":100,\"Hour\":5,\"Minute\":30,\"Money\":1500,\"Energy\":80,\"Hunger\":70,\"Thirst\":60,\"StudyXP\":300,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"IsPlaying\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"AwakeMinutesAccumulator\":0,\"SleepingMinutesAccumulator\":0,\"HungerMinutesAccumulator\":0,\"ThirstMinutesAccumulator\":0,\"PlayMinutesAccumulator\":0,\"AcademicsExperience\":500,\"EducationStatus\":0,\"PrimaryGrade\":0,\"EducationProgress\":0,\"SchoolYearStartDay\":0,\"Confidence\":62.5,\"Curiosity\":73.5,\"Patience\":44.5,\"Ambition\":55.5,\"Empathy\":66.5,\"Intelligence\":30.0,\"Fitness\":40.0,\"Social\":20.0,\"Discipline\":25.0,\"Creativity\":35.0,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            DateTimeOffset loadTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+
+            bool pass = loaded &&
+                        loadPlayer.Family.Mother != null && loadPlayer.Family.Father != null &&
+                        loadPlayer.Family.Mother.Id != Guid.Empty && loadPlayer.Family.Father.Id != Guid.Empty &&
+                        loadPlayer.Family.Mother.Id != loadPlayer.Family.Father.Id &&
+                        loadPlayer.Family.Mother.Name == "Mother" && loadPlayer.Family.Father.Name == "Father" &&
+                        // Ages at loaded Day 100: Mother born -10220 -> 28 + 0 = 28; Father -> 30
+                        loadPlayer.Family.Mother.GetAge(loadClock) == 28 &&
+                        loadPlayer.Family.Father.GetAge(loadClock) == 30 &&
+                        loadPlayer.Relationships.MotherRelationship.PersonId == loadPlayer.Family.Mother.Id &&
+                        loadPlayer.Relationships.FatherRelationship.PersonId == loadPlayer.Family.Father.Id &&
+                        Close(loadPlayer.Relationships.MotherRelationship.Closeness, 50.0) &&
+                        Close(loadPlayer.Relationships.FatherRelationship.Closeness, 50.0) &&
+                        loadPlayer.IsSpendingFamilyTime == false &&
+                        loadPlayer.GetFamilyTimeMinutesAccumulator() == 0;
+
+            // Now save as V6 and reload; migrated IDs must remain stable.
+            Guid migratedMotherId = loadPlayer.Family.Mother!.Id;
+            Guid migratedFatherId = loadPlayer.Family.Father!.Id;
+            SaveManager.Save(loadClock, loadPlayer, path, loadTime);
+
+            var reloadClock = new GameClock();
+            var reloadPlayer = new PlayerState(reloadClock);
+            bool reloaded = SaveManager.Load(reloadClock, reloadPlayer, path, loadTime);
+            pass &= reloaded &&
+                     reloadPlayer.Family.Mother.Id == migratedMotherId &&
+                     reloadPlayer.Family.Father.Id == migratedFatherId;
+
+            Console.WriteLine($"Family-F29: {pass} (Expected: True)");
+        });
+
+        // --- Family-F30: Invalid Person Identity Reject ---
+        RunWithTempSave(path => {
+            // Valid base V6 JSON with placeholders swapped per case.
+            string MakeV6(string motherId, string fatherId) =>
+                "{\"Version\":6,\"Day\":100,\"Hour\":0,\"Minute\":0,\"Money\":1000,\"Energy\":100,\"Hunger\":100,\"Thirst\":100,\"StudyXP\":0,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"IsPlaying\":false,\"IsSpendingFamilyTime\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"AwakeMinutesAccumulator\":0,\"SleepingMinutesAccumulator\":0,\"HungerMinutesAccumulator\":0,\"ThirstMinutesAccumulator\":0,\"PlayMinutesAccumulator\":0,\"FamilyTimeMinutesAccumulator\":0,\"AcademicsExperience\":0,\"EducationStatus\":0,\"PrimaryGrade\":0,\"EducationProgress\":0,\"SchoolYearStartDay\":0," +
+                "\"MotherId\":" + motherId + ",\"MotherName\":\"Mother\",\"MotherBirthDay\":-10220," +
+                "\"FatherId\":" + fatherId + ",\"FatherName\":\"Father\",\"FatherBirthDay\":-10950," +
+                "\"MotherRelationshipPersonId\":" + motherId + ",\"MotherCloseness\":50," +
+                "\"FatherRelationshipPersonId\":" + fatherId + ",\"FatherCloseness\":50," +
+                "\"Confidence\":50,\"Curiosity\":50,\"Patience\":50,\"Ambition\":50,\"Empathy\":50,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}";
+
+            var setupClock = new GameClock();
+            var setupPlayer = new PlayerState(setupClock);
+            var gm = new GodMode(setupClock, setupPlayer);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(15 * 365);
+
+            Guid liveMotherId = setupPlayer.Family.Mother.Id;
+            DateTimeOffset loadTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+
+            // Case 1: Mother Id = Guid.Empty
+            File.WriteAllText(path, MakeV6("\"00000000-0000-0000-0000-000000000000\"", "\"11111111-1111-1111-1111-111111111111\""));
+            bool emptyRejected = !SaveManager.Load(setupClock, setupPlayer, path, loadTime);
+
+            // Case 2: Same ID for both parents
+            File.WriteAllText(path, MakeV6("\"22222222-2222-2222-2222-222222222222\"", "\"22222222-2222-2222-2222-222222222222\""));
+            bool sameRejected = !SaveManager.Load(setupClock, setupPlayer, path, loadTime);
+
+            bool pass = emptyRejected && sameRejected &&
+                        setupClock.Day == 15 * 365 &&
+                        setupPlayer.Family.Mother.Id == liveMotherId &&
+                        Close(setupPlayer.Relationships.MotherRelationship.Closeness, 50.0) &&
+                        setupPlayer.Money == 1000;
+            Console.WriteLine($"Family-F30: {pass} (Expected: True)");
+        });
+
+        // --- Family-F31: Invalid Relationship Cross Reference Reject ---
+        RunWithTempSave(path => {
+            string baseJson = "{\"Version\":6,\"Day\":100,\"Hour\":0,\"Minute\":0,\"Money\":1000,\"Energy\":100,\"Hunger\":100,\"Thirst\":100,\"StudyXP\":0,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"IsPlaying\":false,\"IsSpendingFamilyTime\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"AwakeMinutesAccumulator\":0,\"SleepingMinutesAccumulator\":0,\"HungerMinutesAccumulator\":0,\"ThirstMinutesAccumulator\":0,\"PlayMinutesAccumulator\":0,\"FamilyTimeMinutesAccumulator\":0,\"AcademicsExperience\":0,\"EducationStatus\":0,\"PrimaryGrade\":0,\"EducationProgress\":0,\"SchoolYearStartDay\":0," +
+                "\"MotherId\":\"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\",\"MotherName\":\"Mother\",\"MotherBirthDay\":-10220," +
+                "\"FatherId\":\"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb\",\"FatherName\":\"Father\",\"FatherBirthDay\":-10950," +
+                "\"MotherRelationshipPersonId\":\"cccccccc-cccc-cccc-cccc-cccccccccccc\",\"MotherCloseness\":50," +
+                "\"FatherRelationshipPersonId\":\"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb\",\"FatherCloseness\":50," +
+                "\"Confidence\":50,\"Curiosity\":50,\"Patience\":50,\"Ambition\":50,\"Empathy\":50,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}";
+            File.WriteAllText(path, baseJson);
+
+            var setupClock = new GameClock();
+            var setupPlayer = new PlayerState(setupClock);
+            var gm = new GodMode(setupClock, setupPlayer);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(10 * 365);
+            setupPlayer.Relationships.MotherRelationship.RestoreCloseness(66.0);
+
+            DateTimeOffset loadTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            bool loaded = SaveManager.Load(setupClock, setupPlayer, path, loadTime);
+            bool pass = !loaded &&
+                        Close(setupPlayer.Relationships.MotherRelationship.Closeness, 66.0) &&
+                        setupPlayer.Money == 1000;
+            Console.WriteLine($"Family-F31: {pass} (Expected: True)");
+        });
+
+        // --- Family-F32: Invalid Closeness Reject ---
+        RunWithTempSave(path => {
+            string MakeV6Closeness(string mClose, string fClose) =>
+                "{\"Version\":6,\"Day\":100,\"Hour\":0,\"Minute\":0,\"Money\":1000,\"Energy\":100,\"Hunger\":100,\"Thirst\":100,\"StudyXP\":0,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"IsPlaying\":false,\"IsSpendingFamilyTime\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"AwakeMinutesAccumulator\":0,\"SleepingMinutesAccumulator\":0,\"HungerMinutesAccumulator\":0,\"ThirstMinutesAccumulator\":0,\"PlayMinutesAccumulator\":0,\"FamilyTimeMinutesAccumulator\":0,\"AcademicsExperience\":0,\"EducationStatus\":0,\"PrimaryGrade\":0,\"EducationProgress\":0,\"SchoolYearStartDay\":0," +
+                "\"MotherId\":\"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\",\"MotherName\":\"Mother\",\"MotherBirthDay\":-10220," +
+                "\"FatherId\":\"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb\",\"FatherName\":\"Father\",\"FatherBirthDay\":-10950," +
+                "\"MotherRelationshipPersonId\":\"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\",\"MotherCloseness\":" + mClose + "," +
+                "\"FatherRelationshipPersonId\":\"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb\",\"FatherCloseness\":" + fClose + "," +
+                "\"Confidence\":50,\"Curiosity\":50,\"Patience\":50,\"Ambition\":50,\"Empathy\":50,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}";
+
+            DateTimeOffset loadTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+
+            // Case 1: Mother closeness -1
+            File.WriteAllText(path, MakeV6Closeness("-1", "50"));
+            var c1 = new GameClock();
+            var p1 = new PlayerState(c1);
+            bool negRejected = !SaveManager.Load(c1, p1, path, loadTime);
+
+            // Case 2: Father closeness 101
+            File.WriteAllText(path, MakeV6Closeness("50", "101"));
+            var c2 = new GameClock();
+            var p2 = new PlayerState(c2);
+            bool overRejected = !SaveManager.Load(c2, p2, path, loadTime);
+
+            bool pass = negRejected && overRejected &&
+                        Close(p1.Relationships.MotherRelationship.Closeness, 50.0) &&
+                        Close(p2.Relationships.FatherRelationship.Closeness, 50.0);
+            Console.WriteLine($"Family-F32: {pass} (Expected: True)");
+        });
+
+        // --- Family-F33: Invalid Family Time Accumulator Reject ---
+        RunWithTempSave(path => {
+            string MakeV6Acc(string ftAcc) =>
+                "{\"Version\":6,\"Day\":100,\"Hour\":0,\"Minute\":0,\"Money\":1000,\"Energy\":100,\"Hunger\":100,\"Thirst\":100,\"StudyXP\":0,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"IsPlaying\":false,\"IsSpendingFamilyTime\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"AwakeMinutesAccumulator\":0,\"SleepingMinutesAccumulator\":0,\"HungerMinutesAccumulator\":0,\"ThirstMinutesAccumulator\":0,\"PlayMinutesAccumulator\":0,\"FamilyTimeMinutesAccumulator\":" + ftAcc + ",\"AcademicsExperience\":0,\"EducationStatus\":0,\"PrimaryGrade\":0,\"EducationProgress\":0,\"SchoolYearStartDay\":0," +
+                "\"MotherId\":\"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\",\"MotherName\":\"Mother\",\"MotherBirthDay\":-10220," +
+                "\"FatherId\":\"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb\",\"FatherName\":\"Father\",\"FatherBirthDay\":-10950," +
+                "\"MotherRelationshipPersonId\":\"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\",\"MotherCloseness\":50," +
+                "\"FatherRelationshipPersonId\":\"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb\",\"FatherCloseness\":50," +
+                "\"Confidence\":50,\"Curiosity\":50,\"Patience\":50,\"Ambition\":50,\"Empathy\":50,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}";
+
+            DateTimeOffset loadTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+
+            File.WriteAllText(path, MakeV6Acc("-1"));
+            var c1 = new GameClock();
+            var p1 = new PlayerState(c1);
+            bool negRejected = !SaveManager.Load(c1, p1, path, loadTime);
+
+            File.WriteAllText(path, MakeV6Acc("60"));
+            var c2 = new GameClock();
+            var p2 = new PlayerState(c2);
+            bool overRejected = !SaveManager.Load(c2, p2, path, loadTime);
+
+            bool pass = negRejected && overRejected;
+            Console.WriteLine($"Family-F33: {pass} (Expected: True)");
+        });
+
+        // --- Family-F34: Offline Family Time ---
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            player.StartFamilyTime();
+            player.AdvanceSimulation(30); // accumulator 30
+            DateTimeOffset saveTime = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+            SaveManager.Save(clock, player, path, saveTime);
+
+            // 120 game minutes offline = 30 real seconds. Total = 150 -> 2 completed hours, remainder 30.
+            DateTimeOffset loadTime = saveTime.AddSeconds(30);
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+
+            bool pass = loaded &&
+                        loadPlayer.IsSpendingFamilyTime &&
+                        loadPlayer.GetFamilyTimeMinutesAccumulator() == 30 &&
+                        Close(loadPlayer.Relationships.MotherRelationship.Closeness - player.Relationships.MotherRelationship.Closeness, 0.50) &&
+                        Close(loadPlayer.Relationships.FatherRelationship.Closeness - player.Relationships.FatherRelationship.Closeness, 0.50) &&
+                        Close(loadPlayer.Attributes.Social - player.Attributes.Social, 0.04) &&
+                        Close(loadPlayer.Traits.Empathy - player.Traits.Empathy, 0.04) &&
+                        Close(loadPlayer.Traits.Confidence - player.Traits.Confidence, 0.02) &&
+                        loadPlayer.Energy == 98 && loadPlayer.Hunger == 98 && loadPlayer.Thirst == 96;
+            Console.WriteLine($"Family-F34: {pass} (Expected: True)");
+        });
+
+        // --- Family-F35: Normal vs Bulk Equivalence ---
+        {
+            var clock1 = new GameClock();
+            var p1 = new PlayerState(clock1);
+            p1.StartFamilyTime();
+
+            var clock2 = new GameClock();
+            var p2 = new PlayerState(clock2);
+            p2.StartFamilyTime();
+
+            // Advance both by 150 minutes (2 completed hours + 30 remainder).
+            p1.AdvanceSimulation(150);
+            p2.BulkAdvanceSimulation(150, out long moneyEarned, out long xpEarned);
+            p2.ApplyRewards(moneyEarned, xpEarned);
+
+            bool pass = Close(p1.Relationships.MotherRelationship.Closeness, p2.Relationships.MotherRelationship.Closeness) &&
+                        Close(p1.Relationships.FatherRelationship.Closeness, p2.Relationships.FatherRelationship.Closeness) &&
+                        Close(p1.Attributes.Social, p2.Attributes.Social) &&
+                        Close(p1.Traits.Empathy, p2.Traits.Empathy) &&
+                        Close(p1.Traits.Confidence, p2.Traits.Confidence) &&
+                        p1.GetFamilyTimeMinutesAccumulator() == p2.GetFamilyTimeMinutesAccumulator() &&
+                        p1.Energy == p2.Energy &&
+                        p1.Hunger == p2.Hunger &&
+                        p1.Thirst == p2.Thirst &&
+                        p1.IsSpendingFamilyTime == p2.IsSpendingFamilyTime;
+            Console.WriteLine($"Family-F35: {pass} (Expected: True)");
         }
     }
 }

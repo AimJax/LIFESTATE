@@ -5,7 +5,7 @@ namespace Lifestate;
 
 public class SaveData
 {
-    public int Version { get; set; } = 5;
+    public int Version { get; set; } = 6;
     public int Day { get; set; }
     public int Hour { get; set; }
     public int Minute { get; set; }
@@ -18,6 +18,7 @@ public class SaveData
     public bool IsWorking { get; set; }
     public bool IsStudying { get; set; }
     public bool IsPlaying { get; set; }
+    public bool IsSpendingFamilyTime { get; set; }
     public int WorkMinutesAccumulator { get; set; }
     public int StudyMinutesAccumulator { get; set; }
     public int AwakeMinutesAccumulator { get; set; }
@@ -25,11 +26,22 @@ public class SaveData
     public int HungerMinutesAccumulator { get; set; }
     public int ThirstMinutesAccumulator { get; set; }
     public int PlayMinutesAccumulator { get; set; }
+    public int FamilyTimeMinutesAccumulator { get; set; }
     public long AcademicsExperience { get; set; }
     public int EducationStatus { get; set; }
     public int PrimaryGrade { get; set; }
     public int EducationProgress { get; set; }
     public long SchoolYearStartDay { get; set; }
+    public Guid MotherId { get; set; }
+    public string MotherName { get; set; } = "";
+    public long MotherBirthDay { get; set; }
+    public Guid FatherId { get; set; }
+    public string FatherName { get; set; } = "";
+    public long FatherBirthDay { get; set; }
+    public Guid MotherRelationshipPersonId { get; set; }
+    public double MotherCloseness { get; set; }
+    public Guid FatherRelationshipPersonId { get; set; }
+    public double FatherCloseness { get; set; }
     public double Confidence { get; set; }
     public double Curiosity { get; set; }
     public double Patience { get; set; }

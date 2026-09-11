@@ -31,6 +31,8 @@ public class MainForm : Form
     private Label _lblPatience = new();
     private Label _lblAmbition = new();
     private Label _lblEmpathy = new();
+    private Label _lblMother = new();
+    private Label _lblFather = new();
     private Label _lblFeedback = new();
 
     private FlowLayoutPanel _debugPanel = new();
@@ -78,6 +80,8 @@ public class MainForm : Form
         _lblPatience = new Label { AutoSize = true };
         _lblAmbition = new Label { AutoSize = true };
         _lblEmpathy = new Label { AutoSize = true };
+        _lblMother = new Label { AutoSize = true };
+        _lblFather = new Label { AutoSize = true };
         _lblFeedback = new Label { AutoSize = true, ForeColor = System.Drawing.Color.Red };
 
         panel.Controls.Add(_lblAge);
@@ -100,6 +104,8 @@ public class MainForm : Form
         panel.Controls.Add(_lblPatience);
         panel.Controls.Add(_lblAmbition);
         panel.Controls.Add(_lblEmpathy);
+        panel.Controls.Add(_lblMother);
+        panel.Controls.Add(_lblFather);
         panel.Controls.Add(_lblFeedback);
 
         var btnStart = new Button { Text = "Start Time" };
@@ -169,6 +175,30 @@ public class MainForm : Form
         var btnStopPlay = new Button { Text = "Stop Play" };
         btnStopPlay.Click += (s, e) => { _player.StopPlaying(); RefreshUI(); };
         panel.Controls.Add(btnStopPlay);
+
+        var btnFamilyTime = new Button { Text = "Spend Time With Family" };
+        btnFamilyTime.Click += (s, e) => {
+            if (_player.IsSleeping)
+                _lblFeedback.Text = "Cannot spend time with family while sleeping.";
+            else if (_player.IsWorking)
+                _lblFeedback.Text = "Cannot spend time with family while working.";
+            else if (_player.IsStudying)
+                _lblFeedback.Text = "Cannot spend time with family while studying.";
+            else if (_player.IsPlaying)
+                _lblFeedback.Text = "Cannot spend time with family while playing.";
+            else if (_player.IsSpendingFamilyTime)
+                _lblFeedback.Text = "Already spending time with family.";
+            else if (!_player.StartFamilyTime())
+                _lblFeedback.Text = "Cannot start family time.";
+            else
+                _lblFeedback.Text = "";
+            RefreshUI();
+        };
+        panel.Controls.Add(btnFamilyTime);
+
+        var btnStopFamilyTime = new Button { Text = "Stop Family Time" };
+        btnStopFamilyTime.Click += (s, e) => { _player.StopFamilyTime(); RefreshUI(); };
+        panel.Controls.Add(btnStopFamilyTime);
 
         var btnStudy = new Button { Text = "Study" };
         btnStudy.Click += (s, e) => {
@@ -253,7 +283,7 @@ public class MainForm : Form
     {
         _lblAge.Text = $"Age: {_player.Age}";
         _lblLifeStage.Text = $"Life Stage: {_player.LifeStage}";
-        string state = _player.IsSleeping ? "Sleeping" : (_player.IsWorking ? "Working" : (_player.IsStudying ? "Studying" : (_player.IsPlaying ? "Playing" : "Awake")));
+        string state = _player.IsSleeping ? "Sleeping" : (_player.IsWorking ? "Working" : (_player.IsStudying ? "Studying" : (_player.IsPlaying ? "Playing" : (_player.IsSpendingFamilyTime ? "Family Time" : "Awake"))));
         _lblStatus.Text = $"Day: {_clock.Day}, Time: {_clock.Hour:00}:{_clock.Minute:00}, State: {state}";
         _lblEnergy.Text = $"Energy: {_player.Energy}";
         _lblHunger.Text = $"Hunger: {_player.Hunger}";
@@ -282,5 +312,8 @@ public class MainForm : Form
         _lblPatience.Text = $"Patience: {_player.Traits.Patience:F2}";
         _lblAmbition.Text = $"Ambition: {_player.Traits.Ambition:F2}";
         _lblEmpathy.Text = $"Empathy: {_player.Traits.Empathy:F2}";
+
+        _lblMother.Text = $"Mother: {_player.Family.Mother.Name} | Age: {_player.Family.Mother.GetAge(_clock)} | Relationship: {_player.Relationships.MotherRelationship.Closeness:F2}";
+        _lblFather.Text = $"Father: {_player.Family.Father.Name} | Age: {_player.Family.Father.GetAge(_clock)} | Relationship: {_player.Relationships.FatherRelationship.Closeness:F2}";
     }
 }

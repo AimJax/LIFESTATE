@@ -7,6 +7,7 @@ public class PlayerState
     public PlayerState(GameClock clock)
     {
         _clock = clock;
+        Relationships = new PlayerRelationships(Family.Mother.Id, Family.Father.Id);
     }
 
     public int Age => _clock.Day / 365;
@@ -25,6 +26,8 @@ public class PlayerState
     public PlayerSkills Skills { get; } = new();
     public EducationState Education { get; } = new();
     public PlayerTraits Traits { get; } = new();
+    public PlayerFamily Family { get; } = new();
+    public PlayerRelationships Relationships { get; }
     public int Money { get; set; } = 1000;
     public int Energy { get; private set; } = 100;
     public int Hunger { get; private set; } = 100;
@@ -34,6 +37,7 @@ public class PlayerState
     public bool IsWorking { get; private set; } = false;
     public bool IsStudying { get; private set; } = false;
     public bool IsPlaying { get; private set; } = false;
+    public bool IsSpendingFamilyTime { get; private set; } = false;
 
     private int _awakeMinutesAccumulator = 0;
     private int _sleepingMinutesAccumulator = 0;
@@ -42,35 +46,44 @@ public class PlayerState
     private int _workMinutesAccumulator = 0;
     private int _studyMinutesAccumulator = 0;
     private int _playMinutesAccumulator = 0;
+    private int _familyTimeMinutesAccumulator = 0;
 
     public void StartSleeping()
     {
-        if (IsWorking || IsStudying || IsPlaying) return;
+        if (IsWorking || IsStudying || IsPlaying || IsSpendingFamilyTime) return;
         IsSleeping = true;
     }
     public void StopSleeping() => IsSleeping = false;
 
     public void StartWorking()
     {
-        if (Age < 18 || IsSleeping || IsStudying || IsPlaying) return;
+        if (Age < 18 || IsSleeping || IsStudying || IsPlaying || IsSpendingFamilyTime) return;
         IsWorking = true;
     }
     public void StopWorking() => IsWorking = false;
 
     public void StartStudying()
     {
-        if (Age < 6 || IsSleeping || IsWorking || IsPlaying) return;
+        if (Age < 6 || IsSleeping || IsWorking || IsPlaying || IsSpendingFamilyTime) return;
         IsStudying = true;
     }
     public void StopStudying() => IsStudying = false;
 
     public bool StartPlaying()
     {
-        if (Age < 2 || IsSleeping || IsWorking || IsStudying || IsPlaying) return false;
+        if (Age < 2 || IsSleeping || IsWorking || IsStudying || IsPlaying || IsSpendingFamilyTime) return false;
         IsPlaying = true;
         return true;
     }
     public void StopPlaying() => IsPlaying = false;
+
+    public bool StartFamilyTime()
+    {
+        if (IsSleeping || IsWorking || IsStudying || IsPlaying || IsSpendingFamilyTime) return false;
+        IsSpendingFamilyTime = true;
+        return true;
+    }
+    public void StopFamilyTime() => IsSpendingFamilyTime = false;
 
     public bool EnrollPrimarySchool()
     {
@@ -127,6 +140,7 @@ public class PlayerState
         UpdateWork(minutes);
         UpdateStudy(minutes);
         UpdatePlay(minutes);
+        UpdateFamilyTime(minutes);
         Education.EvaluateProgression(_clock.Day);
     }
 
@@ -202,6 +216,19 @@ public class PlayerState
             Traits.AddConfidence(hoursPlayed * 0.02);
             Traits.AddCuriosity(hoursPlayed * 0.01);
             _playMinutesAccumulator = (int)(totalPlayMinutes % 60);
+        }
+
+        // Family Time rewards are linear and O(1).
+        if (IsSpendingFamilyTime)
+        {
+            long totalFamilyMinutes = (long)_familyTimeMinutesAccumulator + elapsedMinutes;
+            long hoursSpent = totalFamilyMinutes / 60;
+            Relationships.MotherRelationship.AddCloseness(hoursSpent * 0.25);
+            Relationships.FatherRelationship.AddCloseness(hoursSpent * 0.25);
+            Attributes.AddSocial(hoursSpent * 0.02);
+            Traits.AddEmpathy(hoursSpent * 0.02);
+            Traits.AddConfidence(hoursSpent * 0.01);
+            _familyTimeMinutesAccumulator = (int)(totalFamilyMinutes % 60);
         }
 
         Education.EvaluateProgression(_clock.Day);
@@ -298,6 +325,23 @@ public class PlayerState
         }
     }
 
+    public void UpdateFamilyTime(int elapsedMinutes)
+    {
+        if (!IsSpendingFamilyTime) return;
+
+        _familyTimeMinutesAccumulator += elapsedMinutes;
+        int hoursSpent = _familyTimeMinutesAccumulator / 60;
+        if (hoursSpent > 0)
+        {
+            Relationships.MotherRelationship.AddCloseness(hoursSpent * 0.25);
+            Relationships.FatherRelationship.AddCloseness(hoursSpent * 0.25);
+            Attributes.AddSocial(hoursSpent * 0.02);
+            Traits.AddEmpathy(hoursSpent * 0.02);
+            Traits.AddConfidence(hoursSpent * 0.01);
+            _familyTimeMinutesAccumulator %= 60;
+        }
+    }
+
     public void Drink(int thirstRestored)
     {
         if (thirstRestored <= 0) return;
@@ -318,7 +362,7 @@ public class PlayerState
         Hunger = 100;
         Thirst = 100;
     }
-    internal void Restore(int money, int energy, int hunger, int thirst, int studyXP, bool isSleeping, bool isWorking, bool isStudying, bool isPlaying, int awakeMinutesAccumulator, int sleepingMinutesAccumulator, int hungerMinutesAccumulator, int thirstMinutesAccumulator, int workMinutesAccumulator, int studyMinutesAccumulator, int playMinutesAccumulator)
+    internal void Restore(int money, int energy, int hunger, int thirst, int studyXP, bool isSleeping, bool isWorking, bool isStudying, bool isPlaying, bool isSpendingFamilyTime, int awakeMinutesAccumulator, int sleepingMinutesAccumulator, int hungerMinutesAccumulator, int thirstMinutesAccumulator, int workMinutesAccumulator, int studyMinutesAccumulator, int playMinutesAccumulator, int familyTimeMinutesAccumulator)
     {
         Money = money;
         Energy = energy;
@@ -329,6 +373,7 @@ public class PlayerState
         IsWorking = isWorking;
         IsStudying = isStudying;
         IsPlaying = isPlaying;
+        IsSpendingFamilyTime = isSpendingFamilyTime;
         _awakeMinutesAccumulator = awakeMinutesAccumulator;
         _sleepingMinutesAccumulator = sleepingMinutesAccumulator;
         _hungerMinutesAccumulator = hungerMinutesAccumulator;
@@ -336,6 +381,7 @@ public class PlayerState
         _workMinutesAccumulator = workMinutesAccumulator;
         _studyMinutesAccumulator = studyMinutesAccumulator;
         _playMinutesAccumulator = playMinutesAccumulator;
+        _familyTimeMinutesAccumulator = familyTimeMinutesAccumulator;
     }
 
     internal int GetAwakeMinutesAccumulator() => _awakeMinutesAccumulator;
@@ -345,4 +391,5 @@ public class PlayerState
     internal int GetWorkMinutesAccumulator() => _workMinutesAccumulator;
     internal int GetStudyMinutesAccumulator() => _studyMinutesAccumulator;
     internal int GetPlayMinutesAccumulator() => _playMinutesAccumulator;
+    internal int GetFamilyTimeMinutesAccumulator() => _familyTimeMinutesAccumulator;
 }
