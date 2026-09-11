@@ -23,6 +23,7 @@ public class PlayerState
 
     public PlayerAttributes Attributes { get; } = new();
     public PlayerSkills Skills { get; } = new();
+    public EducationState Education { get; } = new();
     public int Money { get; set; } = 1000;
     public int Energy { get; private set; } = 100;
     public int Hunger { get; private set; } = 100;
@@ -59,6 +60,12 @@ public class PlayerState
         IsStudying = true;
     }
     public void StopStudying() => IsStudying = false;
+
+    public bool EnrollPrimarySchool()
+    {
+        if (Age < 6) return false;
+        return Education.TryEnroll(_clock.Day);
+    }
 
     public void UpdateEnergy(int elapsedMinutes)
     {
@@ -108,6 +115,7 @@ public class PlayerState
         UpdateThirst(minutes);
         UpdateWork(minutes);
         UpdateStudy(minutes);
+        Education.EvaluateProgression(_clock.Day);
     }
 
     internal void BulkAdvanceSimulation(long elapsedMinutes, out long moneyEarned, out long xpEarned)
@@ -160,8 +168,12 @@ public class PlayerState
             xpEarned = hoursStudied * 10;
             Attributes.AddIntelligence(hoursStudied * 0.05);
             Skills.Academics.AddExperience(hoursStudied * 10);
+            if (Education.Status == EducationStatus.PrimarySchool)
+                Education.AddProgress((int)hoursStudied);
             _studyMinutesAccumulator = (int)(totalStudyMinutes % 60);
         }
+
+        Education.EvaluateProgression(_clock.Day);
     }
 
     internal bool PreflightWorkAndStudy(long elapsedMinutes, out long totalMoney, out long totalXP)
@@ -216,6 +228,11 @@ public class PlayerState
             StudyXP += (hoursStudied * 10);
             Attributes.AddIntelligence(hoursStudied * 0.05);
             Skills.Academics.AddExperience(hoursStudied * 10);
+            if (Education.Status == EducationStatus.PrimarySchool)
+            {
+                Education.AddProgress(hoursStudied);
+                Education.EvaluateProgression(_clock.Day);
+            }
             _studyMinutesAccumulator %= 60;
         }
     }

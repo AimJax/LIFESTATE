@@ -666,6 +666,7 @@ public static class SimulationTests
         RunAttributeTests();
         RunNeedPersistTests();
         RunSkillTests();
+        RunEducationTests();
     }
 
     private static void RunSaveLoadTests()
@@ -2543,6 +2544,630 @@ public static class SimulationTests
                         Math.Abs(player.Attributes.Intelligence - intelBefore) < 0.000001 &&
                         player.IsStudying == studying;
             Console.WriteLine($"Skill-S20: {pass} (Expected: True)");
+        }
+    }
+
+    private static void RunEducationTests()
+    {
+        Console.WriteLine("\n--- LIFESTATE Education Regression Tests ---");
+
+        void RunWithTempSave(Action<string> testAction)
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), "LIFESTATE-tests-E", Guid.NewGuid().ToString());
+            string tempSavePath = Path.Combine(tempDir, "save.json");
+            try
+            {
+                Directory.CreateDirectory(tempDir);
+                testAction(tempSavePath);
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+            }
+        }
+
+        // Helper: create an age-10 enrolled player
+        static (GameClock clock, PlayerState player) MakeEnrolledPlayer()
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(10 * 365);
+            player.EnrollPrimarySchool();
+            return (clock, player);
+        }
+
+        // --- Education-E1: Defaults ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            bool pass = player.Education.Status == EducationStatus.NotEnrolled &&
+                        player.Education.PrimaryGrade == 0 &&
+                        player.Education.EducationProgress == 0 &&
+                        player.Education.SchoolYearStartDay == 0;
+            Console.WriteLine($"Education-E1: {pass} (Expected: True)");
+        }
+
+        // --- Education-E2: Underage Enrollment Rejected ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(5 * 365); // Age 5
+            bool result = player.EnrollPrimarySchool();
+            bool pass = !result &&
+                        player.Education.Status == EducationStatus.NotEnrolled &&
+                        player.Education.PrimaryGrade == 0;
+            Console.WriteLine($"Education-E2: {pass} (Expected: True)");
+        }
+
+        // --- Education-E3: Age 6 Enrollment ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(6 * 365); // Age 6
+            int dayBefore = clock.Day;
+            bool result = player.EnrollPrimarySchool();
+            bool pass = result &&
+                        player.Education.Status == EducationStatus.PrimarySchool &&
+                        player.Education.PrimaryGrade == 1 &&
+                        player.Education.EducationProgress == 0 &&
+                        player.Education.SchoolYearStartDay == dayBefore;
+            Console.WriteLine($"Education-E3: {pass} (Expected: True)");
+        }
+
+        // --- Education-E4: Older Enrollment ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(30 * 365); // Age 30
+            bool result = player.EnrollPrimarySchool();
+            bool pass = result &&
+                        player.Education.PrimaryGrade == 1 &&
+                        player.Education.EducationProgress == 0;
+            Console.WriteLine($"Education-E4: {pass} (Expected: True)");
+        }
+
+        // --- Education-E5: Duplicate Enrollment Rejected ---
+        {
+            var (clock, player) = MakeEnrolledPlayer();
+            int gradeBefore = player.Education.PrimaryGrade;
+            int progressBefore = player.Education.EducationProgress;
+            bool result = player.EnrollPrimarySchool();
+            bool pass = !result &&
+                        player.Education.PrimaryGrade == gradeBefore &&
+                        player.Education.EducationProgress == progressBefore;
+            Console.WriteLine($"Education-E5: {pass} (Expected: True)");
+        }
+
+        // --- Education-E6: Study Before Enrollment ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(10 * 365); // Age 10, NOT enrolled
+            player.StartStudying();
+            player.AdvanceSimulation(100 * 60); // 100 completed hours
+            bool pass = player.StudyXP == 1000 &&
+                        Math.Abs(player.Attributes.Intelligence - 15.0) < 0.000001 &&
+                        player.Skills.Academics.Experience == 1000 &&
+                        player.Education.EducationProgress == 0;
+            Console.WriteLine($"Education-E6: {pass} (Expected: True)");
+        }
+
+        // --- Education-E7: Enrolled Study Progress ---
+        {
+            var (clock, player) = MakeEnrolledPlayer();
+            player.StartStudying();
+            player.AdvanceSimulation(10 * 60); // 10 completed hours
+            bool pass = player.Education.EducationProgress == 10 &&
+                        player.StudyXP == 100 &&
+                        Math.Abs(player.Attributes.Intelligence - 10.50) < 0.000001 &&
+                        player.Skills.Academics.Experience == 100;
+            Console.WriteLine($"Education-E7: {pass} (Expected: True)");
+        }
+
+        // --- Education-E8: Partial Study Hour ---
+        {
+            var (clock, player) = MakeEnrolledPlayer();
+            player.StartStudying();
+            player.AdvanceSimulation(59);
+            bool pass59 = player.Education.EducationProgress == 0;
+            player.AdvanceSimulation(1);
+            bool pass60 = player.Education.EducationProgress == 1;
+            Console.WriteLine($"Education-E8: {pass59 && pass60} (Expected: True)");
+        }
+
+        // --- Education-E9: Education Progress Cap ---
+        {
+            var (clock, player) = MakeEnrolledPlayer();
+            player.StartStudying();
+            player.AdvanceSimulation(150 * 60); // 150 hours > 100 cap
+            bool pass = player.Education.EducationProgress == 100 &&
+                        player.StudyXP == 1500 &&
+                        player.Skills.Academics.Experience == 1500;
+            Console.WriteLine($"Education-E9: {pass} (Expected: True)");
+        }
+
+        // --- Education-E10: Progress Alone Cannot Advance ---
+        {
+            var (clock, player) = MakeEnrolledPlayer();
+            player.StartStudying();
+            player.AdvanceSimulation(100 * 60); // Progress 100
+            // Advance calendar 364 days (not enough)
+            player.StopStudying();
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(364);
+            // Evaluate
+            player.Education.EvaluateProgression(clock.Day);
+            bool pass = player.Education.PrimaryGrade == 1 &&
+                        player.Education.EducationProgress == 100;
+            Console.WriteLine($"Education-E10: {pass} (Expected: True)");
+        }
+
+        // --- Education-E11: Time Alone Cannot Advance ---
+        {
+            var (clock, player) = MakeEnrolledPlayer();
+            player.StartStudying();
+            player.AdvanceSimulation(50 * 60); // Progress 50
+            player.StopStudying();
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(400); // > 365 days
+            player.Education.EvaluateProgression(clock.Day);
+            bool pass = player.Education.PrimaryGrade == 1 &&
+                        player.Education.EducationProgress == 50;
+            Console.WriteLine($"Education-E11: {pass} (Expected: True)");
+        }
+
+        // --- Education-E12: Grade Advancement ---
+        {
+            var (clock, player) = MakeEnrolledPlayer();
+            player.StartStudying();
+            player.AdvanceSimulation(100 * 60); // Progress 100
+            player.StopStudying();
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(365); // 365+ days
+            int dayBeforeEval = clock.Day;
+            player.Education.EvaluateProgression(clock.Day);
+            bool pass = player.Education.PrimaryGrade == 2 &&
+                        player.Education.EducationProgress == 0 &&
+                        player.Education.SchoolYearStartDay == dayBeforeEval;
+            Console.WriteLine($"Education-E12: {pass} (Expected: True)");
+        }
+
+        // --- Education-E13: Delayed / Repeat Grade ---
+        {
+            var (clock, player) = MakeEnrolledPlayer();
+            player.StartStudying();
+            player.AdvanceSimulation(80 * 60); // Progress 80
+            player.StopStudying();
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(365); // Calendar eligible
+            player.Education.EvaluateProgression(clock.Day);
+            bool passDelayed = player.Education.PrimaryGrade == 1 &&
+                               player.Education.EducationProgress == 80;
+            // Now study 20 more hours
+            player.StartStudying();
+            player.AdvanceSimulation(20 * 60); // Progress reaches 100
+            int dayAfterStudy = clock.Day;
+            bool passAdvanced = player.Education.PrimaryGrade == 2 &&
+                                player.Education.EducationProgress == 0 &&
+                                player.Education.SchoolYearStartDay == dayAfterStudy;
+            Console.WriteLine($"Education-E13: {passDelayed && passAdvanced} (Expected: True)");
+        }
+
+        // --- Education-E14: No Progress Carry ---
+        {
+            var (clock, player) = MakeEnrolledPlayer();
+            player.StartStudying();
+            player.AdvanceSimulation(100 * 60); // Progress 100
+            player.AdvanceSimulation(200 * 60); // More study, stays 100
+            player.StopStudying();
+            bool passCap = player.Education.EducationProgress == 100;
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(365);
+            player.Education.EvaluateProgression(clock.Day);
+            bool passNoCarry = player.Education.PrimaryGrade == 2 &&
+                               player.Education.EducationProgress == 0;
+            Console.WriteLine($"Education-E14: {passCap && passNoCarry} (Expected: True)");
+        }
+
+        // --- Education-E15: Sequential Grade Progression ---
+        {
+            var (clock, player) = MakeEnrolledPlayer();
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            bool pass = true;
+            // Grade 1 -> 2
+            player.StartStudying();
+            player.AdvanceSimulation(100 * 60);
+            player.StopStudying();
+            gm.AdvanceDays(365);
+            player.Education.EvaluateProgression(clock.Day);
+            pass &= player.Education.PrimaryGrade == 2 && player.Education.EducationProgress == 0;
+            // Grade 2 -> 3
+            player.StartStudying();
+            player.AdvanceSimulation(100 * 60);
+            player.StopStudying();
+            gm.AdvanceDays(365);
+            player.Education.EvaluateProgression(clock.Day);
+            pass &= player.Education.PrimaryGrade == 3 && player.Education.EducationProgress == 0;
+            // Grade 3 -> 4
+            player.StartStudying();
+            player.AdvanceSimulation(100 * 60);
+            player.StopStudying();
+            gm.AdvanceDays(365);
+            player.Education.EvaluateProgression(clock.Day);
+            pass &= player.Education.PrimaryGrade == 4 && player.Education.EducationProgress == 0;
+            Console.WriteLine($"Education-E15: {pass} (Expected: True)");
+        }
+
+        // --- Education-E16: Grade 6 Completion ---
+        {
+            var (clock, player) = MakeEnrolledPlayer();
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            // Advance to grade 6
+            player.Education.Restore(EducationStatus.PrimarySchool, 6, 0, clock.Day);
+            player.StartStudying();
+            player.AdvanceSimulation(100 * 60); // Progress 100
+            player.StopStudying();
+            gm.AdvanceDays(365);
+            player.Education.EvaluateProgression(clock.Day);
+            bool pass = player.Education.Status == EducationStatus.CompletedPrimary &&
+                        player.Education.PrimaryGrade == 6 &&
+                        player.Education.EducationProgress == 100;
+            Console.WriteLine($"Education-E16: {pass} (Expected: True)");
+        }
+
+        // --- Education-E17: Completed Primary Cannot Re-Enroll ---
+        {
+            var (clock, player) = MakeEnrolledPlayer();
+            player.Education.Restore(EducationStatus.CompletedPrimary, 6, 100, 1000);
+            bool result = player.EnrollPrimarySchool();
+            bool pass = !result &&
+                        player.Education.Status == EducationStatus.CompletedPrimary &&
+                        player.Education.PrimaryGrade == 6;
+            Console.WriteLine($"Education-E17: {pass} (Expected: True)");
+        }
+
+        // --- Education-E18: Study After Completion ---
+        {
+            var (clock, player) = MakeEnrolledPlayer();
+            player.Education.Restore(EducationStatus.CompletedPrimary, 6, 100, 1000);
+            player.StartStudying();
+            player.AdvanceSimulation(10 * 60); // 10 hours
+            bool pass = player.StudyXP == 100 &&
+                        player.Skills.Academics.Experience == 100 &&
+                        player.Education.EducationProgress == 100;
+            Console.WriteLine($"Education-E18: {pass} (Expected: True)");
+        }
+
+        // --- Education-E19: Save / Load Active Education ---
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(10 * 365);
+            player.EnrollPrimarySchool();
+            // Advance to Grade 3 with Progress 47
+            player.Education.Restore(EducationStatus.PrimarySchool, 3, 47, clock.Day - 100);
+            DateTimeOffset saveTime = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+            SaveManager.Save(clock, player, path, saveTime);
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, saveTime);
+            bool pass = loaded &&
+                        loadPlayer.Education.Status == EducationStatus.PrimarySchool &&
+                        loadPlayer.Education.PrimaryGrade == 3 &&
+                        loadPlayer.Education.EducationProgress == 47;
+            Console.WriteLine($"Education-E19: {pass} (Expected: True)");
+        });
+
+        // --- Education-E20: Save / Load Completed Primary ---
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(10 * 365);
+            player.Education.Restore(EducationStatus.CompletedPrimary, 6, 100, 5000);
+            DateTimeOffset saveTime = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+            SaveManager.Save(clock, player, path, saveTime);
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, saveTime);
+            bool pass = loaded &&
+                        loadPlayer.Education.Status == EducationStatus.CompletedPrimary &&
+                        loadPlayer.Education.PrimaryGrade == 6 &&
+                        loadPlayer.Education.EducationProgress == 100;
+            Console.WriteLine($"Education-E20: {pass} (Expected: True)");
+        });
+
+        // --- Education-E21: Version 2 Compatibility ---
+        RunWithTempSave(path => {
+            // V2 save with no education fields
+            File.WriteAllText(path, "{\"Version\":2,\"Day\":100,\"Hour\":5,\"Minute\":30,\"Money\":1500,\"Energy\":80,\"Hunger\":70,\"Thirst\":60,\"StudyXP\":300,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"AwakeMinutesAccumulator\":0,\"SleepingMinutesAccumulator\":0,\"HungerMinutesAccumulator\":0,\"ThirstMinutesAccumulator\":0,\"AcademicsExperience\":500,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            DateTimeOffset loadTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+            bool pass = loaded &&
+                        loadPlayer.Education.Status == EducationStatus.NotEnrolled &&
+                        loadPlayer.Education.PrimaryGrade == 0 &&
+                        loadPlayer.Education.EducationProgress == 0 &&
+                        loadPlayer.Education.SchoolYearStartDay == 0 &&
+                        loadPlayer.StudyXP == 300 &&
+                        loadPlayer.Skills.Academics.Experience == 500;
+            Console.WriteLine($"Education-E21: {pass} (Expected: True)");
+        });
+
+        // --- Education-E22: Invalid Grade Transactional Rejection ---
+        RunWithTempSave(path => {
+            // Setup non-default runtime
+            var setupClock = new GameClock();
+            var setupPlayer = new PlayerState(setupClock);
+            var gm = new GodMode(setupClock, setupPlayer);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(20 * 365);
+            setupPlayer.EnrollPrimarySchool();
+            setupPlayer.StartStudying();
+            setupPlayer.AdvanceSimulation(30);
+            setupPlayer.Education.Restore(EducationStatus.PrimarySchool, 2, 50, setupClock.Day - 200);
+
+            int dayBefore = setupClock.Day;
+            int moneyBefore = setupPlayer.Money;
+            int xpBefore = setupPlayer.StudyXP;
+            long acadBefore = setupPlayer.Skills.Academics.Experience;
+            int gradeBefore = setupPlayer.Education.PrimaryGrade;
+            int progressBefore = setupPlayer.Education.EducationProgress;
+
+            File.WriteAllText(path, "{\"Version\":3,\"Day\":5000,\"Hour\":5,\"Minute\":30,\"Money\":9999,\"Energy\":50,\"Hunger\":60,\"Thirst\":70,\"StudyXP\":500,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"AwakeMinutesAccumulator\":0,\"SleepingMinutesAccumulator\":0,\"HungerMinutesAccumulator\":0,\"ThirstMinutesAccumulator\":0,\"AcademicsExperience\":2000,\"EducationStatus\":1,\"PrimaryGrade\":7,\"EducationProgress\":50,\"SchoolYearStartDay\":100,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+
+            DateTimeOffset loadTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            bool loaded = SaveManager.Load(setupClock, setupPlayer, path, loadTime);
+            bool pass = !loaded &&
+                        setupClock.Day == dayBefore &&
+                        setupPlayer.Money == moneyBefore &&
+                        setupPlayer.StudyXP == xpBefore &&
+                        setupPlayer.Skills.Academics.Experience == acadBefore &&
+                        setupPlayer.Education.PrimaryGrade == gradeBefore &&
+                        setupPlayer.Education.EducationProgress == progressBefore;
+            Console.WriteLine($"Education-E22: {pass} (Expected: True)");
+        });
+
+        // --- Education-E23: Invalid Progress Transactional Rejection ---
+        RunWithTempSave(path => {
+            // Test -1
+            var setupClock1 = new GameClock();
+            var setupPlayer1 = new PlayerState(setupClock1);
+            var gm1 = new GodMode(setupClock1, setupPlayer1);
+            gm1.SetEnabled(true);
+            gm1.AdvanceDays(20 * 365);
+            setupPlayer1.EnrollPrimarySchool();
+            setupPlayer1.StartStudying();
+            setupPlayer1.AdvanceSimulation(30);
+            int gradeBefore1 = setupPlayer1.Education.PrimaryGrade;
+            int progressBefore1 = setupPlayer1.Education.EducationProgress;
+            int dayBefore1 = setupClock1.Day;
+
+            File.WriteAllText(path, "{\"Version\":3,\"Day\":5000,\"Hour\":0,\"Minute\":0,\"Money\":9999,\"Energy\":50,\"Hunger\":60,\"Thirst\":70,\"StudyXP\":500,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"AwakeMinutesAccumulator\":0,\"SleepingMinutesAccumulator\":0,\"HungerMinutesAccumulator\":0,\"ThirstMinutesAccumulator\":0,\"AcademicsExperience\":2000,\"EducationStatus\":1,\"PrimaryGrade\":3,\"EducationProgress\":-1,\"SchoolYearStartDay\":100,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+            DateTimeOffset loadTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            bool loadedNeg = SaveManager.Load(setupClock1, setupPlayer1, path, loadTime);
+            bool passNeg = !loadedNeg && setupClock1.Day == dayBefore1 && setupPlayer1.Education.PrimaryGrade == gradeBefore1;
+
+            // Test 101
+            File.WriteAllText(path, "{\"Version\":3,\"Day\":5000,\"Hour\":0,\"Minute\":0,\"Money\":9999,\"Energy\":50,\"Hunger\":60,\"Thirst\":70,\"StudyXP\":500,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"AwakeMinutesAccumulator\":0,\"SleepingMinutesAccumulator\":0,\"HungerMinutesAccumulator\":0,\"ThirstMinutesAccumulator\":0,\"AcademicsExperience\":2000,\"EducationStatus\":1,\"PrimaryGrade\":3,\"EducationProgress\":101,\"SchoolYearStartDay\":100,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+            var setupClock2 = new GameClock();
+            var setupPlayer2 = new PlayerState(setupClock2);
+            var gm2 = new GodMode(setupClock2, setupPlayer2);
+            gm2.SetEnabled(true);
+            gm2.AdvanceDays(20 * 365);
+            setupPlayer2.EnrollPrimarySchool();
+            setupPlayer2.StartStudying();
+            setupPlayer2.AdvanceSimulation(30);
+            int gradeBefore2 = setupPlayer2.Education.PrimaryGrade;
+            int dayBefore2 = setupClock2.Day;
+            bool loadedOver = SaveManager.Load(setupClock2, setupPlayer2, path, loadTime);
+            bool passOver = !loadedOver && setupClock2.Day == dayBefore2 && setupPlayer2.Education.PrimaryGrade == gradeBefore2;
+
+            Console.WriteLine($"Education-E23: {passNeg && passOver} (Expected: True)");
+        });
+
+        // --- Education-E24: Invalid Status Combination ---
+        RunWithTempSave(path => {
+            // NotEnrolled + Grade 1
+            File.WriteAllText(path, "{\"Version\":3,\"Day\":100,\"Hour\":0,\"Minute\":0,\"Money\":1000,\"Energy\":100,\"Hunger\":100,\"Thirst\":100,\"StudyXP\":0,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"AwakeMinutesAccumulator\":0,\"SleepingMinutesAccumulator\":0,\"HungerMinutesAccumulator\":0,\"ThirstMinutesAccumulator\":0,\"AcademicsExperience\":0,\"EducationStatus\":0,\"PrimaryGrade\":1,\"EducationProgress\":0,\"SchoolYearStartDay\":0,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+            var loadClock1 = new GameClock();
+            var loadPlayer1 = new PlayerState(loadClock1);
+            DateTimeOffset loadTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            bool loaded1 = SaveManager.Load(loadClock1, loadPlayer1, path, loadTime);
+            bool pass1 = !loaded1;
+
+            // CompletedPrimary + Grade 5
+            File.WriteAllText(path, "{\"Version\":3,\"Day\":100,\"Hour\":0,\"Minute\":0,\"Money\":1000,\"Energy\":100,\"Hunger\":100,\"Thirst\":100,\"StudyXP\":0,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"AwakeMinutesAccumulator\":0,\"SleepingMinutesAccumulator\":0,\"HungerMinutesAccumulator\":0,\"ThirstMinutesAccumulator\":0,\"AcademicsExperience\":0,\"EducationStatus\":2,\"PrimaryGrade\":5,\"EducationProgress\":100,\"SchoolYearStartDay\":50,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+            var loadClock2 = new GameClock();
+            var loadPlayer2 = new PlayerState(loadClock2);
+            bool loaded2 = SaveManager.Load(loadClock2, loadPlayer2, path, loadTime);
+            bool pass2 = !loaded2;
+
+            Console.WriteLine($"Education-E24: {pass1 && pass2} (Expected: True)");
+        });
+
+        // --- Education-E25: Future School-Year Start Rejected ---
+        RunWithTempSave(path => {
+            File.WriteAllText(path, "{\"Version\":3,\"Day\":1000,\"Hour\":0,\"Minute\":0,\"Money\":1000,\"Energy\":100,\"Hunger\":100,\"Thirst\":100,\"StudyXP\":0,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"AwakeMinutesAccumulator\":0,\"SleepingMinutesAccumulator\":0,\"HungerMinutesAccumulator\":0,\"ThirstMinutesAccumulator\":0,\"AcademicsExperience\":0,\"EducationStatus\":1,\"PrimaryGrade\":1,\"EducationProgress\":0,\"SchoolYearStartDay\":1001,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            DateTimeOffset loadTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+            Console.WriteLine($"Education-E25: {!loaded} (Expected: True)");
+        });
+
+        // --- Education-E26: Direct Restore Invariant ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(10 * 365);
+            player.EnrollPrimarySchool();
+            player.Education.Restore(EducationStatus.PrimarySchool, 3, 50, 1000);
+
+            // Invalid restores
+            player.Education.Restore(EducationStatus.NotEnrolled, 1, 0, 0); // grade mismatch
+            bool passInv1 = player.Education.PrimaryGrade == 3 && player.Education.EducationProgress == 50;
+            player.Education.Restore(EducationStatus.PrimarySchool, 7, 50, 1000); // grade > 6
+            bool passInv2 = player.Education.PrimaryGrade == 3;
+            player.Education.Restore(EducationStatus.PrimarySchool, 3, 101, 1000); // progress > 100
+            bool passInv3 = player.Education.EducationProgress == 50;
+            player.Education.Restore(EducationStatus.CompletedPrimary, 5, 100, 1000); // grade != 6
+            bool passInv4 = player.Education.Status == EducationStatus.PrimarySchool;
+
+            // Valid restore
+            player.Education.Restore(EducationStatus.PrimarySchool, 4, 75, 2000);
+            bool passValid = player.Education.PrimaryGrade == 4 &&
+                             player.Education.EducationProgress == 75 &&
+                             player.Education.SchoolYearStartDay == 2000;
+
+            Console.WriteLine($"Education-E26: {passInv1 && passInv2 && passInv3 && passInv4 && passValid} (Expected: True)");
+        }
+
+        // --- Education-E27: Offline Study Progression ---
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(10 * 365);
+            player.EnrollPrimarySchool();
+            // Set up: Grade 1, Progress 90, calendar already eligible
+            long startDay = clock.Day - 400;
+            player.Education.Restore(EducationStatus.PrimarySchool, 1, 90, startDay);
+            player.StartStudying();
+            DateTimeOffset saveTime = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+            SaveManager.Save(clock, player, path, saveTime);
+
+            // 10 hours offline = 600 game minutes = 150 real seconds
+            DateTimeOffset loadTime = saveTime.AddSeconds(150);
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+
+            // Progress reaches 100, calendar eligible, should advance to Grade 2
+            bool pass = loaded &&
+                        loadPlayer.Education.PrimaryGrade == 2 &&
+                        loadPlayer.Education.EducationProgress == 0 &&
+                        loadPlayer.StudyXP == 100 &&
+                        loadPlayer.Skills.Academics.Experience == 100 &&
+                        Math.Abs(loadPlayer.Attributes.Intelligence - 10.50) < 0.000001;
+            Console.WriteLine($"Education-E27: {pass} (Expected: True)");
+        });
+
+        // --- Education-E28: Offline Time Without Study ---
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(10 * 365);
+            player.EnrollPrimarySchool();
+            player.Education.Restore(EducationStatus.PrimarySchool, 1, 50, clock.Day);
+            // NOT studying
+            DateTimeOffset saveTime = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+            SaveManager.Save(clock, player, path, saveTime);
+
+            // > 365 in-game days offline. 366 days = 527040 minutes / 4 = 131760 real seconds
+            DateTimeOffset loadTime = saveTime.AddSeconds(200000);
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+
+            bool pass = loaded &&
+                        loadPlayer.Education.PrimaryGrade == 1 &&
+                        loadPlayer.Education.EducationProgress == 50;
+            Console.WriteLine($"Education-E28: {pass} (Expected: True)");
+        });
+
+        // --- Education-E29: Offline Study Cannot Bypass Calendar ---
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(10 * 365);
+            player.EnrollPrimarySchool();
+            // School year just started
+            player.StartStudying();
+            DateTimeOffset saveTime = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+            SaveManager.Save(clock, player, path, saveTime);
+
+            // 100 hours of study = 6000 game minutes = 1500 real seconds
+            // But 1500 real seconds = 1500 * 4 = 6000 game minutes = 100 game hours = ~4.17 game days
+            // Not enough for 365-day calendar requirement
+            DateTimeOffset loadTime = saveTime.AddSeconds(1500);
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+
+            bool pass = loaded &&
+                        loadPlayer.Education.PrimaryGrade == 1 &&
+                        loadPlayer.Education.EducationProgress == 100;
+            Console.WriteLine($"Education-E29: {pass} (Expected: True)");
+        });
+
+        // --- Education-E30: Bulk/Normal Reasonable Equivalence ---
+        {
+            var clock1 = new GameClock();
+            var p1 = new PlayerState(clock1);
+            var gm1 = new GodMode(clock1, p1);
+            gm1.SetEnabled(true);
+            gm1.AdvanceDays(10 * 365);
+            p1.EnrollPrimarySchool();
+            p1.StartStudying();
+            p1.AdvanceSimulation(17);
+
+            var clock2 = new GameClock();
+            var p2 = new PlayerState(clock2);
+            var gm2 = new GodMode(clock2, p2);
+            gm2.SetEnabled(true);
+            gm2.AdvanceDays(10 * 365);
+            p2.EnrollPrimarySchool();
+            p2.StartStudying();
+            p2.AdvanceSimulation(17);
+
+            // Advance both by 120 minutes (2 hours)
+            // Normal path
+            p1.AdvanceSimulation(120);
+            // Bulk path
+            p2.BulkAdvanceSimulation(120, out long moneyEarned, out long xpEarned);
+            p2.ApplyRewards(moneyEarned, xpEarned);
+
+            bool pass = p1.StudyXP == p2.StudyXP &&
+                        p1.Skills.Academics.Experience == p2.Skills.Academics.Experience &&
+                        p1.Education.PrimaryGrade == p2.Education.PrimaryGrade &&
+                        p1.Education.EducationProgress == p2.Education.EducationProgress &&
+                        p1.GetStudyMinutesAccumulator() == p2.GetStudyMinutesAccumulator() &&
+                        p1.Energy == p2.Energy &&
+                        p1.Hunger == p2.Hunger &&
+                        p1.Thirst == p2.Thirst;
+            Console.WriteLine($"Education-E30: {pass} (Expected: True)");
         }
     }
 }

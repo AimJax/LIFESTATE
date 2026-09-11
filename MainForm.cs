@@ -25,6 +25,7 @@ public class MainForm : Form
     private Label _lblDiscipline = new();
     private Label _lblCreativity = new();
     private Label _lblAcademics = new();
+    private Label _lblEducation = new();
     private Label _lblFeedback = new();
 
     private FlowLayoutPanel _debugPanel = new();
@@ -42,7 +43,7 @@ public class MainForm : Form
         };
 
         Text = "LIFESTATE Prototype";
-        Size = new System.Drawing.Size(300, 500);
+        Size = new System.Drawing.Size(350, 600);
 
         InitializeComponents();
         RefreshUI();
@@ -50,7 +51,7 @@ public class MainForm : Form
 
     private void InitializeComponents()
     {
-        var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown };
+        var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, AutoScroll = true };
 
         _lblAge = new Label { AutoSize = true };
         _lblLifeStage = new Label { AutoSize = true };
@@ -66,6 +67,7 @@ public class MainForm : Form
         _lblDiscipline = new Label { AutoSize = true };
         _lblCreativity = new Label { AutoSize = true };
         _lblAcademics = new Label { AutoSize = true };
+        _lblEducation = new Label { AutoSize = true };
         _lblFeedback = new Label { AutoSize = true, ForeColor = System.Drawing.Color.Red };
 
         panel.Controls.Add(_lblAge);
@@ -82,6 +84,7 @@ public class MainForm : Form
         panel.Controls.Add(_lblDiscipline);
         panel.Controls.Add(_lblCreativity);
         panel.Controls.Add(_lblAcademics);
+        panel.Controls.Add(_lblEducation);
         panel.Controls.Add(_lblFeedback);
 
         var btnStart = new Button { Text = "Start Time" };
@@ -101,104 +104,55 @@ public class MainForm : Form
         panel.Controls.Add(btnWait);
 
         var btnSleep = new Button { Text = "Sleep" };
-        btnSleep.Click += (s, e) => {
-            _player.StartSleeping();
-            _lblFeedback.Text = "";
-            RefreshUI();
-        };
+        btnSleep.Click += (s, e) => { _player.StartSleeping(); _lblFeedback.Text = ""; RefreshUI(); };
         panel.Controls.Add(btnSleep);
 
         var btnWake = new Button { Text = "Wake Up" };
-        btnWake.Click += (s, e) => {
-            _player.StopSleeping();
-            RefreshUI();
-        };
+        btnWake.Click += (s, e) => { _player.StopSleeping(); RefreshUI(); };
         panel.Controls.Add(btnWake);
 
         var btnWork = new Button { Text = "Work" };
         btnWork.Click += (s, e) => {
-            if (_player.Age < 18)
-            {
-                _lblFeedback.Text = "Cannot work before age 18.";
-            }
-            else
-            {
-                _player.StartWorking();
-                _lblFeedback.Text = "";
-            }
+            if (_player.Age < 18) _lblFeedback.Text = "Cannot work before age 18.";
+            else { _player.StartWorking(); _lblFeedback.Text = ""; }
             RefreshUI();
         };
         panel.Controls.Add(btnWork);
 
         var btnStopWork = new Button { Text = "Stop Work" };
-        btnStopWork.Click += (s, e) => {
-            _player.StopWorking();
-            RefreshUI();
-        };
+        btnStopWork.Click += (s, e) => { _player.StopWorking(); RefreshUI(); };
         panel.Controls.Add(btnStopWork);
 
         var btnEat = new Button { Text = "Eat +20" };
-        btnEat.Click += (s, e) => {
-            _player.Eat(20);
-            RefreshUI();
-        };
+        btnEat.Click += (s, e) => { _player.Eat(20); RefreshUI(); };
         panel.Controls.Add(btnEat);
 
         var btnDrink = new Button { Text = "Drink +20" };
-        btnDrink.Click += (s, e) => {
-            _player.Drink(20);
-            RefreshUI();
-        };
+        btnDrink.Click += (s, e) => { _player.Drink(20); RefreshUI(); };
         panel.Controls.Add(btnDrink);
 
         var btnStudy = new Button { Text = "Study" };
         btnStudy.Click += (s, e) => {
-            if (_player.Age < 6)
-            {
-                _lblFeedback.Text = "Cannot study before age 6.";
-            }
-            else if (_player.IsSleeping)
-            {
-                _lblFeedback.Text = "Cannot study while sleeping.";
-            }
-            else if (_player.IsWorking)
-            {
-                _lblFeedback.Text = "Cannot study while working.";
-            }
-            else
-            {
-                _player.StartStudying();
-                _lblFeedback.Text = "";
-            }
+            if (_player.Age < 6) _lblFeedback.Text = "Cannot study before age 6.";
+            else if (_player.IsSleeping) _lblFeedback.Text = "Cannot study while sleeping.";
+            else if (_player.IsWorking) _lblFeedback.Text = "Cannot study while working.";
+            else { _player.StartStudying(); _lblFeedback.Text = ""; }
             RefreshUI();
         };
         panel.Controls.Add(btnStudy);
 
         var btnStopStudy = new Button { Text = "Stop Study" };
-        btnStopStudy.Click += (s, e) => {
-            _player.StopStudying();
-            RefreshUI();
-        };
+        btnStopStudy.Click += (s, e) => { _player.StopStudying(); RefreshUI(); };
         panel.Controls.Add(btnStopStudy);
 
         var btnSave = new Button { Text = "Save" };
-        btnSave.Click += (s, e) => {
-            SaveManager.Save(_clock, _player);
-            _lblFeedback.Text = "Saved.";
-        };
+        btnSave.Click += (s, e) => { SaveManager.Save(_clock, _player); _lblFeedback.Text = "Saved."; };
         panel.Controls.Add(btnSave);
 
         var btnLoad = new Button { Text = "Load" };
         btnLoad.Click += (s, e) => {
-            if (SaveManager.Load(_clock, _player))
-            {
-                RefreshUI();
-                _lblFeedback.Text = "Loaded.";
-            }
-            else
-            {
-                _lblFeedback.Text = "Load failed.";
-            }
+            _lblFeedback.Text = SaveManager.Load(_clock, _player) ? "Loaded." : "Load failed.";
+            RefreshUI();
         };
         panel.Controls.Add(btnLoad);
 
@@ -214,33 +168,26 @@ public class MainForm : Form
         var btnDay = new Button { Text = "+1 Day" };
         btnDay.Click += (s, e) => { _godMode.AdvanceDays(1); RefreshUI(); };
         _debugPanel.Controls.Add(btnDay);
-
         var btnYear = new Button { Text = "+1 Year" };
         btnYear.Click += (s, e) => { _godMode.AdvanceDays(365); RefreshUI(); };
         _debugPanel.Controls.Add(btnYear);
-
         var btn10Years = new Button { Text = "+10 Years" };
         btn10Years.Click += (s, e) => { _godMode.AdvanceDays(3650); RefreshUI(); };
         _debugPanel.Controls.Add(btn10Years);
-
         var btnMoney = new Button { Text = "+100 Money" };
         btnMoney.Click += (s, e) => { _godMode.AddMoney(100); RefreshUI(); };
         _debugPanel.Controls.Add(btnMoney);
-
         var btnNeeds = new Button { Text = "Restore Needs" };
         btnNeeds.Click += (s, e) => { _godMode.RestoreNeeds(); RefreshUI(); };
         _debugPanel.Controls.Add(btnNeeds);
-
         var btnMaxAttrs = new Button { Text = "Max Attributes" };
         btnMaxAttrs.Click += (s, e) => { _godMode.MaxAttributes(); RefreshUI(); };
         _debugPanel.Controls.Add(btnMaxAttrs);
-
         var btnMaxSkills = new Button { Text = "Max Skills" };
         btnMaxSkills.Click += (s, e) => { _godMode.MaxSkills(); RefreshUI(); };
         _debugPanel.Controls.Add(btnMaxSkills);
 
         panel.Controls.Add(_debugPanel);
-
         Controls.Add(panel);
     }
 
@@ -261,5 +208,15 @@ public class MainForm : Form
         _lblDiscipline.Text = $"Discipline: {_player.Attributes.Discipline:F2}";
         _lblCreativity.Text = $"Creativity: {_player.Attributes.Creativity:F2}";
         _lblAcademics.Text = $"Academics: Lv. {_player.Skills.Academics.Level}  XP: {_player.Skills.Academics.Experience}/{SkillProgress.MaxExperience}";
+
+        if (_player.Education.Status == EducationStatus.NotEnrolled)
+            _lblEducation.Text = "Education: Not Enrolled";
+        else if (_player.Education.Status == EducationStatus.PrimarySchool)
+        {
+            long elapsed = _clock.Day - _player.Education.SchoolYearStartDay;
+            _lblEducation.Text = $"Education: Primary School | Grade: {_player.Education.PrimaryGrade} | Progress: {_player.Education.EducationProgress}/100 | Year: {Math.Min(elapsed, 365)}/365 days";
+        }
+        else
+            _lblEducation.Text = "Education: Primary Completed";
     }
 }

@@ -13,7 +13,7 @@ public static class SaveManager
     {
         var saveData = new SaveData
         {
-            Version = 2,
+            Version = 3,
             Day = clock.Day,
             Hour = clock.Hour,
             Minute = clock.Minute,
@@ -32,6 +32,10 @@ public static class SaveManager
             HungerMinutesAccumulator = player.GetHungerMinutesAccumulator(),
             ThirstMinutesAccumulator = player.GetThirstMinutesAccumulator(),
             AcademicsExperience = player.Skills.Academics.Experience,
+            EducationStatus = (int)player.Education.Status,
+            PrimaryGrade = player.Education.PrimaryGrade,
+            EducationProgress = player.Education.EducationProgress,
+            SchoolYearStartDay = player.Education.SchoolYearStartDay,
             Intelligence = player.Attributes.Intelligence,
             Fitness = player.Attributes.Fitness,
             Social = player.Attributes.Social,
@@ -61,7 +65,7 @@ public static class SaveManager
             string json = File.ReadAllText(targetPath);
             var saveData = JsonSerializer.Deserialize<SaveData>(json);
 
-            if (saveData == null || saveData.Version != 2) return false;
+            if (saveData == null || (saveData.Version != 2 && saveData.Version != 3)) return false;
 
             // Strict Validation — basic fields
             if (saveData.Day < 0 ||
@@ -87,7 +91,7 @@ public static class SaveManager
             if (saveData.AcademicsExperience < 0 || saveData.AcademicsExperience > SkillProgress.MaxExperience)
                 return false;
 
-            // Validate attribute values — nulls are acceptable (old V2 compat), present values must be finite and in [0, 100]
+            // Validate attribute values
             double attrIntelligence = GetValidatedAttribute(saveData.Intelligence, out bool attrValid);
             if (!attrValid) return false;
             double attrFitness = GetValidatedAttribute(saveData.Fitness, out attrValid);
@@ -98,6 +102,22 @@ public static class SaveManager
             if (!attrValid) return false;
             double attrCreativity = GetValidatedAttribute(saveData.Creativity, out attrValid);
             if (!attrValid) return false;
+
+            // Validate Education if version 3
+            EducationStatus eduStatus = EducationStatus.NotEnrolled;
+            int eduGrade = 0;
+            int eduProgress = 0;
+            long eduStartDay = 0;
+            if (saveData.Version == 3)
+            {
+                eduStatus = (EducationStatus)saveData.EducationStatus;
+                eduGrade = saveData.PrimaryGrade;
+                eduProgress = saveData.EducationProgress;
+                eduStartDay = saveData.SchoolYearStartDay;
+
+                if (!ValidateEducation(eduStatus, eduGrade, eduProgress, eduStartDay, saveData.Day))
+                    return false;
+            }
 
             // Transactional Load: Create clones for validation
             var tempClock = new GameClock();
@@ -110,6 +130,7 @@ public static class SaveManager
                 saveData.WorkMinutesAccumulator, saveData.StudyMinutesAccumulator);
             tempPlayer.Attributes.Restore(attrIntelligence, attrFitness, attrSocial, attrDiscipline, attrCreativity);
             tempPlayer.Skills.Academics.Restore(saveData.AcademicsExperience);
+            tempPlayer.Education.Restore(eduStatus, eduGrade, eduProgress, eduStartDay);
 
             // Offline Progression Calculation
             DateTimeOffset currentTime = nowUtc ?? DateTimeOffset.UtcNow;
@@ -120,7 +141,6 @@ public static class SaveManager
             {
                 long elapsedMinutes = elapsedSeconds * GameClock.MinutesPerRealSecond;
 
-                // Preflight clock overflow
                 try
                 {
                     tempClock.AdvanceGameMinutes(elapsedMinutes);
@@ -130,18 +150,18 @@ public static class SaveManager
                     return false;
                 }
 
-                // Preflight Money/XP overflow
                 if (!tempPlayer.PreflightWorkAndStudy(elapsedMinutes, out _, out _))
                 {
                     return false;
                 }
 
-                // Apply offline progression to temp objects
                 tempPlayer.BulkAdvanceSimulation(elapsedMinutes, out long moneyEarned, out long xpEarned);
                 tempPlayer.ApplyRewards(moneyEarned, xpEarned);
+                // Evaluate education after offline progression (clock has advanced)
+                tempPlayer.Education.EvaluateProgression(tempClock.Day);
             }
 
-            // Only if we get here do we modify the actual objects
+            // Commit to live objects
             clock.Restore(tempClock.Day, tempClock.Hour, tempClock.Minute);
             player.Restore(tempPlayer.Money, tempPlayer.Energy, tempPlayer.Hunger, tempPlayer.Thirst, tempPlayer.StudyXP,
                 tempPlayer.IsSleeping, tempPlayer.IsWorking, tempPlayer.IsStudying,
@@ -150,6 +170,7 @@ public static class SaveManager
                 tempPlayer.GetWorkMinutesAccumulator(), tempPlayer.GetStudyMinutesAccumulator());
             player.Attributes.Restore(tempPlayer.Attributes.Intelligence, tempPlayer.Attributes.Fitness, tempPlayer.Attributes.Social, tempPlayer.Attributes.Discipline, tempPlayer.Attributes.Creativity);
             player.Skills.Academics.Restore(tempPlayer.Skills.Academics.Experience);
+            player.Education.Restore(tempPlayer.Education.Status, tempPlayer.Education.PrimaryGrade, tempPlayer.Education.EducationProgress, tempPlayer.Education.SchoolYearStartDay);
 
             return true;
         }
@@ -157,6 +178,22 @@ public static class SaveManager
         {
             return false;
         }
+    }
+
+    private static bool ValidateEducation(EducationStatus status, int grade, int progress, long startDay, int currentDay)
+    {
+        if (startDay < 0 || startDay > currentDay) return false;
+
+        if (status == EducationStatus.NotEnrolled)
+            return grade == 0 && progress == 0 && startDay == 0;
+
+        if (status == EducationStatus.PrimarySchool)
+            return grade >= 1 && grade <= 6 && progress >= 0 && progress <= 100;
+
+        if (status == EducationStatus.CompletedPrimary)
+            return grade == 6 && progress == 100;
+
+        return false;
     }
 
     private static double GetValidatedAttribute(double? value, out bool valid)
