@@ -8,28 +8,28 @@ public sealed class PlayerTraits
     public double Ambition { get; private set; } = 50.0;
     public double Empathy { get; private set; } = 50.0;
 
-    public void AddConfidence(double amount)
+    internal void AddConfidence(double amount)
     {
         if (IsValidInput(amount)) Confidence = Clamp(Confidence + amount);
     }
-    public void AddCuriosity(double amount)
+    internal void AddCuriosity(double amount)
     {
         if (IsValidInput(amount)) Curiosity = Clamp(Curiosity + amount);
     }
-    public void AddPatience(double amount)
+    internal void AddPatience(double amount)
     {
         if (IsValidInput(amount)) Patience = Clamp(Patience + amount);
     }
-    public void AddAmbition(double amount)
+    internal void AddAmbition(double amount)
     {
         if (IsValidInput(amount)) Ambition = Clamp(Ambition + amount);
     }
-    public void AddEmpathy(double amount)
+    internal void AddEmpathy(double amount)
     {
         if (IsValidInput(amount)) Empathy = Clamp(Empathy + amount);
     }
 
-    public void SetAllMax()
+    internal void SetAllMax()
     {
         Confidence = 100.0;
         Curiosity = 100.0;

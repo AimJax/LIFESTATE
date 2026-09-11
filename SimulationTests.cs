@@ -669,6 +669,7 @@ public static class SimulationTests
         RunSkillTests();
         RunEducationTests();
         RunTraitTests();
+        RunPlayTests();
     }
 
     private static void RunSaveLoadTests()
@@ -3878,6 +3879,517 @@ public static class SimulationTests
                         Close(player.Traits.Empathy, 56.0) &&
                         player.Education.Status == EducationStatus.PrimarySchool;
             Console.WriteLine($"Trait-T30: {pass} (Expected: True)");
+        }
+    }
+
+    private static void RunPlayTests()
+    {
+        Console.WriteLine("\n--- LIFESTATE Play Regression Tests ---");
+
+        void RunWithTempSave(Action<string> testAction)
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), "LIFESTATE-tests-P", Guid.NewGuid().ToString());
+            string tempSavePath = Path.Combine(tempDir, "save.json");
+            try
+            {
+                Directory.CreateDirectory(tempDir);
+                testAction(tempSavePath);
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+            }
+        }
+
+        static bool Close(double a, double b) => Math.Abs(a - b) < 0.000001;
+
+        // Helper: age-5 player (valid for Play, invalid for Study)
+        static (GameClock clock, PlayerState player) MakeAge5Player()
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(5 * 365);
+            return (clock, player);
+        }
+
+        // Helper: age-10 player (valid for Play and Study)
+        static (GameClock clock, PlayerState player) MakeAge10Player()
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(10 * 365);
+            return (clock, player);
+        }
+
+        // Helper: age-20 player (valid for Play and Work)
+        static (GameClock clock, PlayerState player) MakeAge20Player()
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(20 * 365);
+            return (clock, player);
+        }
+
+        // --- Play-P1: Defaults ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            bool pass = player.IsPlaying == false &&
+                        player.GetPlayMinutesAccumulator() == 0;
+            Console.WriteLine($"Play-P1: {pass} (Expected: True)");
+        }
+
+        // --- Play-P2: Underage Rejected ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(1 * 365); // Age 1
+            bool result = player.StartPlaying();
+            bool pass = !result &&
+                        player.IsPlaying == false &&
+                        player.GetPlayMinutesAccumulator() == 0 &&
+                        player.Energy == 100 && player.Hunger == 100 && player.Thirst == 100;
+            Console.WriteLine($"Play-P2: {pass} (Expected: True)");
+        }
+
+        // --- Play-P3: Age 2 Allowed ---
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(2 * 365); // Age 2
+            bool result = player.StartPlaying();
+            bool pass = result && player.IsPlaying;
+            Console.WriteLine($"Play-P3: {pass} (Expected: True)");
+        }
+
+        // --- Play-P4: Duplicate Start Rejected ---
+        {
+            var (clock, player) = MakeAge5Player();
+            bool first = player.StartPlaying();
+            int accBefore = player.GetPlayMinutesAccumulator();
+            bool second = player.StartPlaying();
+            bool pass = first && !second && player.IsPlaying &&
+                        player.GetPlayMinutesAccumulator() == accBefore;
+            Console.WriteLine($"Play-P4: {pass} (Expected: True)");
+        }
+
+        // --- Play-P5: Stop Playing ---
+        {
+            var (clock, player) = MakeAge5Player();
+            player.StartPlaying();
+            player.StopPlaying();
+            bool pass = player.IsPlaying == false;
+            Console.WriteLine($"Play-P5: {pass} (Expected: True)");
+        }
+
+        // --- Play-P6: Sleeping Blocks Play ---
+        {
+            var (clock, player) = MakeAge5Player();
+            player.StartSleeping();
+            bool result = player.StartPlaying();
+            bool pass = !result && player.IsSleeping && player.IsPlaying == false;
+            Console.WriteLine($"Play-P6: {pass} (Expected: True)");
+        }
+
+        // --- Play-P7: Working Blocks Play ---
+        {
+            var (clock, player) = MakeAge20Player();
+            player.StartWorking();
+            bool result = player.StartPlaying();
+            bool pass = !result && player.IsWorking && player.IsPlaying == false;
+            Console.WriteLine($"Play-P7: {pass} (Expected: True)");
+        }
+
+        // --- Play-P8: Studying Blocks Play ---
+        {
+            var (clock, player) = MakeAge10Player();
+            player.StartStudying();
+            bool result = player.StartPlaying();
+            bool pass = !result && player.IsStudying && player.IsPlaying == false;
+            Console.WriteLine($"Play-P8: {pass} (Expected: True)");
+        }
+
+        // --- Play-P9: Playing Blocks Sleep ---
+        {
+            var (clock, player) = MakeAge5Player();
+            player.StartPlaying();
+            player.StartSleeping();
+            bool pass = player.IsPlaying && player.IsSleeping == false;
+            Console.WriteLine($"Play-P9: {pass} (Expected: True)");
+        }
+
+        // --- Play-P10: Playing Blocks Work ---
+        {
+            var (clock, player) = MakeAge20Player();
+            player.StartPlaying();
+            player.StartWorking();
+            bool pass = player.IsPlaying && player.IsWorking == false;
+            Console.WriteLine($"Play-P10: {pass} (Expected: True)");
+        }
+
+        // --- Play-P11: Playing Blocks Study ---
+        {
+            var (clock, player) = MakeAge10Player();
+            player.StartPlaying();
+            player.StartStudying();
+            bool pass = player.IsPlaying && player.IsStudying == false;
+            Console.WriteLine($"Play-P11: {pass} (Expected: True)");
+        }
+
+        // --- Play-P12: 59 Minute Partial ---
+        {
+            var (clock, player) = MakeAge5Player();
+            double fitBefore = player.Attributes.Fitness;
+            double creBefore = player.Attributes.Creativity;
+            double confBefore = player.Traits.Confidence;
+            double curBefore = player.Traits.Curiosity;
+            player.StartPlaying();
+            player.AdvanceSimulation(59);
+            bool pass = player.IsPlaying &&
+                        Close(player.Attributes.Fitness, fitBefore) &&
+                        Close(player.Attributes.Creativity, creBefore) &&
+                        Close(player.Traits.Confidence, confBefore) &&
+                        Close(player.Traits.Curiosity, curBefore) &&
+                        player.GetPlayMinutesAccumulator() == 59;
+            Console.WriteLine($"Play-P12: {pass} (Expected: True)");
+        }
+
+        // --- Play-P13: Complete Hour ---
+        {
+            var (clock, player) = MakeAge5Player();
+            double fitBefore = player.Attributes.Fitness;
+            double creBefore = player.Attributes.Creativity;
+            double confBefore = player.Traits.Confidence;
+            double curBefore = player.Traits.Curiosity;
+            player.StartPlaying();
+            player.AdvanceSimulation(59);
+            player.AdvanceSimulation(1);
+            bool pass = Close(player.Attributes.Fitness - fitBefore, 0.03) &&
+                        Close(player.Attributes.Creativity - creBefore, 0.03) &&
+                        Close(player.Traits.Confidence - confBefore, 0.02) &&
+                        Close(player.Traits.Curiosity - curBefore, 0.01) &&
+                        player.GetPlayMinutesAccumulator() == 0;
+            Console.WriteLine($"Play-P13: {pass} (Expected: True)");
+        }
+
+        // --- Play-P14: Multi-Hour Reward ---
+        {
+            var (clock, player) = MakeAge5Player();
+            double fitBefore = player.Attributes.Fitness;
+            double creBefore = player.Attributes.Creativity;
+            double confBefore = player.Traits.Confidence;
+            double curBefore = player.Traits.Curiosity;
+            player.StartPlaying();
+            player.AdvanceSimulation(10 * 60); // 10 completed Play hours
+            bool pass = Close(player.Attributes.Fitness - fitBefore, 0.30) &&
+                        Close(player.Attributes.Creativity - creBefore, 0.30) &&
+                        Close(player.Traits.Confidence - confBefore, 0.20) &&
+                        Close(player.Traits.Curiosity - curBefore, 0.10);
+            Console.WriteLine($"Play-P14: {pass} (Expected: True)");
+        }
+
+        // --- Play-P15: No Unintended Rewards ---
+        {
+            var (clock, player) = MakeAge10Player();
+            double intelBefore = player.Attributes.Intelligence;
+            double socialBefore = player.Attributes.Social;
+            double discBefore = player.Attributes.Discipline;
+            double patBefore = player.Traits.Patience;
+            double ambBefore = player.Traits.Ambition;
+            double empBefore = player.Traits.Empathy;
+            long acadBefore = player.Skills.Academics.Experience;
+            int xpBefore = player.StudyXP;
+            int moneyBefore = player.Money;
+            player.StartPlaying();
+            player.AdvanceSimulation(5 * 60); // 5 completed Play hours
+            bool pass = Close(player.Attributes.Intelligence, intelBefore) &&
+                        Close(player.Attributes.Social, socialBefore) &&
+                        Close(player.Attributes.Discipline, discBefore) &&
+                        Close(player.Traits.Patience, patBefore) &&
+                        Close(player.Traits.Ambition, ambBefore) &&
+                        Close(player.Traits.Empathy, empBefore) &&
+                        player.Skills.Academics.Experience == acadBefore &&
+                        player.StudyXP == xpBefore &&
+                        player.Money == moneyBefore &&
+                        player.Education.EducationProgress == 0;
+            Console.WriteLine($"Play-P15: {pass} (Expected: True)");
+        }
+
+        // --- Play-P16: Attribute/Trait Clamp ---
+        {
+            var (clock, player) = MakeAge5Player();
+            player.Attributes.Restore(50.0, 99.99, 50.0, 50.0, 99.99);
+            player.Traits.Restore(99.99, 50.0, 50.0, 50.0, 50.0);
+            player.StartPlaying();
+            player.AdvanceSimulation(10 * 60); // 10 completed Play hours
+            bool pass = Close(player.Attributes.Fitness, 100.0) &&
+                        Close(player.Attributes.Creativity, 100.0) &&
+                        Close(player.Traits.Confidence, 100.0) &&
+                        Close(player.Traits.Curiosity, 50.10);
+            Console.WriteLine($"Play-P16: {pass} (Expected: True)");
+        }
+
+        // --- Play-P17: Partial Persists Across Stop/Start ---
+        {
+            var (clock, player) = MakeAge5Player();
+            double fitBefore = player.Attributes.Fitness;
+            double creBefore = player.Attributes.Creativity;
+            double confBefore = player.Traits.Confidence;
+            double curBefore = player.Traits.Curiosity;
+            player.StartPlaying();
+            player.AdvanceSimulation(30);
+            player.StopPlaying();
+            bool partialKept = player.GetPlayMinutesAccumulator() == 30;
+            player.StartPlaying();
+            player.AdvanceSimulation(30);
+            bool pass = partialKept &&
+                        Close(player.Attributes.Fitness - fitBefore, 0.03) &&
+                        Close(player.Attributes.Creativity - creBefore, 0.03) &&
+                        Close(player.Traits.Confidence - confBefore, 0.02) &&
+                        Close(player.Traits.Curiosity - curBefore, 0.01) &&
+                        player.GetPlayMinutesAccumulator() == 0;
+            Console.WriteLine($"Play-P17: {pass} (Expected: True)");
+        }
+
+        // --- Play-P18: Needs While Playing ---
+        {
+            var (clock, player) = MakeAge5Player();
+            player.StartPlaying();
+            player.AdvanceSimulation(3 * 60); // 3 awake hours
+            bool pass = player.Energy == 97 &&
+                        player.Hunger == 97 &&
+                        player.Thirst == 94;
+            Console.WriteLine($"Play-P18: {pass} (Expected: True)");
+        }
+
+        // --- Play-P19: Save / Load Active Play ---
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(5 * 365);
+            player.StartPlaying();
+            player.AdvanceSimulation(45); // accumulator 45
+            DateTimeOffset saveTime = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+            SaveManager.Save(clock, player, path, saveTime);
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, saveTime);
+            bool pass = loaded &&
+                        loadPlayer.IsPlaying &&
+                        loadPlayer.GetPlayMinutesAccumulator() == 45 &&
+                        !loadPlayer.IsSleeping && !loadPlayer.IsWorking && !loadPlayer.IsStudying;
+            Console.WriteLine($"Play-P19: {pass} (Expected: True)");
+        });
+
+        // --- Play-P20: V4 Compatibility ---
+        RunWithTempSave(path => {
+            // V4 save: traits present, no play fields.
+            File.WriteAllText(path, "{\"Version\":4,\"Day\":100,\"Hour\":5,\"Minute\":30,\"Money\":1500,\"Energy\":80,\"Hunger\":70,\"Thirst\":60,\"StudyXP\":300,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"AwakeMinutesAccumulator\":0,\"SleepingMinutesAccumulator\":0,\"HungerMinutesAccumulator\":0,\"ThirstMinutesAccumulator\":0,\"AcademicsExperience\":500,\"EducationStatus\":0,\"PrimaryGrade\":0,\"EducationProgress\":0,\"SchoolYearStartDay\":0,\"Confidence\":62.5,\"Curiosity\":73.5,\"Patience\":44.5,\"Ambition\":55.5,\"Empathy\":66.5,\"Intelligence\":30.0,\"Fitness\":40.0,\"Social\":20.0,\"Discipline\":25.0,\"Creativity\":35.0,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            DateTimeOffset loadTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+            bool pass = loaded &&
+                        loadPlayer.IsPlaying == false &&
+                        loadPlayer.GetPlayMinutesAccumulator() == 0 &&
+                        loadPlayer.StudyXP == 300 &&
+                        loadPlayer.Skills.Academics.Experience == 500 &&
+                        Close(loadPlayer.Traits.Confidence, 62.5) &&
+                        Close(loadPlayer.Traits.Curiosity, 73.5) &&
+                        Close(loadPlayer.Attributes.Intelligence, 30.0);
+            Console.WriteLine($"Play-P20: {pass} (Expected: True)");
+        });
+
+        // --- Play-P21: Invalid Accumulator Transaction Reject ---
+        RunWithTempSave(path => {
+            // Non-default live runtime
+            var setupClock = new GameClock();
+            var setupPlayer = new PlayerState(setupClock);
+            var gm = new GodMode(setupClock, setupPlayer);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(15 * 365);
+            setupPlayer.Traits.Restore(11.0, 22.0, 33.0, 44.0, 55.0);
+
+            int dayBefore = setupClock.Day;
+            int moneyBefore = setupPlayer.Money;
+            double confBefore = setupPlayer.Traits.Confidence;
+
+            File.WriteAllText(path, "{\"Version\":5,\"Day\":100,\"Hour\":0,\"Minute\":0,\"Money\":1000,\"Energy\":100,\"Hunger\":100,\"Thirst\":100,\"StudyXP\":0,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"IsPlaying\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"AwakeMinutesAccumulator\":0,\"SleepingMinutesAccumulator\":0,\"HungerMinutesAccumulator\":0,\"ThirstMinutesAccumulator\":0,\"PlayMinutesAccumulator\":60,\"AcademicsExperience\":0,\"EducationStatus\":0,\"PrimaryGrade\":0,\"EducationProgress\":0,\"SchoolYearStartDay\":0,\"Confidence\":50,\"Curiosity\":50,\"Patience\":50,\"Ambition\":50,\"Empathy\":50,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+
+            DateTimeOffset loadTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            bool loaded = SaveManager.Load(setupClock, setupPlayer, path, loadTime);
+            bool pass = !loaded &&
+                        setupClock.Day == dayBefore &&
+                        setupPlayer.Money == moneyBefore &&
+                        Close(setupPlayer.Traits.Confidence, confBefore) &&
+                        setupPlayer.GetPlayMinutesAccumulator() == 0 &&
+                        setupPlayer.IsPlaying == false;
+            Console.WriteLine($"Play-P21: {pass} (Expected: True)");
+        });
+
+        // --- Play-P22: Multiple Activity Transaction Reject ---
+        RunWithTempSave(path => {
+            // Case 1: Studying + Playing
+            File.WriteAllText(path, "{\"Version\":5,\"Day\":100,\"Hour\":0,\"Minute\":0,\"Money\":1000,\"Energy\":100,\"Hunger\":100,\"Thirst\":100,\"StudyXP\":0,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":true,\"IsPlaying\":true,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"AwakeMinutesAccumulator\":0,\"SleepingMinutesAccumulator\":0,\"HungerMinutesAccumulator\":0,\"ThirstMinutesAccumulator\":0,\"PlayMinutesAccumulator\":0,\"AcademicsExperience\":0,\"EducationStatus\":0,\"PrimaryGrade\":0,\"EducationProgress\":0,\"SchoolYearStartDay\":0,\"Confidence\":50,\"Curiosity\":50,\"Patience\":50,\"Ambition\":50,\"Empathy\":50,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+            var loadClock1 = new GameClock();
+            var loadPlayer1 = new PlayerState(loadClock1);
+            DateTimeOffset loadTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            bool loaded1 = SaveManager.Load(loadClock1, loadPlayer1, path, loadTime);
+
+            // Case 2: Sleeping + Playing
+            File.WriteAllText(path, "{\"Version\":5,\"Day\":100,\"Hour\":0,\"Minute\":0,\"Money\":1000,\"Energy\":100,\"Hunger\":100,\"Thirst\":100,\"StudyXP\":0,\"IsSleeping\":true,\"IsWorking\":false,\"IsStudying\":false,\"IsPlaying\":true,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"AwakeMinutesAccumulator\":0,\"SleepingMinutesAccumulator\":0,\"HungerMinutesAccumulator\":0,\"ThirstMinutesAccumulator\":0,\"PlayMinutesAccumulator\":0,\"AcademicsExperience\":0,\"EducationStatus\":0,\"PrimaryGrade\":0,\"EducationProgress\":0,\"SchoolYearStartDay\":0,\"Confidence\":50,\"Curiosity\":50,\"Patience\":50,\"Ambition\":50,\"Empathy\":50,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+            var loadClock2 = new GameClock();
+            var loadPlayer2 = new PlayerState(loadClock2);
+            bool loaded2 = SaveManager.Load(loadClock2, loadPlayer2, path, loadTime);
+
+            // Case 3: Working + Playing
+            File.WriteAllText(path, "{\"Version\":5,\"Day\":100,\"Hour\":0,\"Minute\":0,\"Money\":1000,\"Energy\":100,\"Hunger\":100,\"Thirst\":100,\"StudyXP\":0,\"IsSleeping\":false,\"IsWorking\":true,\"IsStudying\":false,\"IsPlaying\":true,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"AwakeMinutesAccumulator\":0,\"SleepingMinutesAccumulator\":0,\"HungerMinutesAccumulator\":0,\"ThirstMinutesAccumulator\":0,\"PlayMinutesAccumulator\":0,\"AcademicsExperience\":0,\"EducationStatus\":0,\"PrimaryGrade\":0,\"EducationProgress\":0,\"SchoolYearStartDay\":0,\"Confidence\":50,\"Curiosity\":50,\"Patience\":50,\"Ambition\":50,\"Empathy\":50,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+            var loadClock3 = new GameClock();
+            var loadPlayer3 = new PlayerState(loadClock3);
+            bool loaded3 = SaveManager.Load(loadClock3, loadPlayer3, path, loadTime);
+
+            bool pass = !loaded1 && !loaded2 && !loaded3;
+            Console.WriteLine($"Play-P22: {pass} (Expected: True)");
+        });
+
+        // --- Play-P23: Offline Play ---
+        RunWithTempSave(path => {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            var gm = new GodMode(clock, player);
+            gm.SetEnabled(true);
+            gm.AdvanceDays(5 * 365);
+            player.StartPlaying();
+            player.AdvanceSimulation(30); // accumulator 30
+            DateTimeOffset saveTime = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+            SaveManager.Save(clock, player, path, saveTime);
+
+            // 90 in-game minutes offline = 22.5 real seconds -> use 23s? No: exact.
+            // 90 game minutes = 90/4 = 22.5 real seconds. Not integer; use 120 game minutes instead:
+            // accumulator 30 + 120 = 150 -> 2 completed hours, remainder 30.
+            // 120 game minutes = 30 real seconds.
+            DateTimeOffset loadTime = saveTime.AddSeconds(30);
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+
+            // Needs: 2 awake hours -> Energy 98, Hunger 98, Thirst 96.
+            bool pass = loaded &&
+                        loadPlayer.IsPlaying &&
+                        loadPlayer.GetPlayMinutesAccumulator() == 30 &&
+                        Close(loadPlayer.Attributes.Fitness - player.Attributes.Fitness, 0.06) &&
+                        Close(loadPlayer.Attributes.Creativity - player.Attributes.Creativity, 0.06) &&
+                        Close(loadPlayer.Traits.Confidence - player.Traits.Confidence, 0.04) &&
+                        Close(loadPlayer.Traits.Curiosity - player.Traits.Curiosity, 0.02) &&
+                        loadPlayer.Energy == 98 &&
+                        loadPlayer.Hunger == 98 &&
+                        loadPlayer.Thirst == 96;
+            Console.WriteLine($"Play-P23: {pass} (Expected: True)");
+        });
+
+        // --- Play-P24: Normal vs Bulk Equivalence ---
+        {
+            var clock1 = new GameClock();
+            var p1 = new PlayerState(clock1);
+            var gm1 = new GodMode(clock1, p1);
+            gm1.SetEnabled(true);
+            gm1.AdvanceDays(5 * 365);
+            p1.StartPlaying();
+
+            var clock2 = new GameClock();
+            var p2 = new PlayerState(clock2);
+            var gm2 = new GodMode(clock2, p2);
+            gm2.SetEnabled(true);
+            gm2.AdvanceDays(5 * 365);
+            p2.StartPlaying();
+
+            // Advance both by 150 minutes (2 completed Play hours + 30 remainder).
+            p1.AdvanceSimulation(150);
+            p2.BulkAdvanceSimulation(150, out long moneyEarned, out long xpEarned);
+            p2.ApplyRewards(moneyEarned, xpEarned);
+
+            bool pass = Close(p1.Attributes.Fitness, p2.Attributes.Fitness) &&
+                        Close(p1.Attributes.Creativity, p2.Attributes.Creativity) &&
+                        Close(p1.Traits.Confidence, p2.Traits.Confidence) &&
+                        Close(p1.Traits.Curiosity, p2.Traits.Curiosity) &&
+                        p1.GetPlayMinutesAccumulator() == p2.GetPlayMinutesAccumulator() &&
+                        p1.Energy == p2.Energy &&
+                        p1.Hunger == p2.Hunger &&
+                        p1.Thirst == p2.Thirst &&
+                        p1.IsPlaying == p2.IsPlaying;
+            Console.WriteLine($"Play-P24: {pass} (Expected: True)");
+        }
+
+        // --- Play-P25: Other Activities Do Not Award Play Rewards ---
+        {
+            // Work
+            var (wClock, wPlayer) = MakeAge20Player();
+            double wFit = wPlayer.Attributes.Fitness;
+            double wCre = wPlayer.Attributes.Creativity;
+            double wConf = wPlayer.Traits.Confidence;
+            double wCur = wPlayer.Traits.Curiosity;
+            wPlayer.StartWorking();
+            wPlayer.AdvanceSimulation(3 * 60); // 3 work hours
+            bool workPass = Close(wPlayer.Attributes.Fitness, wFit) &&
+                            Close(wPlayer.Attributes.Creativity, wCre) &&
+                            Close(wPlayer.Traits.Confidence, wConf) &&
+                            Close(wPlayer.Traits.Curiosity, wCur);
+
+            // Sleep
+            var (sClock, sPlayer) = MakeAge5Player();
+            double sFit = sPlayer.Attributes.Fitness;
+            double sCre = sPlayer.Attributes.Creativity;
+            double sConf = sPlayer.Traits.Confidence;
+            double sCur = sPlayer.Traits.Curiosity;
+            sPlayer.StartSleeping();
+            sPlayer.AdvanceSimulation(8 * 60); // 8 sleep hours
+            bool sleepPass = Close(sPlayer.Attributes.Fitness, sFit) &&
+                             Close(sPlayer.Attributes.Creativity, sCre) &&
+                             Close(sPlayer.Traits.Confidence, sConf) &&
+                             Close(sPlayer.Traits.Curiosity, sCur);
+
+            // Idle
+            var (iClock, iPlayer) = MakeAge5Player();
+            double iFit = iPlayer.Attributes.Fitness;
+            double iCre = iPlayer.Attributes.Creativity;
+            double iConf = iPlayer.Traits.Confidence;
+            double iCur = iPlayer.Traits.Curiosity;
+            iPlayer.AdvanceSimulation(4 * 60); // 4 idle awake hours
+            bool idlePass = Close(iPlayer.Attributes.Fitness, iFit) &&
+                            Close(iPlayer.Attributes.Creativity, iCre) &&
+                            Close(iPlayer.Traits.Confidence, iConf) &&
+                            Close(iPlayer.Traits.Curiosity, iCur);
+
+            // Study: may legitimately change Curiosity (+0.02/h) but must NOT grant
+            // Fitness/Creativity/Confidence Play rates.
+            var (stClock, stPlayer) = MakeAge10Player();
+            double stFit = stPlayer.Attributes.Fitness;
+            double stCre = stPlayer.Attributes.Creativity;
+            double stConf = stPlayer.Traits.Confidence;
+            double stCur = stPlayer.Traits.Curiosity;
+            stPlayer.StartStudying();
+            stPlayer.AdvanceSimulation(3 * 60); // 3 study hours
+            bool studyPass = Close(stPlayer.Attributes.Fitness, stFit) &&
+                             Close(stPlayer.Attributes.Creativity, stCre) &&
+                             Close(stPlayer.Traits.Confidence, stConf) &&
+                             Close(stPlayer.Traits.Curiosity - stCur, 0.06); // +0.02 * 3, legitimate trait rate
+
+            bool pass = workPass && sleepPass && idlePass && studyPass;
+            Console.WriteLine($"Play-P25: {pass} (Expected: True)");
         }
     }
 }

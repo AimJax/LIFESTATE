@@ -13,7 +13,7 @@ public static class SaveManager
     {
         var saveData = new SaveData
         {
-            Version = 4,
+            Version = 5,
             Day = clock.Day,
             Hour = clock.Hour,
             Minute = clock.Minute,
@@ -25,12 +25,14 @@ public static class SaveManager
             IsSleeping = player.IsSleeping,
             IsWorking = player.IsWorking,
             IsStudying = player.IsStudying,
+            IsPlaying = player.IsPlaying,
             WorkMinutesAccumulator = player.GetWorkMinutesAccumulator(),
             StudyMinutesAccumulator = player.GetStudyMinutesAccumulator(),
             AwakeMinutesAccumulator = player.GetAwakeMinutesAccumulator(),
             SleepingMinutesAccumulator = player.GetSleepingMinutesAccumulator(),
             HungerMinutesAccumulator = player.GetHungerMinutesAccumulator(),
             ThirstMinutesAccumulator = player.GetThirstMinutesAccumulator(),
+            PlayMinutesAccumulator = player.GetPlayMinutesAccumulator(),
             AcademicsExperience = player.Skills.Academics.Experience,
             EducationStatus = (int)player.Education.Status,
             PrimaryGrade = player.Education.PrimaryGrade,
@@ -70,7 +72,7 @@ public static class SaveManager
             string json = File.ReadAllText(targetPath);
             var saveData = JsonSerializer.Deserialize<SaveData>(json);
 
-            if (saveData == null || (saveData.Version != 2 && saveData.Version != 3 && saveData.Version != 4)) return false;
+            if (saveData == null || (saveData.Version != 2 && saveData.Version != 3 && saveData.Version != 4 && saveData.Version != 5)) return false;
 
             // Strict Validation — basic fields
             if (saveData.Day < 0 ||
@@ -86,7 +88,8 @@ public static class SaveManager
                 saveData.SleepingMinutesAccumulator < 0 || saveData.SleepingMinutesAccumulator >= 60 ||
                 saveData.HungerMinutesAccumulator < 0 || saveData.HungerMinutesAccumulator >= 60 ||
                 saveData.ThirstMinutesAccumulator < 0 || saveData.ThirstMinutesAccumulator >= 60 ||
-                (saveData.IsSleeping ? 1 : 0) + (saveData.IsWorking ? 1 : 0) + (saveData.IsStudying ? 1 : 0) > 1 ||
+                (saveData.IsSleeping ? 1 : 0) + (saveData.IsWorking ? 1 : 0) + (saveData.IsStudying ? 1 : 0) + (saveData.IsPlaying ? 1 : 0) > 1 ||
+                saveData.PlayMinutesAccumulator < 0 || saveData.PlayMinutesAccumulator >= 60 ||
                 saveData.SavedAtUtc == DateTimeOffset.MinValue)
             {
                 return false;
@@ -124,13 +127,13 @@ public static class SaveManager
                     return false;
             }
 
-            // Validate Traits if version 4 (V3/V2 saves have no trait fields; defaults apply)
+            // Validate Traits if version 4+ (V4/V5 saves persist traits; V2/V3 default to 50)
             double traitConfidence = 50.0;
             double traitCuriosity = 50.0;
             double traitPatience = 50.0;
             double traitAmbition = 50.0;
             double traitEmpathy = 50.0;
-            if (saveData.Version == 4)
+            if (saveData.Version >= 4)
             {
                 if (!IsValidTraitValue(saveData.Confidence) ||
                     !IsValidTraitValue(saveData.Curiosity) ||
@@ -153,10 +156,11 @@ public static class SaveManager
             tempClock.Restore(saveData.Day, saveData.Hour, saveData.Minute);
             var tempPlayer = new PlayerState(tempClock);
             tempPlayer.Restore(saveData.Money, saveData.Energy, saveData.Hunger, saveData.Thirst, saveData.StudyXP,
-                saveData.IsSleeping, saveData.IsWorking, saveData.IsStudying,
+                saveData.IsSleeping, saveData.IsWorking, saveData.IsStudying, saveData.IsPlaying,
                 saveData.AwakeMinutesAccumulator, saveData.SleepingMinutesAccumulator,
                 saveData.HungerMinutesAccumulator, saveData.ThirstMinutesAccumulator,
-                saveData.WorkMinutesAccumulator, saveData.StudyMinutesAccumulator);
+                saveData.WorkMinutesAccumulator, saveData.StudyMinutesAccumulator,
+                saveData.PlayMinutesAccumulator);
             tempPlayer.Attributes.Restore(attrIntelligence, attrFitness, attrSocial, attrDiscipline, attrCreativity);
             tempPlayer.Skills.Academics.Restore(saveData.AcademicsExperience);
             tempPlayer.Education.Restore(eduStatus, eduGrade, eduProgress, eduStartDay);
@@ -194,10 +198,11 @@ public static class SaveManager
             // Commit to live objects
             clock.Restore(tempClock.Day, tempClock.Hour, tempClock.Minute);
             player.Restore(tempPlayer.Money, tempPlayer.Energy, tempPlayer.Hunger, tempPlayer.Thirst, tempPlayer.StudyXP,
-                tempPlayer.IsSleeping, tempPlayer.IsWorking, tempPlayer.IsStudying,
+                tempPlayer.IsSleeping, tempPlayer.IsWorking, tempPlayer.IsStudying, tempPlayer.IsPlaying,
                 tempPlayer.GetAwakeMinutesAccumulator(), tempPlayer.GetSleepingMinutesAccumulator(),
                 tempPlayer.GetHungerMinutesAccumulator(), tempPlayer.GetThirstMinutesAccumulator(),
-                tempPlayer.GetWorkMinutesAccumulator(), tempPlayer.GetStudyMinutesAccumulator());
+                tempPlayer.GetWorkMinutesAccumulator(), tempPlayer.GetStudyMinutesAccumulator(),
+                tempPlayer.GetPlayMinutesAccumulator());
             player.Attributes.Restore(tempPlayer.Attributes.Intelligence, tempPlayer.Attributes.Fitness, tempPlayer.Attributes.Social, tempPlayer.Attributes.Discipline, tempPlayer.Attributes.Creativity);
             player.Skills.Academics.Restore(tempPlayer.Skills.Academics.Experience);
             player.Education.Restore(tempPlayer.Education.Status, tempPlayer.Education.PrimaryGrade, tempPlayer.Education.EducationProgress, tempPlayer.Education.SchoolYearStartDay);

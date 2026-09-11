@@ -146,6 +146,30 @@ public class MainForm : Form
         btnDrink.Click += (s, e) => { _player.Drink(20); RefreshUI(); };
         panel.Controls.Add(btnDrink);
 
+        var btnPlay = new Button { Text = "Play" };
+        btnPlay.Click += (s, e) => {
+            if (_player.Age < 2)
+                _lblFeedback.Text = "Cannot play before age 2.";
+            else if (_player.IsSleeping)
+                _lblFeedback.Text = "Cannot play while sleeping.";
+            else if (_player.IsWorking)
+                _lblFeedback.Text = "Cannot play while working.";
+            else if (_player.IsStudying)
+                _lblFeedback.Text = "Cannot play while studying.";
+            else if (_player.IsPlaying)
+                _lblFeedback.Text = "Already playing.";
+            else if (!_player.StartPlaying())
+                _lblFeedback.Text = "Cannot play.";
+            else
+                _lblFeedback.Text = "";
+            RefreshUI();
+        };
+        panel.Controls.Add(btnPlay);
+
+        var btnStopPlay = new Button { Text = "Stop Play" };
+        btnStopPlay.Click += (s, e) => { _player.StopPlaying(); RefreshUI(); };
+        panel.Controls.Add(btnStopPlay);
+
         var btnStudy = new Button { Text = "Study" };
         btnStudy.Click += (s, e) => {
             if (_player.Age < 6) _lblFeedback.Text = "Cannot study before age 6.";
@@ -229,7 +253,7 @@ public class MainForm : Form
     {
         _lblAge.Text = $"Age: {_player.Age}";
         _lblLifeStage.Text = $"Life Stage: {_player.LifeStage}";
-        string state = _player.IsSleeping ? "Sleeping" : (_player.IsWorking ? "Working" : (_player.IsStudying ? "Studying" : "Awake"));
+        string state = _player.IsSleeping ? "Sleeping" : (_player.IsWorking ? "Working" : (_player.IsStudying ? "Studying" : (_player.IsPlaying ? "Playing" : "Awake")));
         _lblStatus.Text = $"Day: {_clock.Day}, Time: {_clock.Hour:00}:{_clock.Minute:00}, State: {state}";
         _lblEnergy.Text = $"Energy: {_player.Energy}";
         _lblHunger.Text = $"Hunger: {_player.Hunger}";

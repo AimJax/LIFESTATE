@@ -33,6 +33,7 @@ public class PlayerState
     public bool IsSleeping { get; private set; } = false;
     public bool IsWorking { get; private set; } = false;
     public bool IsStudying { get; private set; } = false;
+    public bool IsPlaying { get; private set; } = false;
 
     private int _awakeMinutesAccumulator = 0;
     private int _sleepingMinutesAccumulator = 0;
@@ -40,27 +41,36 @@ public class PlayerState
     private int _thirstMinutesAccumulator = 0;
     private int _workMinutesAccumulator = 0;
     private int _studyMinutesAccumulator = 0;
+    private int _playMinutesAccumulator = 0;
 
     public void StartSleeping()
     {
-        if (IsWorking || IsStudying) return;
+        if (IsWorking || IsStudying || IsPlaying) return;
         IsSleeping = true;
     }
     public void StopSleeping() => IsSleeping = false;
 
     public void StartWorking()
     {
-        if (Age < 18 || IsSleeping || IsStudying) return;
+        if (Age < 18 || IsSleeping || IsStudying || IsPlaying) return;
         IsWorking = true;
     }
     public void StopWorking() => IsWorking = false;
 
     public void StartStudying()
     {
-        if (Age < 6 || IsSleeping || IsWorking) return;
+        if (Age < 6 || IsSleeping || IsWorking || IsPlaying) return;
         IsStudying = true;
     }
     public void StopStudying() => IsStudying = false;
+
+    public bool StartPlaying()
+    {
+        if (Age < 2 || IsSleeping || IsWorking || IsStudying || IsPlaying) return false;
+        IsPlaying = true;
+        return true;
+    }
+    public void StopPlaying() => IsPlaying = false;
 
     public bool EnrollPrimarySchool()
     {
@@ -116,6 +126,7 @@ public class PlayerState
         UpdateThirst(minutes);
         UpdateWork(minutes);
         UpdateStudy(minutes);
+        UpdatePlay(minutes);
         Education.EvaluateProgression(_clock.Day);
     }
 
@@ -178,6 +189,19 @@ public class PlayerState
             Traits.AddPatience(hoursStudied * 0.01);
             Traits.AddAmbition(hoursStudied * 0.01);
             _studyMinutesAccumulator = (int)(totalStudyMinutes % 60);
+        }
+
+        // Play rewards are linear and O(1). long * double stays finite for any
+        // valid elapsedMinutes, and Add/AddMutation clamp at 0..100 anyway.
+        if (IsPlaying)
+        {
+            long totalPlayMinutes = (long)_playMinutesAccumulator + elapsedMinutes;
+            long hoursPlayed = totalPlayMinutes / 60;
+            Attributes.AddFitness(hoursPlayed * 0.03);
+            Attributes.AddCreativity(hoursPlayed * 0.03);
+            Traits.AddConfidence(hoursPlayed * 0.02);
+            Traits.AddCuriosity(hoursPlayed * 0.01);
+            _playMinutesAccumulator = (int)(totalPlayMinutes % 60);
         }
 
         Education.EvaluateProgression(_clock.Day);
@@ -258,6 +282,22 @@ public class PlayerState
         }
     }
 
+    public void UpdatePlay(int elapsedMinutes)
+    {
+        if (!IsPlaying) return;
+
+        _playMinutesAccumulator += elapsedMinutes;
+        int hoursPlayed = _playMinutesAccumulator / 60;
+        if (hoursPlayed > 0)
+        {
+            Attributes.AddFitness(hoursPlayed * 0.03);
+            Attributes.AddCreativity(hoursPlayed * 0.03);
+            Traits.AddConfidence(hoursPlayed * 0.02);
+            Traits.AddCuriosity(hoursPlayed * 0.01);
+            _playMinutesAccumulator %= 60;
+        }
+    }
+
     public void Drink(int thirstRestored)
     {
         if (thirstRestored <= 0) return;
@@ -278,7 +318,7 @@ public class PlayerState
         Hunger = 100;
         Thirst = 100;
     }
-    internal void Restore(int money, int energy, int hunger, int thirst, int studyXP, bool isSleeping, bool isWorking, bool isStudying, int awakeMinutesAccumulator, int sleepingMinutesAccumulator, int hungerMinutesAccumulator, int thirstMinutesAccumulator, int workMinutesAccumulator, int studyMinutesAccumulator)
+    internal void Restore(int money, int energy, int hunger, int thirst, int studyXP, bool isSleeping, bool isWorking, bool isStudying, bool isPlaying, int awakeMinutesAccumulator, int sleepingMinutesAccumulator, int hungerMinutesAccumulator, int thirstMinutesAccumulator, int workMinutesAccumulator, int studyMinutesAccumulator, int playMinutesAccumulator)
     {
         Money = money;
         Energy = energy;
@@ -288,12 +328,14 @@ public class PlayerState
         IsSleeping = isSleeping;
         IsWorking = isWorking;
         IsStudying = isStudying;
+        IsPlaying = isPlaying;
         _awakeMinutesAccumulator = awakeMinutesAccumulator;
         _sleepingMinutesAccumulator = sleepingMinutesAccumulator;
         _hungerMinutesAccumulator = hungerMinutesAccumulator;
         _thirstMinutesAccumulator = thirstMinutesAccumulator;
         _workMinutesAccumulator = workMinutesAccumulator;
         _studyMinutesAccumulator = studyMinutesAccumulator;
+        _playMinutesAccumulator = playMinutesAccumulator;
     }
 
     internal int GetAwakeMinutesAccumulator() => _awakeMinutesAccumulator;
@@ -302,4 +344,5 @@ public class PlayerState
     internal int GetThirstMinutesAccumulator() => _thirstMinutesAccumulator;
     internal int GetWorkMinutesAccumulator() => _workMinutesAccumulator;
     internal int GetStudyMinutesAccumulator() => _studyMinutesAccumulator;
+    internal int GetPlayMinutesAccumulator() => _playMinutesAccumulator;
 }
