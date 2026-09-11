@@ -22,6 +22,9 @@ public class GodMode
         if (!IsEnabled) return;
         int realSeconds = days * 24 * 60 / GameClock.MinutesPerRealSecond;
         _clock.AdvanceSeconds(realSeconds);
+        // Time skips can make age-based events eligible (e.g. Found Money at age 8).
+        // No skipped rewards are simulated; only eligibility is evaluated.
+        _player.Events.EvaluateTriggers(_clock.Day);
     }
 
     public void AddMoney(int amount)

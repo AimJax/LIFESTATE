@@ -33,6 +33,9 @@ public class MainForm : Form
     private Label _lblEmpathy = new();
     private Label _lblMother = new();
     private Label _lblFather = new();
+    private Label _lblEvent = new();
+    private Label _lblEventHistory = new();
+    private FlowLayoutPanel _eventChoicesPanel = new();
     private Label _lblFeedback = new();
 
     private FlowLayoutPanel _debugPanel = new();
@@ -82,6 +85,9 @@ public class MainForm : Form
         _lblEmpathy = new Label { AutoSize = true };
         _lblMother = new Label { AutoSize = true };
         _lblFather = new Label { AutoSize = true };
+        _lblEvent = new Label { AutoSize = true, MaximumSize = new System.Drawing.Size(320, 0) };
+        _eventChoicesPanel = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false };
+        _lblEventHistory = new Label { AutoSize = true, MaximumSize = new System.Drawing.Size(320, 0) };
         _lblFeedback = new Label { AutoSize = true, ForeColor = System.Drawing.Color.Red };
 
         panel.Controls.Add(_lblAge);
@@ -106,6 +112,9 @@ public class MainForm : Form
         panel.Controls.Add(_lblEmpathy);
         panel.Controls.Add(_lblMother);
         panel.Controls.Add(_lblFather);
+        panel.Controls.Add(_lblEvent);
+        panel.Controls.Add(_eventChoicesPanel);
+        panel.Controls.Add(_lblEventHistory);
         panel.Controls.Add(_lblFeedback);
 
         var btnStart = new Button { Text = "Start Time" };
@@ -315,5 +324,57 @@ public class MainForm : Form
 
         _lblMother.Text = $"Mother: {_player.Family.Mother.Name} | Age: {_player.Family.Mother.GetAge(_clock)} | Relationship: {_player.Relationships.MotherRelationship.Closeness:F2}";
         _lblFather.Text = $"Father: {_player.Family.Father.Name} | Age: {_player.Family.Father.GetAge(_clock)} | Relationship: {_player.Relationships.FatherRelationship.Closeness:F2}";
+
+        // Event section: pending event + choices, or "no pending event".
+        var currentEvent = _player.Events.CurrentEvent;
+        if (currentEvent == null)
+        {
+            _lblEvent.Text = "No pending event.";
+        }
+        else
+        {
+            var definition = LifeEventCatalog.GetById(currentEvent.EventId);
+            _lblEvent.Text = definition == null
+                ? "No pending event."
+                : $"Event: {definition.Title}\n{definition.Description}";
+        }
+
+        // Rebuild choice buttons from the catalog definition (no outcome logic here).
+        _eventChoicesPanel.Controls.Clear();
+        if (currentEvent != null)
+        {
+            var eventDefinition = LifeEventCatalog.GetById(currentEvent.EventId);
+            if (eventDefinition != null)
+            {
+                foreach (var choice in eventDefinition.Choices)
+                {
+                    var choiceLocal = choice;
+                    var btnChoice = new Button { Text = choiceLocal.Text, AutoSize = true };
+                    btnChoice.Click += (s, e) => {
+                        _player.ResolveEventChoice(choiceLocal.Id);
+                        RefreshUI();
+                    };
+                    _eventChoicesPanel.Controls.Add(btnChoice);
+                }
+            }
+        }
+
+        // Event history: "Title — choice text — Day N" per resolved event.
+        if (_player.Events.History.Count == 0)
+        {
+            _lblEventHistory.Text = "Event History: (none)";
+        }
+        else
+        {
+            var lines = new System.Text.StringBuilder("Event History:");
+            foreach (var entry in _player.Events.History)
+            {
+                var def = LifeEventCatalog.GetById(entry.EventId);
+                string title = def?.Title ?? entry.EventId;
+                string choiceText = def?.Choices.FirstOrDefault(c => c.Id == entry.ChoiceId)?.Text ?? entry.ChoiceId;
+                lines.Append($"\n{title} — {choiceText} — Day {entry.ResolvedDay}");
+            }
+            _lblEventHistory.Text = lines.ToString();
+        }
     }
 }

@@ -13,7 +13,7 @@ public static class SaveManager
     {
         var saveData = new SaveData
         {
-            Version = 6,
+            Version = 7,
             Day = clock.Day,
             Hour = clock.Hour,
             Minute = clock.Minute,
@@ -40,6 +40,16 @@ public static class SaveManager
             PrimaryGrade = player.Education.PrimaryGrade,
             EducationProgress = player.Education.EducationProgress,
             SchoolYearStartDay = player.Education.SchoolYearStartDay,
+            TotalPlayHours = player.TotalPlayHours,
+            CurrentEventId = player.Events.CurrentEvent?.EventId,
+            CurrentEventTriggeredDay = player.Events.CurrentEvent?.TriggeredDay ?? 0,
+            EventHistory = player.Events.History.Select(h => new EventHistorySaveData
+            {
+                EventId = h.EventId,
+                ChoiceId = h.ChoiceId,
+                TriggeredDay = h.TriggeredDay,
+                ResolvedDay = h.ResolvedDay
+            }).ToList(),
             MotherId = player.Family.Mother.Id,
             MotherName = player.Family.Mother.Name,
             MotherBirthDay = player.Family.Mother.BirthDay,
@@ -84,7 +94,7 @@ public static class SaveManager
             string json = File.ReadAllText(targetPath);
             var saveData = JsonSerializer.Deserialize<SaveData>(json);
 
-            if (saveData == null || (saveData.Version != 2 && saveData.Version != 3 && saveData.Version != 4 && saveData.Version != 5 && saveData.Version != 6)) return false;
+            if (saveData == null || (saveData.Version != 2 && saveData.Version != 3 && saveData.Version != 4 && saveData.Version != 5 && saveData.Version != 6 && saveData.Version != 7)) return false;
 
             // Strict Validation — basic fields
             if (saveData.Day < 0 ||
@@ -164,7 +174,7 @@ public static class SaveManager
                 traitEmpathy = saveData.Empathy;
             }
 
-            // Validate Family if version 6 (V5 and earlier have no family data; defaults apply)
+            // Validate Family if version 6+ (V5 and earlier have no family data; defaults apply)
             Guid motherId = Guid.Empty;
             string motherName = "Mother";
             long motherBirthDay = -(28L * 365);
@@ -200,6 +210,42 @@ public static class SaveManager
                     return false;
             }
 
+            // Validate event data if version 7+ (V6 and earlier have none; defaults apply)
+            long totalPlayHours = 0;
+            string? pendingEventId = null;
+            long pendingTriggeredDay = 0;
+            List<EventHistorySaveData> eventHistory = new();
+            bool hasEventData = saveData.Version >= 7;
+            if (saveData.Version >= 7)
+            {
+                totalPlayHours = saveData.TotalPlayHours;
+                if (totalPlayHours < 0) return false;
+
+                // Pending event: must be a known event with a valid trigger day.
+                pendingEventId = saveData.CurrentEventId;
+                if (pendingEventId != null)
+                {
+                    if (!LifeEventCatalog.IsKnownEvent(pendingEventId)) return false;
+                    pendingTriggeredDay = saveData.CurrentEventTriggeredDay;
+                    if (pendingTriggeredDay < 0 || pendingTriggeredDay > saveData.Day) return false;
+                }
+
+                // History: known events, valid paired choices, valid day ordering,
+                // no duplicate one-shot events, no pending/history conflict.
+                eventHistory = saveData.EventHistory ?? new List<EventHistorySaveData>();
+                var seen = new HashSet<string>();
+                foreach (var entry in eventHistory)
+                {
+                    if (entry == null || !LifeEventCatalog.IsKnownEvent(entry.EventId)) return false;
+                    if (!LifeEventCatalog.IsKnownChoice(entry.EventId, entry.ChoiceId)) return false;
+                    if (entry.TriggeredDay < 0) return false;
+                    if (entry.ResolvedDay < entry.TriggeredDay) return false;
+                    if (entry.ResolvedDay > saveData.Day) return false;
+                    if (!seen.Add(entry.EventId)) return false; // one-shot duplicates invalid
+                }
+                if (pendingEventId != null && seen.Contains(pendingEventId)) return false;
+            }
+
             // Transactional Load: Create clones for validation
             var tempClock = new GameClock();
             tempClock.Restore(saveData.Day, saveData.Hour, saveData.Minute);
@@ -214,6 +260,26 @@ public static class SaveManager
             tempPlayer.Skills.Academics.Restore(saveData.AcademicsExperience);
             tempPlayer.Education.Restore(eduStatus, eduGrade, eduProgress, eduStartDay);
             tempPlayer.Traits.Restore(traitConfidence, traitCuriosity, traitPatience, traitAmbition, traitEmpathy);
+
+            // Restore event state (replaces fresh defaults for V7)
+            if (hasEventData)
+            {
+                tempPlayer.RestoreTotalPlayHours(totalPlayHours);
+                if (eventHistory.Count > 0)
+                {
+                    var historyEntries = new List<EventHistoryEntry>();
+                    foreach (var entry in eventHistory)
+                    {
+                        historyEntries.Add(new EventHistoryEntry(entry.EventId, entry.ChoiceId, entry.TriggeredDay, entry.ResolvedDay));
+                    }
+                    // Single all-or-nothing restore preserves order and rejects duplicates.
+                    tempPlayer.Events.RestoreHistory(historyEntries);
+                }
+                if (pendingEventId != null)
+                {
+                    tempPlayer.Events.RestorePending(pendingEventId, pendingTriggeredDay);
+                }
+            }
 
             // Restore family + relationships (replaces temp constructor-generated IDs for V6)
             if (hasFamilyData)
@@ -255,6 +321,10 @@ public static class SaveManager
                 tempPlayer.Education.EvaluateProgression(tempClock.Day);
             }
 
+            // Offline progression remains bulk/O(1): evaluate event eligibility ONCE
+            // against the FINAL state. TriggeredDay becomes the final current day.
+            tempPlayer.Events.EvaluateTriggers(tempClock.Day);
+
             // Commit to live objects
             clock.Restore(tempClock.Day, tempClock.Hour, tempClock.Minute);
             player.Restore(tempPlayer.Money, tempPlayer.Energy, tempPlayer.Hunger, tempPlayer.Thirst, tempPlayer.StudyXP,
@@ -269,6 +339,13 @@ public static class SaveManager
             player.Traits.Restore(tempPlayer.Traits.Confidence, tempPlayer.Traits.Curiosity, tempPlayer.Traits.Patience, tempPlayer.Traits.Ambition, tempPlayer.Traits.Empathy);
             player.Family.Restore(tempPlayer.Family.Mother, tempPlayer.Family.Father);
             player.Relationships.Restore(tempPlayer.Relationships.MotherRelationship, tempPlayer.Relationships.FatherRelationship);
+            player.RestoreTotalPlayHours(tempPlayer.TotalPlayHours);
+            player.Events.ClearPending();
+            player.Events.RestoreHistory(tempPlayer.Events.History);
+            if (tempPlayer.Events.CurrentEvent != null)
+            {
+                player.Events.RestorePending(tempPlayer.Events.CurrentEvent.EventId, tempPlayer.Events.CurrentEvent.TriggeredDay);
+            }
 
             return true;
         }

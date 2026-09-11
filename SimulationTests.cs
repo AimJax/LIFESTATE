@@ -671,6 +671,7 @@ public static class SimulationTests
         RunTraitTests();
         RunPlayTests();
         RunFamilyTests();
+        RunEventTests();
     }
 
     private static void RunSaveLoadTests()
@@ -5069,5 +5070,817 @@ public static class SimulationTests
                         p1.IsSpendingFamilyTime == p2.IsSpendingFamilyTime;
             Console.WriteLine($"Family-F35: {pass} (Expected: True)");
         }
+    }
+
+    private static void RunEventTests()
+    {
+        Console.WriteLine("\n--- LIFESTATE Life Event Regression Tests ---");
+
+        void RunWithTempSave(Action<string> testAction)
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), "LIFESTATE-tests-EV", Guid.NewGuid().ToString());
+            string tempSavePath = Path.Combine(tempDir, "save.json");
+            try
+            {
+                Directory.CreateDirectory(tempDir);
+                testAction(tempSavePath);
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+            }
+        }
+
+        static bool Close(double a, double b) => Math.Abs(a - b) < 0.000001;
+
+        const string FirstDay = LifeEventCatalog.FirstDaySchoolId;
+        const string BrokenToy = LifeEventCatalog.BrokenToyId;
+        const string FoundMoney = LifeEventCatalog.FoundMoneyId;
+
+        // MakeAge: builds a player of the given age WITHOUT evaluating events
+        // (uses clock.AdvanceGameMinutes directly, no simulation rewards).
+        static (GameClock clock, PlayerState player) MakeAge(int age)
+        {
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            clock.AdvanceGameMinutes((long)age * 365 * 24 * 60);
+            return (clock, player);
+        }
+
+        // --- Event-EV1: Catalog Contains Exactly Three Events ---
+        {
+            bool pass = LifeEventCatalog.Definitions.Count == 3 &&
+                        LifeEventCatalog.GetById(FirstDay) != null &&
+                        LifeEventCatalog.GetById(BrokenToy) != null &&
+                        LifeEventCatalog.GetById(FoundMoney) != null &&
+                        !LifeEventCatalog.IsKnownEvent("garbage.event");
+            Console.WriteLine($"Event-EV1: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV2: Stable First Day Choices ---
+        {
+            var def = LifeEventCatalog.GetById(FirstDay)!;
+            bool pass = def.Choices.Count == 2 &&
+                        def.Choices[0].Id == "stay_quiet" &&
+                        def.Choices[1].Id == "introduce_yourself" &&
+                        def.Title == "First Day of School";
+            Console.WriteLine($"Event-EV2: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV3: Stable Broken Toy Choices ---
+        {
+            var def = LifeEventCatalog.GetById(BrokenToy)!;
+            bool pass = def.Choices.Count == 2 &&
+                        def.Choices[0].Id == "try_fix" &&
+                        def.Choices[1].Id == "ask_parent" &&
+                        def.Title == "Broken Toy";
+            Console.WriteLine($"Event-EV3: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV4: Stable Found Money Choices ---
+        {
+            var def = LifeEventCatalog.GetById(FoundMoney)!;
+            bool pass = def.Choices.Count == 2 &&
+                        def.Choices[0].Id == "keep_money" &&
+                        def.Choices[1].Id == "give_parent" &&
+                        def.Title == "Found Money";
+            Console.WriteLine($"Event-EV4: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV5: Fresh Event State ---
+        {
+            var (clock, player) = MakeAge(1);
+            bool pass = player.Events.CurrentEvent == null &&
+                        player.Events.History.Count == 0 &&
+                        player.TotalPlayHours == 0;
+            Console.WriteLine($"Event-EV5: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV6: First Day Not Triggered Before Age 6 ---
+        {
+            var (clock, player) = MakeAge(5);
+            player.Events.EvaluateTriggers(clock.Day);
+            bool pass = player.Events.CurrentEvent == null;
+            Console.WriteLine($"Event-EV6: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV7: First Day Requires Enrollment ---
+        {
+            var (clock, player) = MakeAge(7);
+            player.Events.EvaluateTriggers(clock.Day);
+            bool pass = player.Education.Status == EducationStatus.NotEnrolled &&
+                        player.Events.CurrentEvent == null;
+            Console.WriteLine($"Event-EV7: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV8: First Day Triggers On Enrollment ---
+        {
+            var (clock, player) = MakeAge(6);
+            bool enrolled = player.EnrollPrimarySchool();
+            bool pass = enrolled &&
+                        player.Events.CurrentEvent != null &&
+                        player.Events.CurrentEvent.EventId == FirstDay &&
+                        player.Events.CurrentEvent.TriggeredDay == clock.Day;
+            Console.WriteLine($"Event-EV8: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV9: First Day Priority ---
+        {
+            var (clock, player) = MakeAge(8);
+            player.RestoreTotalPlayHours(50);
+            player.EnrollPrimarySchool();
+            bool pass = player.Events.CurrentEvent != null &&
+                        player.Events.CurrentEvent.EventId == FirstDay;
+            Console.WriteLine($"Event-EV9: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV10: Pending Blocks Another Trigger ---
+        {
+            var (clock, player) = MakeAge(8);
+            player.RestoreTotalPlayHours(50);
+            player.EnrollPrimarySchool();
+            player.Events.EvaluateTriggers(clock.Day);
+            player.Events.EvaluateTriggers(clock.Day);
+            bool pass = player.Events.CurrentEvent != null &&
+                        player.Events.CurrentEvent.EventId == FirstDay &&
+                        player.Events.History.Count == 0;
+            Console.WriteLine($"Event-EV10: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV11: Stay Quiet Outcome ---
+        {
+            var (clock, player) = MakeAge(6);
+            player.EnrollPrimarySchool();
+            bool resolved = player.ResolveEventChoice("stay_quiet");
+            bool pass = resolved &&
+                        Close(player.Traits.Patience, 51.0) &&
+                        Close(player.Traits.Confidence, 49.5) &&
+                        Close(player.Traits.Curiosity, 50.0) &&
+                        Close(player.Traits.Empathy, 50.0) &&
+                        Close(player.Attributes.Social, 10.0);
+            Console.WriteLine($"Event-EV11: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV12: Introduce Yourself Outcome ---
+        {
+            var (clock, player) = MakeAge(6);
+            player.EnrollPrimarySchool();
+            bool resolved = player.ResolveEventChoice("introduce_yourself");
+            bool pass = resolved &&
+                        Close(player.Traits.Confidence, 51.0) &&
+                        Close(player.Attributes.Social, 10.5) &&
+                        Close(player.Traits.Patience, 50.0);
+            Console.WriteLine($"Event-EV12: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV13: Resolution Creates History ---
+        {
+            var (clock, player) = MakeAge(6);
+            player.EnrollPrimarySchool();
+            long triggerDay = player.Events.CurrentEvent!.TriggeredDay;
+            player.ResolveEventChoice("introduce_yourself");
+            bool pass = player.Events.CurrentEvent == null &&
+                        player.Events.History.Count == 1 &&
+                        player.Events.History[0].EventId == FirstDay &&
+                        player.Events.History[0].ChoiceId == "introduce_yourself" &&
+                        player.Events.History[0].TriggeredDay == triggerDay &&
+                        player.Events.History[0].ResolvedDay == clock.Day;
+            Console.WriteLine($"Event-EV13: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV14: Invalid Choice No-Op ---
+        {
+            var (clock, player) = MakeAge(6);
+            player.EnrollPrimarySchool();
+            bool resolved = player.ResolveEventChoice("try_fix");
+            bool pass = !resolved &&
+                        player.Events.CurrentEvent != null &&
+                        player.Events.CurrentEvent.EventId == FirstDay &&
+                        player.Events.History.Count == 0 &&
+                        Close(player.Traits.Confidence, 50.0) &&
+                        Close(player.Attributes.Creativity, 10.0);
+            Console.WriteLine($"Event-EV14: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV15: Duplicate Resolution Rejected ---
+        {
+            var (clock, player) = MakeAge(6);
+            player.EnrollPrimarySchool();
+            player.ResolveEventChoice("stay_quiet");
+            double patienceAfter = player.Traits.Patience;
+            bool second = player.ResolveEventChoice("stay_quiet");
+            bool pass = !second &&
+                        player.Events.CurrentEvent == null &&
+                        player.Events.History.Count == 1 &&
+                        Close(player.Traits.Patience, patienceAfter);
+            Console.WriteLine($"Event-EV15: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV16: Resolved Event Never Retriggers ---
+        {
+            var (clock, player) = MakeAge(6);
+            player.EnrollPrimarySchool();
+            player.ResolveEventChoice("stay_quiet");
+            player.Events.EvaluateTriggers(clock.Day);
+            player.Events.EvaluateTriggers(clock.Day);
+            bool pass = player.Events.CurrentEvent == null;
+            Console.WriteLine($"Event-EV16: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV17: Broken Toy Requires Age 4 ---
+        {
+            var (clock, player) = MakeAge(3);
+            player.RestoreTotalPlayHours(10);
+            player.Events.EvaluateTriggers(clock.Day);
+            bool pass = player.Events.CurrentEvent == null;
+            Console.WriteLine($"Event-EV17: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV18: Broken Toy Requires 10 Play Hours ---
+        {
+            var (clock, player) = MakeAge(5);
+            player.RestoreTotalPlayHours(9);
+            player.Events.EvaluateTriggers(clock.Day);
+            bool pass = player.Events.CurrentEvent == null;
+            Console.WriteLine($"Event-EV18: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV19: TotalPlayHours Tracks Normal Play ---
+        {
+            var (clock, player) = MakeAge(5);
+            player.StartPlaying();
+            player.AdvanceSimulation(600); // 10 hours
+            bool pass = player.TotalPlayHours == 10 &&
+                        player.GetPlayMinutesAccumulator() == 0;
+            Console.WriteLine($"Event-EV19: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV20: Partial Play Does Not Count ---
+        {
+            var (clock, player) = MakeAge(5);
+            player.StartPlaying();
+            player.AdvanceSimulation(59);
+            bool pass = player.TotalPlayHours == 0 &&
+                        player.GetPlayMinutesAccumulator() == 59;
+            player.AdvanceSimulation(1);
+            pass &= player.TotalPlayHours == 1 &&
+                    player.GetPlayMinutesAccumulator() == 0;
+            Console.WriteLine($"Event-EV20: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV21: TotalPlayHours Persists Stop/Start ---
+        {
+            var (clock, player) = MakeAge(5);
+            player.StartPlaying();
+            player.AdvanceSimulation(150); // 2 hours + 30 remainder
+            player.StopPlaying();
+            player.StartPlaying();
+            player.AdvanceSimulation(30); // remainder completes 1 more hour
+            bool pass = player.TotalPlayHours == 3 &&
+                        player.GetPlayMinutesAccumulator() == 0;
+            Console.WriteLine($"Event-EV21: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV22: Broken Toy Triggers At Tenth Hour ---
+        {
+            var (clock, player) = MakeAge(5);
+            player.RestoreTotalPlayHours(9);
+            player.StartPlaying();
+            player.AdvanceSimulation(60); // 10th completed hour
+            bool pass = player.TotalPlayHours == 10 &&
+                        player.Events.CurrentEvent != null &&
+                        player.Events.CurrentEvent.EventId == BrokenToy;
+            Console.WriteLine($"Event-EV22: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV23: Try Fix Outcome ---
+        {
+            var (clock, player) = MakeAge(5);
+            player.RestoreTotalPlayHours(10);
+            player.Events.EvaluateTriggers(clock.Day);
+            bool resolved = player.ResolveEventChoice("try_fix");
+            bool pass = resolved &&
+                        Close(player.Attributes.Creativity, 11.0) &&
+                        Close(player.Traits.Patience, 50.5) &&
+                        Close(player.Attributes.Fitness, 10.0);
+            Console.WriteLine($"Event-EV23: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV24: Ask Parent Outcome ---
+        {
+            var (clock, player) = MakeAge(5);
+            player.RestoreTotalPlayHours(10);
+            player.Events.EvaluateTriggers(clock.Day);
+            bool resolved = player.ResolveEventChoice("ask_parent");
+            bool pass = resolved &&
+                        Close(player.Relationships.MotherRelationship.Closeness, 50.5) &&
+                        Close(player.Relationships.FatherRelationship.Closeness, 50.5) &&
+                        Close(player.Traits.Empathy, 50.5) &&
+                        Close(player.Attributes.Creativity, 10.0);
+            Console.WriteLine($"Event-EV24: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV25: Found Money Age Requirement ---
+        {
+            var (clock7, player7) = MakeAge(7);
+            player7.Events.EvaluateTriggers(clock7.Day);
+            bool notEligible = player7.Events.CurrentEvent == null;
+
+            var (clock8, player8) = MakeAge(8);
+            player8.Events.EvaluateTriggers(clock8.Day);
+            bool eligible = player8.Events.CurrentEvent != null &&
+                            player8.Events.CurrentEvent.EventId == FoundMoney;
+            bool pass = notEligible && eligible;
+            Console.WriteLine($"Event-EV25: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV26: Keep Money Outcome ---
+        {
+            var (clock, player) = MakeAge(8);
+            player.Events.EvaluateTriggers(clock.Day);
+            bool resolved = player.ResolveEventChoice("keep_money");
+            bool pass = resolved &&
+                        player.Money == 1025 &&
+                        Close(player.Traits.Empathy, 49.5);
+            Console.WriteLine($"Event-EV26: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV27: Give Parent Outcome ---
+        {
+            var (clock, player) = MakeAge(8);
+            player.Events.EvaluateTriggers(clock.Day);
+            bool resolved = player.ResolveEventChoice("give_parent");
+            bool pass = resolved &&
+                        player.Money == 1000 &&
+                        Close(player.Traits.Empathy, 51.0) &&
+                        Close(player.Relationships.MotherRelationship.Closeness, 50.5) &&
+                        Close(player.Relationships.FatherRelationship.Closeness, 50.5);
+            Console.WriteLine($"Event-EV27: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV28: Money Overflow Safety ---
+        {
+            var (clock, player) = MakeAge(8);
+            player.Restore(int.MaxValue - 10, 100, 100, 100, 0, false, false, false, false, false,
+                0, 0, 0, 0, 0, 0, 0, 0);
+            player.Events.EvaluateTriggers(clock.Day);
+            bool resolved = player.ResolveEventChoice("keep_money");
+            bool pass = resolved && player.Money == int.MaxValue;
+            Console.WriteLine($"Event-EV28: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV29: Event Priority Sequence ---
+        {
+            var (clock, player) = MakeAge(8);
+            player.RestoreTotalPlayHours(50);
+            player.EnrollPrimarySchool();
+            bool firstPending = player.Events.CurrentEvent != null &&
+                                player.Events.CurrentEvent.EventId == FirstDay;
+            player.ResolveEventChoice("introduce_yourself");
+            bool noAvalanche = player.Events.CurrentEvent == null;
+            player.Events.EvaluateTriggers(clock.Day);
+            bool secondPending = player.Events.CurrentEvent != null &&
+                                 player.Events.CurrentEvent.EventId == BrokenToy;
+            player.ResolveEventChoice("try_fix");
+            player.Events.EvaluateTriggers(clock.Day);
+            bool thirdPending = player.Events.CurrentEvent != null &&
+                                player.Events.CurrentEvent.EventId == FoundMoney;
+            player.ResolveEventChoice("give_parent");
+            bool pass = firstPending && noAvalanche && secondPending && thirdPending &&
+                        player.Events.CurrentEvent == null &&
+                        player.Events.History.Count == 3;
+            Console.WriteLine($"Event-EV29: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV30: Pending Event Does Not Pause Time ---
+        {
+            var (clock, player) = MakeAge(8);
+            player.Events.EvaluateTriggers(clock.Day);
+            player.AdvanceSimulation(600); // 10 simulated hours while pending
+            bool pass = player.Events.CurrentEvent != null &&
+                        player.Events.CurrentEvent.EventId == FoundMoney &&
+                        player.Energy == 90; // awake -1/hour: simulation continued
+            Console.WriteLine($"Event-EV30: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV31: Triggered And Resolved Days ---
+        {
+            var (clock, player) = MakeAge(6);
+            player.EnrollPrimarySchool();
+            long triggerDay = player.Events.CurrentEvent!.TriggeredDay;
+            clock.AdvanceGameMinutes(60 * 24); // time passes while pending (no rewards)
+            player.ResolveEventChoice("introduce_yourself");
+            bool pass = triggerDay == 2190 &&
+                        clock.Day == 2191 &&
+                        player.Events.History[0].TriggeredDay == 2190 &&
+                        player.Events.History[0].ResolvedDay == 2191;
+            Console.WriteLine($"Event-EV31: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV32: Save / Load Pending Event ---
+        RunWithTempSave(path => {
+            var (clock, player) = MakeAge(8);
+            player.Events.EvaluateTriggers(clock.Day);
+            long triggerDay = player.Events.CurrentEvent!.TriggeredDay;
+            DateTimeOffset saveTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            SaveManager.Save(clock, player, path, saveTime);
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, saveTime);
+            bool pass = loaded &&
+                        loadPlayer.Events.CurrentEvent != null &&
+                        loadPlayer.Events.CurrentEvent.EventId == FoundMoney &&
+                        loadPlayer.Events.CurrentEvent.TriggeredDay == triggerDay &&
+                        loadPlayer.Events.History.Count == 0;
+            Console.WriteLine($"Event-EV32: {pass} (Expected: True)");
+        });
+
+        // --- Event-EV33: Save / Load History ---
+        RunWithTempSave(path => {
+            var (clock, player) = MakeAge(8);
+            player.RestoreTotalPlayHours(50);
+            player.EnrollPrimarySchool();
+            player.ResolveEventChoice("introduce_yourself");
+            clock.AdvanceGameMinutes(60 * 24);
+            player.Events.EvaluateTriggers(clock.Day);
+            player.ResolveEventChoice("ask_parent");
+            player.Events.EvaluateTriggers(clock.Day);
+            player.ResolveEventChoice("keep_money");
+
+            DateTimeOffset saveTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            SaveManager.Save(clock, player, path, saveTime);
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, saveTime);
+            var h = loadPlayer.Events.History;
+            bool pass = loaded &&
+                        loadPlayer.Events.CurrentEvent == null &&
+                        h.Count == 3 &&
+                        h[0].EventId == FirstDay && h[0].ChoiceId == "introduce_yourself" &&
+                        h[1].EventId == BrokenToy && h[1].ChoiceId == "ask_parent" &&
+                        h[2].EventId == FoundMoney && h[2].ChoiceId == "keep_money" &&
+                        h.All(e => e.ResolvedDay >= e.TriggeredDay) &&
+                        loadPlayer.TotalPlayHours == 50;
+            Console.WriteLine($"Event-EV33: {pass} (Expected: True)");
+        });
+
+        // --- Event-EV34: V6 Compatibility ---
+        RunWithTempSave(path => {
+            // Valid V6 save: age 7 (Day 2600), NotEnrolled, no event data.
+            File.WriteAllText(path, "{\"Version\":6,\"Day\":2600,\"Hour\":5,\"Minute\":30,\"Money\":1500,\"Energy\":80,\"Hunger\":70,\"Thirst\":60,\"StudyXP\":300,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"IsPlaying\":false,\"IsSpendingFamilyTime\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"AwakeMinutesAccumulator\":0,\"SleepingMinutesAccumulator\":0,\"HungerMinutesAccumulator\":0,\"ThirstMinutesAccumulator\":0,\"PlayMinutesAccumulator\":0,\"FamilyTimeMinutesAccumulator\":0,\"AcademicsExperience\":500,\"EducationStatus\":0,\"PrimaryGrade\":0,\"EducationProgress\":0,\"SchoolYearStartDay\":0,\"MotherId\":\"11111111-1111-1111-1111-111111111111\",\"MotherName\":\"Mother\",\"MotherBirthDay\":-10220,\"FatherId\":\"22222222-2222-2222-2222-222222222222\",\"FatherName\":\"Father\",\"FatherBirthDay\":-10950,\"MotherRelationshipPersonId\":\"11111111-1111-1111-1111-111111111111\",\"MotherCloseness\":62.5,\"FatherRelationshipPersonId\":\"22222222-2222-2222-2222-222222222222\",\"FatherCloseness\":48.5,\"Confidence\":62.5,\"Curiosity\":73.5,\"Patience\":44.5,\"Ambition\":55.5,\"Empathy\":66.5,\"Intelligence\":30.0,\"Fitness\":40.0,\"Social\":20.0,\"Discipline\":25.0,\"Creativity\":35.0,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            DateTimeOffset loadTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+
+            // At age 7 with no education, no event is currently eligible.
+            bool pass = loaded &&
+                        loadPlayer.TotalPlayHours == 0 &&
+                        loadPlayer.Events.History.Count == 0 &&
+                        loadPlayer.Events.CurrentEvent == null;
+
+            // Explicit later evaluation finds nothing at age 7.
+            loadPlayer.Events.EvaluateTriggers(loadClock.Day);
+            pass &= loadPlayer.Events.CurrentEvent == null;
+
+            Console.WriteLine($"Event-EV34: {pass} (Expected: True)");
+        });
+
+        // --- Event-EV34b: V6 Migration Receives Eligible Event After Load ---
+        RunWithTempSave(path => {
+            // V6 player already age 8: Found Money is eligible on first evaluation.
+            File.WriteAllText(path, "{\"Version\":6,\"Day\":3000,\"Hour\":5,\"Minute\":30,\"Money\":1500,\"Energy\":80,\"Hunger\":70,\"Thirst\":60,\"StudyXP\":300,\"IsSleeping\":false,\"IsWorking\":false,\"IsStudying\":false,\"IsPlaying\":false,\"IsSpendingFamilyTime\":false,\"WorkMinutesAccumulator\":0,\"StudyMinutesAccumulator\":0,\"AwakeMinutesAccumulator\":0,\"SleepingMinutesAccumulator\":0,\"HungerMinutesAccumulator\":0,\"ThirstMinutesAccumulator\":0,\"PlayMinutesAccumulator\":0,\"FamilyTimeMinutesAccumulator\":0,\"AcademicsExperience\":0,\"EducationStatus\":0,\"PrimaryGrade\":0,\"EducationProgress\":0,\"SchoolYearStartDay\":0,\"MotherId\":\"33333333-3333-3333-3333-333333333333\",\"MotherName\":\"Mother\",\"MotherBirthDay\":-10220,\"FatherId\":\"44444444-4444-4444-4444-444444444444\",\"FatherName\":\"Father\",\"FatherBirthDay\":-10950,\"MotherRelationshipPersonId\":\"33333333-3333-3333-3333-333333333333\",\"MotherCloseness\":50,\"FatherRelationshipPersonId\":\"44444444-4444-4444-4444-444444444444\",\"FatherCloseness\":50,\"SavedAtUtc\":\"2026-06-15T12:00:00+00:00\"}");
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            DateTimeOffset loadTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+
+            bool pass = loaded &&
+                        loadPlayer.Events.History.Count == 0 &&
+                        loadPlayer.TotalPlayHours == 0;
+
+            // Normal post-load evaluation may create ONE eligible event.
+            loadPlayer.Events.EvaluateTriggers(loadClock.Day);
+            pass &= loadPlayer.Events.CurrentEvent != null &&
+                    loadPlayer.Events.CurrentEvent.EventId == FoundMoney &&
+                    loadPlayer.Events.CurrentEvent.TriggeredDay == loadClock.Day;
+            Console.WriteLine($"Event-EV34b: {pass} (Expected: True)");
+        });
+
+        // --- Event-EV35: Unknown Pending Event Reject ---
+        RunWithTempSave(path => {
+            var (clock, player) = MakeAge(8);
+            player.Events.EvaluateTriggers(clock.Day);
+            DateTimeOffset saveTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            SaveManager.Save(clock, player, path, saveTime);
+            string json = File.ReadAllText(path);
+            json = json.Replace("\"CurrentEventId\":\"childhood.found_money\"", "\"CurrentEventId\":\"garbage.event\"");
+            File.WriteAllText(path, json);
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, saveTime);
+            bool pass = !loaded &&
+                        loadPlayer.Money == 1000 &&
+                        loadPlayer.TotalPlayHours == 0 &&
+                        loadPlayer.Events.CurrentEvent == null &&
+                        loadPlayer.Energy == 100;
+            Console.WriteLine($"Event-EV35: {pass} (Expected: True)");
+        });
+
+        // --- Event-EV36: Unknown History Event Reject ---
+        RunWithTempSave(path => {
+            var (clock, player) = MakeAge(8);
+            player.Events.EvaluateTriggers(clock.Day);
+            player.ResolveEventChoice("keep_money");
+            DateTimeOffset saveTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            SaveManager.Save(clock, player, path, saveTime);
+            string json = File.ReadAllText(path);
+            json = json.Replace("\"EventId\":\"childhood.found_money\"", "\"EventId\":\"childhood.unknown\"");
+            File.WriteAllText(path, json);
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, saveTime);
+            bool pass = !loaded &&
+                        loadPlayer.Events.History.Count == 0 &&
+                        loadPlayer.Money == 1000;
+            Console.WriteLine($"Event-EV36: {pass} (Expected: True)");
+        });
+
+        // --- Event-EV37: Wrong Choice For Event Reject ---
+        RunWithTempSave(path => {
+            var (clock, player) = MakeAge(8);
+            player.Events.EvaluateTriggers(clock.Day);
+            player.ResolveEventChoice("keep_money");
+            DateTimeOffset saveTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            SaveManager.Save(clock, player, path, saveTime);
+            string json = File.ReadAllText(path);
+            // Swap a valid Found Money choice for a First Day choice.
+            json = json.Replace("\"ChoiceId\":\"keep_money\"", "\"ChoiceId\":\"stay_quiet\"");
+            File.WriteAllText(path, json);
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, saveTime);
+            bool pass = !loaded &&
+                        loadPlayer.Events.History.Count == 0;
+            Console.WriteLine($"Event-EV37: {pass} (Expected: True)");
+        });
+
+        // --- Event-EV38: Duplicate History Event Reject ---
+        RunWithTempSave(path => {
+            var (clock, player) = MakeAge(8);
+            player.Events.EvaluateTriggers(clock.Day);
+            player.ResolveEventChoice("keep_money");
+            DateTimeOffset saveTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            SaveManager.Save(clock, player, path, saveTime);
+            string json = File.ReadAllText(path);
+            // Prepend a copy of the single history entry -> duplicate one-shot event.
+            json = json.Replace(
+                "\"EventHistory\":[{\"EventId\":\"childhood.found_money\"",
+                "\"EventHistory\":[{\"EventId\":\"childhood.found_money\",\"ChoiceId\":\"keep_money\",\"TriggeredDay\":2920,\"ResolvedDay\":2920},{\"EventId\":\"childhood.found_money\"");
+            File.WriteAllText(path, json);
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, saveTime);
+            bool pass = !loaded &&
+                        loadPlayer.Events.History.Count == 0;
+            Console.WriteLine($"Event-EV38: {pass} (Expected: True)");
+        });
+
+        // --- Event-EV39: Pending / History Conflict Reject ---
+        RunWithTempSave(path => {
+            var (clock, player) = MakeAge(8);
+            player.Events.EvaluateTriggers(clock.Day);
+            DateTimeOffset saveTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            SaveManager.Save(clock, player, path, saveTime);
+            string json = File.ReadAllText(path);
+            // Inject a history entry for the event that is also pending.
+            json = json.Replace("\"EventHistory\":[]",
+                "\"EventHistory\":[{\"EventId\":\"childhood.found_money\",\"ChoiceId\":\"keep_money\",\"TriggeredDay\":2920,\"ResolvedDay\":2920}]");
+            File.WriteAllText(path, json);
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, saveTime);
+            bool pass = !loaded &&
+                        loadPlayer.Events.CurrentEvent == null &&
+                        loadPlayer.Events.History.Count == 0;
+            Console.WriteLine($"Event-EV39: {pass} (Expected: True)");
+        });
+
+        // --- Event-EV40: Invalid Event Days Reject ---
+        RunWithTempSave(path => {
+            bool allRejected = true;
+
+            // (a) negative pending TriggeredDay
+            var (clockA, playerA) = MakeAge(8);
+            playerA.Events.EvaluateTriggers(clockA.Day);
+            DateTimeOffset saveTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            SaveManager.Save(clockA, playerA, path, saveTime);
+            string jsonA = File.ReadAllText(path).Replace("\"CurrentEventTriggeredDay\":2920", "\"CurrentEventTriggeredDay\":-5");
+            File.WriteAllText(path, jsonA);
+            allRejected &= !SaveManager.Load(new GameClock(), new PlayerState(new GameClock()), path, saveTime);
+
+            // (b) pending TriggeredDay > saved Day
+            var (clockB, playerB) = MakeAge(8);
+            playerB.Events.EvaluateTriggers(clockB.Day);
+            SaveManager.Save(clockB, playerB, path, saveTime);
+            string jsonB = File.ReadAllText(path).Replace("\"CurrentEventTriggeredDay\":2920", "\"CurrentEventTriggeredDay\":9999");
+            File.WriteAllText(path, jsonB);
+            allRejected &= !SaveManager.Load(new GameClock(), new PlayerState(new GameClock()), path, saveTime);
+
+            // (c) history ResolvedDay > saved Day
+            var (clockC, playerC) = MakeAge(8);
+            playerC.Events.EvaluateTriggers(clockC.Day);
+            playerC.ResolveEventChoice("keep_money");
+            SaveManager.Save(clockC, playerC, path, saveTime);
+            string jsonC = File.ReadAllText(path).Replace("\"ResolvedDay\":2920", "\"ResolvedDay\":9999");
+            File.WriteAllText(path, jsonC);
+            allRejected &= !SaveManager.Load(new GameClock(), new PlayerState(new GameClock()), path, saveTime);
+
+            // (d) history ResolvedDay < TriggeredDay
+            var (clockD, playerD) = MakeAge(8);
+            playerD.Events.EvaluateTriggers(clockD.Day);
+            playerD.ResolveEventChoice("keep_money");
+            SaveManager.Save(clockD, playerD, path, saveTime);
+            string jsonD = File.ReadAllText(path)
+                .Replace("\"TriggeredDay\":2920,\"ResolvedDay\":2920", "\"TriggeredDay\":2921,\"ResolvedDay\":2920");
+            File.WriteAllText(path, jsonD);
+            allRejected &= !SaveManager.Load(new GameClock(), new PlayerState(new GameClock()), path, saveTime);
+
+            bool pass = allRejected;
+            Console.WriteLine($"Event-EV40: {pass} (Expected: True)");
+        });
+
+        // --- Event-EV41: Negative TotalPlayHours Reject ---
+        RunWithTempSave(path => {
+            var (clock, player) = MakeAge(8);
+            DateTimeOffset saveTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            SaveManager.Save(clock, player, path, saveTime);
+            string json = File.ReadAllText(path).Replace("\"TotalPlayHours\":0", "\"TotalPlayHours\":-1");
+            File.WriteAllText(path, json);
+
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, saveTime);
+            bool pass = !loaded && loadPlayer.TotalPlayHours == 0;
+            Console.WriteLine($"Event-EV41: {pass} (Expected: True)");
+        });
+
+        // --- Event-EV42: Offline Play Updates Lifetime Hours ---
+        RunWithTempSave(path => {
+            var (clock, player) = MakeAge(5);
+            player.StartPlaying();
+            DateTimeOffset saveTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            SaveManager.Save(clock, player, path, saveTime);
+
+            // Offline: 150 real seconds = 600 game minutes = 10 completed Play hours.
+            DateTimeOffset loadTime = saveTime.AddSeconds(150);
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+
+            bool pass = loaded &&
+                        loadPlayer.TotalPlayHours == 10 &&
+                        loadPlayer.GetPlayMinutesAccumulator() == 0 &&
+                        Close(loadPlayer.Attributes.Fitness, 10.30) && // +0.03 * 10
+                        Close(loadPlayer.Attributes.Creativity, 10.30) &&
+                        Close(loadPlayer.Traits.Confidence, 50.20) &&  // +0.02 * 10
+                        Close(loadPlayer.Traits.Curiosity, 50.10);     // +0.01 * 10
+            Console.WriteLine($"Event-EV42: {pass} (Expected: True)");
+        });
+
+        // --- Event-EV43: Offline Eligibility ---
+        RunWithTempSave(path => {
+            // Save at Day 2919 (age 7) with Found Money NOT eligible.
+            var (clock, player) = MakeAge(7);
+            player.Events.EvaluateTriggers(clock.Day);
+            bool notEligibleAtSave = player.Events.CurrentEvent == null;
+            DateTimeOffset saveTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            SaveManager.Save(clock, player, path, saveTime);
+
+            // Offline: advance exactly 365 game days = 365*1440 game minutes
+            // = 131400 real seconds (Day 2555 -> Day 2920, age 8).
+            DateTimeOffset loadTime = saveTime.AddSeconds(365L * 1440 / 4);
+            var loadClock = new GameClock();
+            var loadPlayer = new PlayerState(loadClock);
+            bool loaded = SaveManager.Load(loadClock, loadPlayer, path, loadTime);
+
+            bool pass = notEligibleAtSave &&
+                        loaded &&
+                        loadClock.Day == 2920 &&
+                        loadPlayer.Events.CurrentEvent != null &&
+                        loadPlayer.Events.CurrentEvent.EventId == FoundMoney &&
+                        loadPlayer.Events.CurrentEvent.TriggeredDay == 2920 &&
+                        loadPlayer.Events.History.Count == 0;
+            Console.WriteLine($"Event-EV43: {pass} (Expected: True)");
+        });
+
+        // --- Event-EV44: Normal vs Bulk Play Lifetime Counter ---
+        {
+            var (clock1, p1) = MakeAge(5);
+            var (clock2, p2) = MakeAge(5);
+            p1.StartPlaying();
+            p2.StartPlaying();
+            p1.AdvanceSimulation(615); // 10 hours + 15 remainder
+            p2.BulkAdvanceSimulation(615, out long moneyEarned, out long xpEarned);
+            p2.ApplyRewards(moneyEarned, xpEarned);
+
+            bool pass = p1.TotalPlayHours == p2.TotalPlayHours &&
+                        p1.TotalPlayHours == 10 &&
+                        p1.GetPlayMinutesAccumulator() == p2.GetPlayMinutesAccumulator() &&
+                        Close(p1.Attributes.Fitness, p2.Attributes.Fitness) &&
+                        Close(p1.Attributes.Creativity, p2.Attributes.Creativity) &&
+                        Close(p1.Traits.Confidence, p2.Traits.Confidence) &&
+                        Close(p1.Traits.Curiosity, p2.Traits.Curiosity);
+            Console.WriteLine($"Event-EV44: {pass} (Expected: True)");
+        }
+
+        // --- Event-EV45: Strong Transactional Event Rejection ---
+        RunWithTempSave(path => {
+            // Build a richly non-default live runtime.
+            var clock = new GameClock();
+            var player = new PlayerState(clock);
+            clock.AdvanceGameMinutes(9L * 365 * 24 * 60); // age 9, no event evaluation
+            player.DebugAddMoney(500);
+            player.RestoreTotalPlayHours(12);
+            player.Attributes.AddIntelligence(5);
+            player.Attributes.AddFitness(7);
+            player.Skills.Academics.AddExperience(800);
+            player.EnrollPrimarySchool();
+            player.ResolveEventChoice("introduce_yourself"); // history: First Day
+            clock.AdvanceGameMinutes(60 * 24);
+            player.Events.EvaluateTriggers(clock.Day); // Broken Toy pending
+            player.StartStudying();
+
+            // Snapshot EVERYTHING.
+            int day = clock.Day, hour = clock.Hour, minute = clock.Minute;
+            int money = player.Money, energy = player.Energy, hunger = player.Hunger, thirst = player.Thirst;
+            int studyXP = player.StudyXP;
+            bool isSleeping = player.IsSleeping, isWorking = player.IsWorking, isStudying = player.IsStudying,
+                  isPlaying = player.IsPlaying, isFamilyTime = player.IsSpendingFamilyTime;
+            int accAwake = player.GetAwakeMinutesAccumulator(), accSleep = player.GetSleepingMinutesAccumulator(),
+                accHunger = player.GetHungerMinutesAccumulator(), accThirst = player.GetThirstMinutesAccumulator(),
+                accWork = player.GetWorkMinutesAccumulator(), accStudy = player.GetStudyMinutesAccumulator(),
+                accPlay = player.GetPlayMinutesAccumulator(), accFamily = player.GetFamilyTimeMinutesAccumulator();
+            long totalPlayHours = player.TotalPlayHours;
+            (double i, double f, double s, double d, double c) attrs =
+                (player.Attributes.Intelligence, player.Attributes.Fitness, player.Attributes.Social,
+                 player.Attributes.Discipline, player.Attributes.Creativity);
+            long academics = player.Skills.Academics.Experience;
+            (int status, int grade, int progress, long startDay) edu =
+                ((int)player.Education.Status, player.Education.PrimaryGrade, player.Education.EducationProgress, player.Education.SchoolYearStartDay);
+            (double conf, double cur, double pat, double amb, double emp) traits =
+                (player.Traits.Confidence, player.Traits.Curiosity, player.Traits.Patience, player.Traits.Ambition, player.Traits.Empathy);
+            Guid motherId = player.Family.Mother.Id, fatherId = player.Family.Father.Id;
+            double motherClose = player.Relationships.MotherRelationship.Closeness;
+            double fatherClose = player.Relationships.FatherRelationship.Closeness;
+            string? pendingId = player.Events.CurrentEvent?.EventId;
+            long pendingDay = player.Events.CurrentEvent?.TriggeredDay ?? -1;
+            int historyCount = player.Events.History.Count;
+
+            // Save as V7, then corrupt TotalPlayHours negative.
+            DateTimeOffset saveTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+            SaveManager.Save(clock, player, path, saveTime);
+            string json = File.ReadAllText(path).Replace($"\"TotalPlayHours\":12", "\"TotalPlayHours\":-3");
+            File.WriteAllText(path, json);
+
+            bool loaded = SaveManager.Load(clock, player, path, saveTime);
+
+            bool pass = !loaded &&
+                clock.Day == day && clock.Hour == hour && clock.Minute == minute &&
+                player.Money == money && player.Energy == energy && player.Hunger == hunger && player.Thirst == thirst &&
+                player.StudyXP == studyXP &&
+                player.IsSleeping == isSleeping && player.IsWorking == isWorking && player.IsStudying == isStudying &&
+                player.IsPlaying == isPlaying && player.IsSpendingFamilyTime == isFamilyTime &&
+                player.GetAwakeMinutesAccumulator() == accAwake && player.GetSleepingMinutesAccumulator() == accSleep &&
+                player.GetHungerMinutesAccumulator() == accHunger && player.GetThirstMinutesAccumulator() == accThirst &&
+                player.GetWorkMinutesAccumulator() == accWork && player.GetStudyMinutesAccumulator() == accStudy &&
+                player.GetPlayMinutesAccumulator() == accPlay && player.GetFamilyTimeMinutesAccumulator() == accFamily &&
+                player.TotalPlayHours == totalPlayHours &&
+                Close(player.Attributes.Intelligence, attrs.i) && Close(player.Attributes.Fitness, attrs.f) &&
+                Close(player.Attributes.Social, attrs.s) && Close(player.Attributes.Discipline, attrs.d) &&
+                Close(player.Attributes.Creativity, attrs.c) &&
+                player.Skills.Academics.Experience == academics &&
+                (int)player.Education.Status == edu.status && player.Education.PrimaryGrade == edu.grade &&
+                player.Education.EducationProgress == edu.progress && player.Education.SchoolYearStartDay == edu.startDay &&
+                Close(player.Traits.Confidence, traits.conf) && Close(player.Traits.Curiosity, traits.cur) &&
+                Close(player.Traits.Patience, traits.pat) && Close(player.Traits.Ambition, traits.amb) &&
+                Close(player.Traits.Empathy, traits.emp) &&
+                player.Family.Mother.Id == motherId && player.Family.Father.Id == fatherId &&
+                Close(player.Relationships.MotherRelationship.Closeness, motherClose) &&
+                Close(player.Relationships.FatherRelationship.Closeness, fatherClose) &&
+                player.Events.CurrentEvent?.EventId == pendingId &&
+                (player.Events.CurrentEvent?.TriggeredDay ?? -1) == pendingDay &&
+                player.Events.History.Count == historyCount;
+            Console.WriteLine($"Event-EV45: {pass} (Expected: True)");
+        });
     }
 }

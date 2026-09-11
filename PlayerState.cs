@@ -8,6 +8,7 @@ public class PlayerState
     {
         _clock = clock;
         Relationships = new PlayerRelationships(Family.Mother.Id, Family.Father.Id);
+        Events = new LifeEventSystem(this);
     }
 
     public int Age => _clock.Day / 365;
@@ -28,6 +29,8 @@ public class PlayerState
     public PlayerTraits Traits { get; } = new();
     public PlayerFamily Family { get; } = new();
     public PlayerRelationships Relationships { get; }
+    public LifeEventSystem Events { get; }
+    public long TotalPlayHours { get; private set; } = 0;
     public int Money { get; set; } = 1000;
     public int Energy { get; private set; } = 100;
     public int Hunger { get; private set; } = 100;
@@ -88,7 +91,13 @@ public class PlayerState
     public bool EnrollPrimarySchool()
     {
         if (Age < 6) return false;
-        return Education.TryEnroll(_clock.Day);
+        bool enrolled = Education.TryEnroll(_clock.Day);
+        if (enrolled)
+        {
+            // Enrollment can immediately make events eligible (e.g. First Day of School).
+            Events.EvaluateTriggers(_clock.Day);
+        }
+        return enrolled;
     }
 
     public void UpdateEnergy(int elapsedMinutes)
@@ -142,6 +151,7 @@ public class PlayerState
         UpdatePlay(minutes);
         UpdateFamilyTime(minutes);
         Education.EvaluateProgression(_clock.Day);
+        Events.EvaluateTriggers(_clock.Day);
     }
 
     internal void BulkAdvanceSimulation(long elapsedMinutes, out long moneyEarned, out long xpEarned)
@@ -216,6 +226,7 @@ public class PlayerState
             Traits.AddConfidence(hoursPlayed * 0.02);
             Traits.AddCuriosity(hoursPlayed * 0.01);
             _playMinutesAccumulator = (int)(totalPlayMinutes % 60);
+            AddTotalPlayHoursSafely(hoursPlayed);
         }
 
         // Family Time rewards are linear and O(1).
@@ -232,6 +243,7 @@ public class PlayerState
         }
 
         Education.EvaluateProgression(_clock.Day);
+        Events.EvaluateTriggers(_clock.Day);
     }
 
     internal bool PreflightWorkAndStudy(long elapsedMinutes, out long totalMoney, out long totalXP)
@@ -322,6 +334,7 @@ public class PlayerState
             Traits.AddConfidence(hoursPlayed * 0.02);
             Traits.AddCuriosity(hoursPlayed * 0.01);
             _playMinutesAccumulator %= 60;
+            AddTotalPlayHoursSafely(hoursPlayed);
         }
     }
 
@@ -354,6 +367,38 @@ public class PlayerState
         {
             Money += amount;
         }
+    }
+
+    /// <summary>
+    /// Controlled safe money mutation used by event outcomes.
+    /// Saturates at int.MaxValue (never wraps) and never goes below zero.
+    /// </summary>
+    public void AddMoneySafely(int amount)
+    {
+        long result = (long)Money + amount;
+        Money = (int)Math.Clamp(result, 0, int.MaxValue);
+    }
+
+    /// <summary>Lifetime completed Play hours with safe saturation at long.MaxValue.</summary>
+    private void AddTotalPlayHoursSafely(long hours)
+    {
+        if (hours <= 0) return;
+        TotalPlayHours = hours >= long.MaxValue - TotalPlayHours
+            ? long.MaxValue
+            : TotalPlayHours + hours;
+    }
+
+    /// <summary>Controlled internal restore of the lifetime Play hour statistic.</summary>
+    internal void RestoreTotalPlayHours(long hours)
+    {
+        if (hours < 0) return;
+        TotalPlayHours = hours;
+    }
+
+    /// <summary>Controlled facade for resolving the current pending event.</summary>
+    public bool ResolveEventChoice(string choiceId)
+    {
+        return Events.ResolveChoice(choiceId, _clock.Day);
     }
 
     internal void DebugRestoreNeeds()

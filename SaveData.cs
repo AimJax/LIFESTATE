@@ -5,7 +5,7 @@ namespace Lifestate;
 
 public class SaveData
 {
-    public int Version { get; set; } = 6;
+    public int Version { get; set; } = 7;
     public int Day { get; set; }
     public int Hour { get; set; }
     public int Minute { get; set; }
@@ -32,6 +32,10 @@ public class SaveData
     public int PrimaryGrade { get; set; }
     public int EducationProgress { get; set; }
     public long SchoolYearStartDay { get; set; }
+    public long TotalPlayHours { get; set; }
+    public string? CurrentEventId { get; set; }
+    public long CurrentEventTriggeredDay { get; set; }
+    public List<EventHistorySaveData> EventHistory { get; set; } = new();
     public Guid MotherId { get; set; }
     public string MotherName { get; set; } = "";
     public long MotherBirthDay { get; set; }
@@ -53,4 +57,12 @@ public class SaveData
     public double? Discipline { get; set; }
     public double? Creativity { get; set; }
     public DateTimeOffset SavedAtUtc { get; set; }
+}
+
+public class EventHistorySaveData
+{
+    public string EventId { get; set; } = "";
+    public string ChoiceId { get; set; } = "";
+    public long TriggeredDay { get; set; }
+    public long ResolvedDay { get; set; }
 }
