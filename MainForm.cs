@@ -26,10 +26,12 @@ public class MainForm : Form
     private Button _btnRunToggle = new();
     private Label _lblFeedback = new();
     private readonly Dictionary<string, Panel> _screens = new();
-    private readonly Dictionary<string, Button> _navButtons = new();
+    private readonly Dictionary<string, UiTheme.GameNavButton> _navButtons = new();
 
     // ---- Life screen ----
     private Panel _screenLife = new();
+    private FlowLayoutPanel _lifeLeft = new();
+    private FlowLayoutPanel _lifeRight = new();
     private Label _lblLifeAge = new();
     private Label _lblLifeStage = new();
     private Label _lblLifeMoney = new();
@@ -50,6 +52,7 @@ public class MainForm : Form
 
     // ---- Activities screen ----
     private Panel _screenActivities = new();
+    private UiTheme.BorderedPanel _heroCard = new();
     private Label _lblCurrentActivityName = new();
     private Label _lblCurrentActivityDetail = new();
     private UiTheme.BorderedPanel _progressCard = new();
@@ -57,36 +60,26 @@ public class MainForm : Form
     private Label _lblProgressLine1 = new();
     private Label _lblProgressLine2 = new();
     private GameProgressBar _barActivityProgress = new();
-    private FlowLayoutPanel _activitiesFlow = new();
-    private readonly List<Control> _activityRowControls = new();
+    private FlowLayoutPanel _activitiesGrid = new();
+    private readonly List<UiTheme.BorderedPanel> _activityCards = new();
     private string _lastActivityKey = "";
 
     // ---- People screen ----
     private Panel _screenPeople = new();
-    private Label _lblMotherName = new();
-    private Label _lblMotherInfo = new();
-    private Label _lblMotherCloseness = new();
-    private GameProgressBar _barMotherCloseness = new();
-    private Label _lblFatherName = new();
-    private Label _lblFatherInfo = new();
-    private Label _lblFatherCloseness = new();
-    private GameProgressBar _barFatherCloseness = new();
+    private UiLayout.PersonCard _motherCard = new("M");
+    private UiLayout.PersonCard _fatherCard = new("F");
 
     // ---- More + subscreens ----
     private Panel _screenMore = new();
     private Panel _screenCharacter = new();
-    private Label _lblCharAgeStage = new();
-    private Label _lblIntel = new();
-    private Label _lblFitness = new();
-    private Label _lblSocial = new();
-    private Label _lblDiscipline = new();
-    private Label _lblCreativity = new();
-    private Label _lblConfidence = new();
-    private Label _lblCuriosity = new();
-    private Label _lblPatience = new();
-    private Label _lblAmbition = new();
-    private Label _lblEmpathy = new();
+    private FlowLayoutPanel _charLeft = new();
+    private FlowLayoutPanel _charRight = new();
+    private Label _lblCharAge = new();
+    private Label _lblCharStage = new();
+    private readonly Dictionary<string, Label> _charValues = new();
+    private readonly Dictionary<string, GameProgressBar> _charBars = new();
     private Label _lblAcademics = new();
+    private Label _lblAcademicsXp = new();
     private GameProgressBar _barAcademics = new();
 
     private Panel _screenEducation = new();
@@ -106,7 +99,8 @@ public class MainForm : Form
     private Panel _screenSettings = new();
 
     // ---- God Mode overlay ----
-    private Panel _godModePanel = new();
+    private UiTheme.BorderedPanel _godModePanel = new();
+    private Button _btnGodToggle = new();
     private bool _godModeVisible = false;
 
     private string _currentScreen = "life";
@@ -156,13 +150,6 @@ public class MainForm : Form
         RefreshUI();
     }
 
-    private void ToggleGodMode()
-    {
-        _godModeVisible = !_godModeVisible;
-        _godMode.SetEnabled(_godModeVisible);
-        _godModePanel.Visible = _godModeVisible;
-    }
-
     // =====================================================================
     // SHELL
     // =====================================================================
@@ -176,10 +163,10 @@ public class MainForm : Form
             RowCount = 4,
             BackColor = UiTheme.Background
         };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, UiTheme.TopBarHeight));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 60));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, UiTheme.NavHeight));
 
         // Top status bar
         var topBar = new TableLayoutPanel
@@ -187,11 +174,10 @@ public class MainForm : Form
             Dock = DockStyle.Fill,
             ColumnCount = 2,
             BackColor = UiTheme.Surface,
-            Padding = new Padding(20, 0, 20, 0),
             Margin = new Padding(0)
         };
-        topBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
-        topBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
+        topBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
+        topBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
         var lblTitle = new Label
         {
             Text = "LIFESTATE",
@@ -199,44 +185,50 @@ public class MainForm : Form
             ForeColor = UiTheme.TextPrimary,
             AutoSize = false,
             Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleLeft
-        };
-        var rightCluster = new FlowLayoutPanel
-        {
-            FlowDirection = FlowDirection.RightToLeft,
-            Dock = DockStyle.Fill,
-            WrapContents = false,
-            BackColor = UiTheme.Surface,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Padding = new Padding(UiTheme.SpaceLg, 0, 0, 0),
             Margin = new Padding(0)
         };
-        _btnRunToggle = new Button
+        var rightCluster = new TableLayoutPanel
         {
-            Text = "Paused",
-            AutoSize = true,
-            Margin = new Padding(10, 12, 0, 0)
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            BackColor = UiTheme.Surface,
+            Margin = new Padding(0),
+            Padding = new Padding(0, 0, UiTheme.SpaceLg, 0)
         };
-        UiTheme.ApplySecondaryButtonStyle(_btnRunToggle);
+        rightCluster.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        rightCluster.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        _lblClock = new Label
+        {
+            Text = "Day 0   00:00",
+            Font = UiTheme.FontValue,
+            ForeColor = UiTheme.TextPrimary,
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleRight,
+            Margin = new Padding(0)
+        };
+        _btnRunToggle = new Button { Text = "Paused", AutoSize = true, Margin = new Padding(10, 14, 0, 0) };
+        UiTheme.ApplyStatusPillStyle(_btnRunToggle);
         _btnRunToggle.Click += (s, e) =>
         {
             if (_timer.Enabled) _timer.Stop(); else _timer.Start();
             RefreshTopBar();
         };
-        _lblClock = new Label
-        {
-            Text = "Day 0   00:00",
-            Font = UiTheme.FontBodyBold,
-            ForeColor = UiTheme.TextPrimary,
-            AutoSize = true,
-            Margin = new Padding(0, 16, 4, 0)
-        };
-        rightCluster.Controls.Add(_btnRunToggle);
-        rightCluster.Controls.Add(_lblClock);
+        rightCluster.Controls.Add(_lblClock, 0, 0);
+        rightCluster.Controls.Add(_btnRunToggle, 1, 0);
         topBar.Controls.Add(lblTitle, 0, 0);
         topBar.Controls.Add(rightCluster, 1, 0);
         root.Controls.Add(topBar, 0, 0);
 
         // Screen host
-        var screenHost = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Background, Padding = new Padding(24, 14, 24, 6), Margin = new Padding(0) };
+        var screenHost = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = UiTheme.Background,
+            Margin = new Padding(0),
+            Padding = new Padding(0, UiTheme.SpaceMd, 0, UiTheme.SpaceSm)
+        };
         _screens["life"] = _screenLife;
         _screens["activities"] = _screenActivities;
         _screens["people"] = _screenPeople;
@@ -254,7 +246,17 @@ public class MainForm : Form
         }
         root.Controls.Add(screenHost, 0, 1);
 
-        // Global feedback line
+        // Feedback + muted developer hint line
+        var feedbackBar = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            BackColor = UiTheme.Background,
+            Margin = new Padding(0),
+            Padding = new Padding(UiTheme.SpaceLg, 0, UiTheme.SpaceLg, 0)
+        };
+        feedbackBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 70));
+        feedbackBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
         _lblFeedback = new Label
         {
             Dock = DockStyle.Fill,
@@ -262,11 +264,22 @@ public class MainForm : Form
             Font = UiTheme.FontSmall,
             ForeColor = UiTheme.TextSecondary,
             BackColor = UiTheme.Background,
-            Padding = new Padding(26, 0, 0, 0),
             Text = "",
             Margin = new Padding(0)
         };
-        root.Controls.Add(_lblFeedback, 0, 2);
+        var devHint = new Label
+        {
+            Text = "F2 · God Mode",
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleRight,
+            Font = UiTheme.FontSmall,
+            ForeColor = UiTheme.TextMuted,
+            BackColor = UiTheme.Background,
+            Margin = new Padding(0)
+        };
+        feedbackBar.Controls.Add(_lblFeedback, 0, 0);
+        feedbackBar.Controls.Add(devHint, 1, 0);
+        root.Controls.Add(feedbackBar, 0, 2);
 
         // Bottom navigation
         var navBar = new TableLayoutPanel
@@ -274,7 +287,7 @@ public class MainForm : Form
             Dock = DockStyle.Fill,
             ColumnCount = 4,
             BackColor = UiTheme.Background,
-            Padding = new Padding(8, 5, 8, 8),
+            Padding = new Padding(8, 6, 8, 8),
             Margin = new Padding(0)
         };
         for (int i = 0; i < 4; i++) navBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
@@ -287,8 +300,7 @@ public class MainForm : Form
         };
         foreach (var (key, label) in navDefs)
         {
-            var btn = new Button { Text = label, Tag = key, Dock = DockStyle.Fill, Margin = new Padding(2, 0, 2, 0) };
-            UiTheme.ApplyNavigationButtonStyle(btn);
+            var btn = new UiTheme.GameNavButton { Text = label, Dock = DockStyle.Fill, Margin = new Padding(2, 0, 2, 0) };
             btn.Click += (s, e) => ShowScreen(key);
             _navButtons[key] = btn;
             navBar.Controls.Add(btn);
@@ -306,7 +318,7 @@ public class MainForm : Form
         string navKey = key is "life" or "activities" or "people" or "more" ? key : "more";
         foreach (var pair in _navButtons)
         {
-            UiTheme.SetNavigationSelected(pair.Value, pair.Key == navKey);
+            pair.Value.Selected = pair.Key == navKey;
         }
 
         _currentScreen = key;
@@ -321,19 +333,6 @@ public class MainForm : Form
 
     private void SetFeedback(string text) => SetFeedback(text, UiTheme.TextSecondary);
 
-    /// <summary>Keeps a flow child stretched to the flow width as the window resizes.</summary>
-    private static void TrackWidth(FlowLayoutPanel flow, Control control, int extraShrink = 0)
-    {
-        void Apply()
-        {
-            int width = flow.ClientSize.Width - control.Margin.Horizontal - extraShrink;
-            control.Width = Math.Max(140, width);
-        }
-        flow.Resize += (s, e) => Apply();
-        Apply();
-    }
-
-    /// <summary>Creates a screen-content flow with vertical scrolling.</summary>
     private static FlowLayoutPanel CreateScreenFlow()
     {
         return new FlowLayoutPanel
@@ -347,86 +346,111 @@ public class MainForm : Form
         };
     }
 
-    // =====================================================================
-    // LIFE SCREEN
-    // =====================================================================
-
-    private void BuildLifeScreen()
+    /// <summary>Two-column centered body (Life, Character): capped width, independent scrolling columns.</summary>
+    private static Panel CreateTwoColumnBody(int maxWidth, int leftPercent, out FlowLayoutPanel left, out FlowLayoutPanel right)
     {
-        var columns = new TableLayoutPanel
+        var host = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Background, Margin = new Padding(0) };
+        var table = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
             BackColor = UiTheme.Background,
             Margin = new Padding(0)
         };
-        columns.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 52));
-        columns.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 48));
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, leftPercent));
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100 - leftPercent));
+        left = CreateScreenFlow();
+        left.Padding = new Padding(0, 0, UiTheme.SpaceMd, 0);
+        right = CreateScreenFlow();
+        table.Controls.Add(left, 0, 0);
+        table.Controls.Add(right, 1, 0);
+        host.Controls.Add(table);
 
-        // LEFT column
-        var left = CreateScreenFlow();
-        columns.Controls.Add(left, 0, 0);
+        void Apply()
+        {
+            if (host.ClientSize.Width <= 0 || host.ClientSize.Height <= 0) return;
+            int w = Math.Min(maxWidth, host.ClientSize.Width - UiTheme.SpaceLg * 2);
+            w = Math.Max(380, w);
+            table.SetBounds((host.ClientSize.Width - w) / 2, 0, w, host.ClientSize.Height);
+        }
+        host.Resize += (s, e) => Apply();
+        if (host.Width > 0 && host.Height > 0) Apply();
+        return host;
+    }
 
-        var identityCard = new UiTheme.BorderedPanel { Height = 148, Margin = new Padding(0, 0, 10, 10), Padding = new Padding(18, 14, 18, 12) };
+    private void ToggleGodMode()
+    {
+        _godModeVisible = !_godModeVisible;
+        _godMode.SetEnabled(_godModeVisible);
+        _godModePanel.Visible = _godModeVisible;
+    }
+
+    // =====================================================================
+    // LIFE SCREEN
+    // =====================================================================
+
+    private void BuildLifeScreen()
+    {
+        _screenLife.Controls.Add(CreateTwoColumnBody(UiTheme.LifeContentMaxWidth, 54, out _lifeLeft, out _lifeRight));
+
+        // LEFT: identity, activity, needs
+        var identityCard = new UiTheme.BorderedPanel { Height = 158, Margin = new Padding(0, 0, 0, UiTheme.SpaceMd), Padding = new Padding(UiTheme.SpaceLg, UiTheme.SpaceMd, UiTheme.SpaceMd, UiTheme.SpaceMd) };
         var identityFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = UiTheme.SurfaceRaised, Margin = new Padding(0) };
-        _lblLifeAge = new Label { Text = "Age 0", Font = UiTheme.FontTitle, ForeColor = UiTheme.TextPrimary, AutoSize = true, Margin = new Padding(0, 0, 0, 0) };
-        _lblLifeStage = new Label { Text = "Infant", Font = UiTheme.FontBody, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(2, 0, 0, 2) };
-        _lblLifeMoney = new Label { Text = "$1,000", Font = UiTheme.FontHeading, ForeColor = UiTheme.Positive, AutoSize = true, Margin = new Padding(0, 6, 0, 0) };
+        _lblLifeAge = new Label { Text = "Age 0", Font = UiTheme.FontDisplay, ForeColor = UiTheme.TextPrimary, AutoSize = true, Margin = new Padding(0) };
+        _lblLifeStage = new Label { Text = "Infant", Font = UiTheme.FontBody, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(2, 0, 0, UiTheme.SpaceXs) };
+        _lblLifeMoney = new Label { Text = "$1,000", Font = UiTheme.FontValue, ForeColor = UiTheme.Positive, AutoSize = true, Margin = new Padding(0, UiTheme.SpaceXs, 0, 0) };
         identityFlow.Controls.Add(_lblLifeAge);
         identityFlow.Controls.Add(_lblLifeStage);
         identityFlow.Controls.Add(_lblLifeMoney);
         identityCard.Controls.Add(identityFlow);
-        left.Controls.Add(identityCard);
-        TrackWidth(left, identityCard);
+        _lifeLeft.Controls.Add(identityCard);
+        UiLayout.TrackWidth(_lifeLeft, identityCard);
 
-        var activityCard = new UiTheme.BorderedPanel { Height = 92, Margin = new Padding(0, 0, 10, 10), Padding = new Padding(18, 12, 18, 10) };
+        var activityCard = new UiTheme.BorderedPanel { Height = 96, Margin = new Padding(0, 0, 0, UiTheme.SpaceMd), Padding = new Padding(UiTheme.SpaceLg, UiTheme.SpaceMd, UiTheme.SpaceMd, UiTheme.SpaceMd) };
         var activityFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = UiTheme.SurfaceRaised, Margin = new Padding(0) };
-        activityFlow.Controls.Add(new Label { Text = "CURRENT ACTIVITY", Font = UiTheme.FontSection, ForeColor = UiTheme.TextMuted, AutoSize = true, Margin = new Padding(0, 0, 0, 4) });
-        _lblLifeActivity = new Label { Text = "Idle", Font = UiTheme.FontHeading, ForeColor = UiTheme.TextPrimary, AutoSize = true };
+        activityFlow.Controls.Add(UiTheme.CreateTag("CURRENT ACTIVITY"));
+        _lblLifeActivity = new Label { Text = "Idle", Font = UiTheme.FontHeading, ForeColor = UiTheme.TextPrimary, AutoSize = true, Margin = new Padding(0) };
         activityFlow.Controls.Add(_lblLifeActivity);
         activityCard.Controls.Add(activityFlow);
-        left.Controls.Add(activityCard);
-        TrackWidth(left, activityCard);
+        _lifeLeft.Controls.Add(activityCard);
+        UiLayout.TrackWidth(_lifeLeft, activityCard);
 
-        var needsCard = new UiTheme.BorderedPanel { Height = 172, Margin = new Padding(0, 0, 10, 10), Padding = new Padding(18, 12, 18, 10) };
+        var needsCard = new UiTheme.BorderedPanel { Height = 176, Margin = new Padding(0, 0, 0, UiTheme.SpaceMd), Padding = new Padding(UiTheme.SpaceLg, UiTheme.SpaceMd, UiTheme.SpaceMd, UiTheme.SpaceMd) };
         var needsFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = UiTheme.SurfaceRaised, Margin = new Padding(0) };
-        needsFlow.Controls.Add(new Label { Text = "NEEDS", Font = UiTheme.FontSection, ForeColor = UiTheme.TextMuted, AutoSize = true, Margin = new Padding(0, 0, 0, 6) });
+        needsFlow.Controls.Add(UiTheme.CreateTag("NEEDS"));
         _barEnergy = new GameProgressBar { BarColor = UiTheme.Accent };
         _barHunger = new GameProgressBar { BarColor = UiTheme.Warning };
-        _barThirst = new GameProgressBar { BarColor = UiTheme.Warning };
+        _barThirst = new GameProgressBar { BarColor = UiTheme.AccentMuted };
         needsFlow.Controls.Add(CreateNeedRow("Energy", _barEnergy, _lblEnergyValue, needsFlow));
         needsFlow.Controls.Add(CreateNeedRow("Hunger", _barHunger, _lblHungerValue, needsFlow));
         needsFlow.Controls.Add(CreateNeedRow("Thirst", _barThirst, _lblThirstValue, needsFlow));
         needsCard.Controls.Add(needsFlow);
-        left.Controls.Add(needsCard);
-        TrackWidth(left, needsCard);
+        _lifeLeft.Controls.Add(needsCard);
+        UiLayout.TrackWidth(_lifeLeft, needsCard);
 
-        // RIGHT column
-        var right = CreateScreenFlow();
-        columns.Controls.Add(right, 1, 0);
-
-        _pendingEventCard = new UiTheme.BorderedPanel { Height = 236, Margin = new Padding(0, 0, 0, 10), Padding = new Padding(18, 14, 18, 12), Visible = false };
+        // RIGHT: pending event + life timeline
+        _pendingEventCard = new UiTheme.BorderedPanel { Height = 250, Margin = new Padding(0, 0, 0, UiTheme.SpaceMd), Padding = new Padding(UiTheme.SpaceLg, UiTheme.SpaceMd, UiTheme.SpaceMd, UiTheme.SpaceMd), Visible = false };
         _pendingEventCard.BorderColor = UiTheme.Accent;
         var pendingFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, BackColor = UiTheme.SurfaceRaised, Margin = new Padding(0) };
-        pendingFlow.Controls.Add(new Label { Text = "LIFE EVENT", Font = UiTheme.FontSection, ForeColor = UiTheme.Accent, AutoSize = true, Margin = new Padding(0, 0, 0, 6) });
+        pendingFlow.Controls.Add(UiTheme.CreateTag("LIFE EVENT", UiTheme.Accent));
         _lblPendingEventTitle = new Label { Text = "", Font = UiTheme.FontHeading, ForeColor = UiTheme.TextPrimary, AutoSize = true };
-        _lblPendingEventDesc = new Label { Text = "", Font = UiTheme.FontBody, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(0, 4, 0, 6) };
+        _lblPendingEventDesc = new Label { Text = "", Font = UiTheme.FontBody, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(0, UiTheme.SpaceXs, 0, UiTheme.SpaceSm) };
         _pendingEventChoices = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, BackColor = UiTheme.SurfaceRaised, Margin = new Padding(0) };
         pendingFlow.Controls.Add(_lblPendingEventTitle);
         pendingFlow.Controls.Add(_lblPendingEventDesc);
         pendingFlow.Controls.Add(_pendingEventChoices);
         _pendingEventCard.Controls.Add(pendingFlow);
-        right.Controls.Add(_pendingEventCard);
-        TrackWidth(right, _pendingEventCard);
+        _lifeRight.Controls.Add(_pendingEventCard);
+        UiLayout.TrackWidth(_lifeRight, _pendingEventCard);
 
-        var timelineCard = new UiTheme.BorderedPanel { Height = 430, Margin = new Padding(0, 0, 0, 10), Padding = new Padding(18, 14, 18, 12) };
+        var timelineCard = new UiTheme.BorderedPanel { Height = 452, Margin = new Padding(0, 0, 0, 0), Padding = new Padding(UiTheme.SpaceMd, UiTheme.SpaceMd, UiTheme.SpaceMd, UiTheme.SpaceMd) };
+        var timelineHead = new FlowLayoutPanel { Dock = DockStyle.Top, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoSize = true, BackColor = UiTheme.SurfaceRaised, Margin = new Padding(0) };
+        timelineHead.Controls.Add(UiTheme.CreateTag("LIFE TIMELINE"));
         _timelineBody = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, BackColor = UiTheme.SurfaceRaised, Margin = new Padding(0) };
-        _timelineBody.Controls.Add(new Label { Text = "LIFE TIMELINE", Font = UiTheme.FontSection, ForeColor = UiTheme.TextMuted, AutoSize = true, Margin = new Padding(0, 0, 0, 6) });
         timelineCard.Controls.Add(_timelineBody);
-        right.Controls.Add(timelineCard);
-        TrackWidth(right, timelineCard);
-
-        _screenLife.Controls.Add(columns);
+        timelineCard.Controls.Add(timelineHead);
+        _lifeRight.Controls.Add(timelineCard);
+        UiLayout.TrackWidth(_lifeRight, timelineCard);
     }
 
     private static TableLayoutPanel CreateNeedRow(string name, GameProgressBar bar, Label valueLabel, FlowLayoutPanel widthSource)
@@ -445,7 +469,7 @@ public class MainForm : Form
         row.Controls.Add(new Label { Text = name, Font = UiTheme.FontBody, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(0, 5, 0, 0) }, 0, 0);
 
         bar.Height = 12;
-        bar.Margin = new Padding(0, 9, 8, 0);
+        bar.Margin = new Padding(0, 9, UiTheme.SpaceSm, 0);
         bar.Width = 200;
         row.Controls.Add(bar, 1, 0);
 
@@ -456,7 +480,7 @@ public class MainForm : Form
         valueLabel.Margin = new Padding(0, 6, 0, 0);
         row.Controls.Add(valueLabel, 2, 0);
 
-        void Apply() => row.Width = Math.Max(220, widthSource.ClientSize.Width - row.Margin.Horizontal);
+        void Apply() => row.Width = Math.Max(220, widthSource.ClientSize.Width - row.Margin.Horizontal - UiTheme.SpaceXs);
         widthSource.Resize += (s, e) => Apply();
         return row;
     }
@@ -516,8 +540,7 @@ public class MainForm : Form
         }
         _lastTimelineCount = _player.Events.History.Count;
 
-        // Clear everything except the section header (index 0).
-        for (int i = _timelineBody.Controls.Count - 1; i >= 1; i--)
+        for (int i = _timelineBody.Controls.Count - 1; i >= 0; i--)
         {
             _timelineBody.Controls.RemoveAt(i);
         }
@@ -530,12 +553,13 @@ public class MainForm : Form
                 Font = UiTheme.FontBody,
                 ForeColor = UiTheme.TextMuted,
                 AutoSize = true,
-                Margin = new Padding(0, 4, 0, 0)
+                Margin = new Padding(UiTheme.SpaceXs, UiTheme.SpaceSm, 0, 0)
             });
             return;
         }
 
-        // Newest first.
+        // Newest first; the newest entry carries the accent marker.
+        bool isFirst = true;
         foreach (var entry in _player.Events.History.Reverse())
         {
             var definition = LifeEventCatalog.GetById(entry.EventId);
@@ -543,33 +567,8 @@ public class MainForm : Form
             string choiceText = definition?.Choices.FirstOrDefault(c => c.Id == entry.ChoiceId)?.Text ?? entry.ChoiceId;
             int age = (int)(entry.TriggeredDay / 365);
 
-            _timelineBody.Controls.Add(new Label
-            {
-                Text = $"AGE {age}",
-                Font = UiTheme.FontSmall,
-                ForeColor = UiTheme.TextMuted,
-                AutoSize = true,
-                Margin = new Padding(0, 6, 0, 0)
-            });
-            _timelineBody.Controls.Add(new Label
-            {
-                Text = title,
-                Font = UiTheme.FontBodyBold,
-                ForeColor = UiTheme.TextPrimary,
-                AutoSize = true,
-                Margin = new Padding(0, 0, 0, 0)
-            });
-            _timelineBody.Controls.Add(new Label
-            {
-                Text = choiceText,
-                Font = UiTheme.FontBody,
-                ForeColor = UiTheme.TextSecondary,
-                AutoSize = true,
-                Margin = new Padding(0, 0, 0, 4)
-            });
-            var separator = new Panel { Height = 1, Width = 380, BackColor = UiTheme.Border, Margin = new Padding(0, 0, 0, 2) };
-            TrackWidth(_timelineBody, separator);
-            _timelineBody.Controls.Add(separator);
+            _timelineBody.Controls.Add(new UiLayout.TimelineEntry($"AGE {age}", title, choiceText, isFirst));
+            isFirst = false;
         }
     }
 
@@ -588,39 +587,43 @@ public class MainForm : Form
 
     private void BuildActivitiesScreen()
     {
-        _activitiesFlow = CreateScreenFlow();
-        _screenActivities.Controls.Add(_activitiesFlow);
+        var host = UiLayout.CreateCenteredColumn(UiTheme.ContentMaxWidth, 30, out var column);
+        _screenActivities.Controls.Add(host);
 
-        var currentCard = new UiTheme.BorderedPanel { Height = 104, Margin = new Padding(0, 0, 0, 10), Padding = new Padding(18, 12, 18, 10) };
-        var currentFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = UiTheme.SurfaceRaised, Margin = new Padding(0) };
-        currentFlow.Controls.Add(new Label { Text = "CURRENT ACTIVITY", Font = UiTheme.FontSection, ForeColor = UiTheme.TextMuted, AutoSize = true, Margin = new Padding(0, 0, 0, 4) });
-        _lblCurrentActivityName = new Label { Text = "IDLE", Font = UiTheme.FontHeading, ForeColor = UiTheme.TextPrimary, AutoSize = true };
-        _lblCurrentActivityDetail = new Label { Text = "You are currently idle.", Font = UiTheme.FontBody, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(0, 2, 0, 0) };
-        currentFlow.Controls.Add(_lblCurrentActivityName);
-        currentFlow.Controls.Add(_lblCurrentActivityDetail);
-        currentCard.Controls.Add(currentFlow);
-        _activitiesFlow.Controls.Add(currentCard);
-        TrackWidth(_activitiesFlow, currentCard);
+        column.Controls.Add(UiLayout.CreateScreenTitle("ACTIVITIES", "Continuous progression — the idle side of life."));
 
-        _progressCard = new UiTheme.BorderedPanel { Height = 150, Margin = new Padding(0, 0, 0, 12), Padding = new Padding(18, 12, 18, 10), Visible = false };
+        // Current activity hero
+        _heroCard = new UiTheme.BorderedPanel { Height = 168, Margin = new Padding(0, 0, 0, UiTheme.SpaceMd), Padding = new Padding(UiTheme.SpaceLg, UiTheme.SpaceMd, UiTheme.SpaceMd, UiTheme.SpaceMd) };
+        var heroFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = UiTheme.SurfaceRaised, Margin = new Padding(0) };
+        heroFlow.Controls.Add(UiTheme.CreateTag("CURRENT ACTIVITY"));
+        _lblCurrentActivityName = new Label { Text = "IDLE", Font = UiTheme.FontDisplay, ForeColor = UiTheme.TextPrimary, AutoSize = true, Margin = new Padding(0) };
+        _lblCurrentActivityDetail = new Label { Text = "Choose an activity below.", Font = UiTheme.FontBody, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(0, UiTheme.SpaceXs, 0, 0) };
+        heroFlow.Controls.Add(_lblCurrentActivityName);
+        heroFlow.Controls.Add(_lblCurrentActivityDetail);
+        _heroCard.Controls.Add(heroFlow);
+        column.Controls.Add(_heroCard);
+        UiLayout.TrackWidth(column, _heroCard);
+
+        // Activity progression card
+        _progressCard = new UiTheme.BorderedPanel { Height = 168, Margin = new Padding(0, 0, 0, UiTheme.SpaceMd), Padding = new Padding(UiTheme.SpaceLg, UiTheme.SpaceMd, UiTheme.SpaceMd, UiTheme.SpaceMd), Visible = false };
         _progressCard.BorderColor = UiTheme.Accent;
         var progressFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = UiTheme.SurfaceRaised, Margin = new Padding(0) };
-        _lblProgressHeader = new Label { Text = "", Font = UiTheme.FontSection, ForeColor = UiTheme.Accent, AutoSize = true, Margin = new Padding(0, 0, 0, 6) };
-        _barActivityProgress = new GameProgressBar { Height = 12, Width = 420, Margin = new Padding(0, 2, 0, 6), BarColor = UiTheme.Accent };
-        _lblProgressLine1 = new Label { Text = "", Font = UiTheme.FontBodyBold, ForeColor = UiTheme.TextPrimary, AutoSize = true };
+        _lblProgressHeader = UiTheme.CreateTag("", UiTheme.Accent);
+        _barActivityProgress = new GameProgressBar { Height = 12, Margin = new Padding(0, 2, 0, UiTheme.SpaceSm), BarColor = UiTheme.Accent };
+        _lblProgressLine1 = new Label { Text = "", Font = UiTheme.FontValue, ForeColor = UiTheme.TextPrimary, AutoSize = true };
         _lblProgressLine2 = new Label { Text = "", Font = UiTheme.FontBody, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(0, 2, 0, 0) };
         progressFlow.Controls.Add(_lblProgressHeader);
         progressFlow.Controls.Add(_barActivityProgress);
         progressFlow.Controls.Add(_lblProgressLine1);
         progressFlow.Controls.Add(_lblProgressLine2);
         _progressCard.Controls.Add(progressFlow);
-        _activitiesFlow.Controls.Add(_progressCard);
-        TrackWidth(_activitiesFlow, _progressCard);
+        column.Controls.Add(_progressCard);
+        UiLayout.TrackWidth(column, _progressCard);
 
-        // Immediate actions (existing gameplay, preserved)
-        var actionsCard = new UiTheme.BorderedPanel { Height = 96, Margin = new Padding(0, 0, 0, 12), Padding = new Padding(18, 10, 18, 8) };
+        // Support actions strip (compact, secondary weight)
+        var actionsCard = new UiTheme.BorderedPanel { Height = 58, Margin = new Padding(0, 0, 0, UiTheme.SpaceMd), Padding = new Padding(UiTheme.SpaceLg, UiTheme.SpaceSm, UiTheme.SpaceMd, UiTheme.SpaceSm) };
         var actionsFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = UiTheme.SurfaceRaised, Margin = new Padding(0) };
-        actionsFlow.Controls.Add(new Label { Text = "ACTIONS", Font = UiTheme.FontSection, ForeColor = UiTheme.TextMuted, AutoSize = true, Margin = new Padding(0, 10, 18, 0) });
+        actionsFlow.Controls.Add(new Label { Text = "SUPPORT", Font = UiTheme.FontTag, ForeColor = UiTheme.TextMuted, AutoSize = true, Margin = new Padding(0, 10, UiTheme.SpaceMd, 0) });
         actionsFlow.Controls.Add(MakeActionButton("Wait 1 Hour", () =>
         {
             _clock.AdvanceSeconds(15);
@@ -630,78 +633,50 @@ public class MainForm : Form
         actionsFlow.Controls.Add(MakeActionButton("Eat +20", () => { _player.Eat(20); RefreshUI(); }));
         actionsFlow.Controls.Add(MakeActionButton("Drink +20", () => { _player.Drink(20); RefreshUI(); }));
         actionsCard.Controls.Add(actionsFlow);
-        _activitiesFlow.Controls.Add(actionsCard);
-        TrackWidth(_activitiesFlow, actionsCard);
+        column.Controls.Add(actionsCard);
+        UiLayout.TrackWidth(column, actionsCard);
 
-        RebuildActivityRows();
+        // Activity card grid
+        column.Controls.Add(UiTheme.CreateTag("ALL ACTIVITIES"));
+        _activitiesGrid = new FlowLayoutPanel
+        {
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true,
+            AutoSize = true,
+            BackColor = UiTheme.Background,
+            Margin = new Padding(0)
+        };
+        UiLayout.EnableCardSizing(_activitiesGrid, minCardWidth: 340, maxCardWidth: 560, gutter: UiTheme.SpaceSm);
+        RebuildActivityCards();
+        column.Controls.Add(_activitiesGrid);
+        UiLayout.TrackWidth(column, _activitiesGrid);
     }
 
     private static Button MakeActionButton(string text, Action onClick)
     {
-        var btn = new Button { Text = text, AutoSize = true, Margin = new Padding(0, 8, 10, 0) };
-        UiTheme.ApplySecondaryButtonStyle(btn);
+        var btn = new Button { Text = text, AutoSize = true, Margin = new Padding(0, 4, UiTheme.SpaceSm, 0) };
+        UiTheme.ApplyUtilityButtonStyle(btn);
         btn.Click += (s, e) => onClick();
         return btn;
     }
 
-    private void RebuildActivityRows()
+    private void RebuildActivityCards()
     {
-        _activitiesFlow.SuspendLayout();
-        foreach (var row in _activityRowControls)
+        _activitiesGrid.SuspendLayout();
+        foreach (var card in _activityCards)
         {
-            _activitiesFlow.Controls.Remove(row);
+            _activitiesGrid.Controls.Remove(card);
         }
-        _activityRowControls.Clear();
+        _activityCards.Clear();
 
         foreach (var def in ActivityDefs)
         {
-            var row = BuildActivityRow(def);
-            _activityRowControls.Add(row);
-            _activitiesFlow.Controls.Add(row);
-            TrackWidth(_activitiesFlow, row);
+            var card = new UiLayout.ActivityCard(def.Name, def.Description, def.Key);
+            card.ActionButton.Click += (s, e) => HandleActivityButton(def.Key);
+            _activityCards.Add(card);
+            _activitiesGrid.Controls.Add(card);
         }
-
-        _activitiesFlow.ResumeLayout();
-    }
-
-    private Control BuildActivityRow((string Name, string Description, string Key) def)
-    {
-        var row = new UiTheme.BorderedPanel { Height = 78, Margin = new Padding(0, 0, 0, 8), Padding = new Padding(14, 10, 14, 10) };
-        var layout = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 3,
-            BackColor = UiTheme.SurfaceRaised,
-            Margin = new Padding(0)
-        };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
-
-        var nameStack = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, BackColor = UiTheme.SurfaceRaised, Margin = new Padding(0) };
-        nameStack.Controls.Add(new Label { Text = def.Name, Font = UiTheme.FontBodyBold, ForeColor = UiTheme.TextPrimary, AutoSize = true, Margin = new Padding(0, 0, 0, 1) });
-        nameStack.Controls.Add(new Label { Text = def.Description, Font = UiTheme.FontSmall, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(0, 0, 0, 0) });
-        layout.Controls.Add(nameStack, 0, 0);
-
-        var statusLabel = new Label
-        {
-            Text = "",
-            Font = UiTheme.FontSmall,
-            ForeColor = UiTheme.TextMuted,
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleRight,
-            Margin = new Padding(0)
-        };
-        layout.Controls.Add(statusLabel, 1, 0);
-
-        var btn = new Button { Text = "Start", Dock = DockStyle.Fill, Margin = new Padding(8, 0, 0, 0) };
-        UiTheme.ApplySecondaryButtonStyle(btn);
-        btn.Click += (s, e) => HandleActivityButton(def.Key);
-        layout.Controls.Add(btn, 2, 0);
-
-        row.Controls.Add(layout);
-        row.Tag = (statusLabel, btn, def.Key);
-        return row;
+        _activitiesGrid.ResumeLayout();
     }
 
     private void HandleActivityButton(string key)
@@ -755,18 +730,18 @@ public class MainForm : Form
         return "Idle";
     }
 
-    private void RefreshActivityRows()
+    private void RefreshActivityCards()
     {
         string key = $"{_player.IsSleeping}|{_player.IsWorking}|{_player.IsStudying}|{_player.IsPlaying}|{_player.IsSpendingFamilyTime}";
         if (key != _lastActivityKey)
         {
             _lastActivityKey = key;
-            RebuildActivityRows();
+            RebuildActivityCards();
         }
 
-        foreach (var row in _activityRowControls)
+        foreach (var card in _activityCards)
         {
-            if (row is not UiTheme.BorderedPanel bordered || bordered.Tag is not (Label status, Button btn, string rowKey)) continue;
+            if (card.Tag is not (Label status, Button btn, string rowKey)) continue;
 
             bool isActive = rowKey switch
             {
@@ -780,30 +755,30 @@ public class MainForm : Form
 
             if (isActive)
             {
-                status.Text = "ACTIVE";
+                status.Text = "● ACTIVE";
                 status.ForeColor = UiTheme.Accent;
                 btn.Text = "Stop";
                 UiTheme.ApplyDangerButtonStyle(btn);
-                bordered.BorderColor = UiTheme.Accent;
+                card.BorderColor = UiTheme.Accent;
             }
             else
             {
                 status.Text = rowKey switch
                 {
-                    "work" => _player.Age < 18 ? "Age 18+" : "Available",
-                    "study" => _player.Age < 6 ? "Age 6+" : "Available",
-                    "play" => _player.Age < 2 ? "Age 2+" : "Available",
+                    "work" => "Age 18+",
+                    "study" => "Age 6+",
+                    "play" => "Age 2+",
                     _ => "Available"
                 };
                 status.ForeColor = UiTheme.TextMuted;
                 btn.Text = "Start";
                 UiTheme.ApplySecondaryButtonStyle(btn);
-                bordered.BorderColor = UiTheme.Border;
+                card.BorderColor = UiTheme.Border;
             }
         }
     }
 
-    private void RefreshCurrentActivityCard()
+    private void RefreshCurrentActivityHero()
     {
         string name = CurrentActivityName(_player);
         _lblLifeActivity.Text = name;
@@ -811,11 +786,13 @@ public class MainForm : Form
 
         if (name == "Idle")
         {
-            _lblCurrentActivityDetail.Text = "You are currently idle.";
+            _lblCurrentActivityDetail.Text = "Choose an activity below.";
+            _heroCard.BorderColor = UiTheme.Border;
         }
         else
         {
-            _lblCurrentActivityDetail.Text = $"Started on day {_clock.Day}. Time keeps moving.";
+            _lblCurrentActivityDetail.Text = "Time keeps moving while you work.";
+            _heroCard.BorderColor = UiTheme.Accent;
         }
     }
 
@@ -885,94 +862,50 @@ public class MainForm : Form
 
     private void BuildPeopleScreen()
     {
-        var flow = CreateScreenFlow();
-        _screenPeople.Controls.Add(flow);
+        var host = UiLayout.CreateCenteredColumn(UiTheme.ContentMaxWidth, 30, out var column);
+        _screenPeople.Controls.Add(host);
 
-        flow.Controls.Add(new Label { Text = "FAMILY", Font = UiTheme.FontSection, ForeColor = UiTheme.TextMuted, AutoSize = true, Margin = new Padding(2, 2, 0, 8) });
+        column.Controls.Add(UiLayout.CreateScreenTitle("PEOPLE", "Your social world."));
 
-        flow.Controls.Add(BuildPersonCard("M", _lblMotherName, _lblMotherInfo, _lblMotherCloseness, _barMotherCloseness, flow));
-        flow.Controls.Add(BuildPersonCard("F", _lblFatherName, _lblFatherInfo, _lblFatherCloseness, _barFatherCloseness, flow));
+        column.Controls.Add(UiTheme.CreateTag("FAMILY"));
+        var familyRow = new FlowLayoutPanel
+        {
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true,
+            AutoSize = true,
+            BackColor = UiTheme.Background,
+            Margin = new Padding(0, 0, 0, UiTheme.SpaceMd)
+        };
+        UiLayout.EnableCardSizing(familyRow, minCardWidth: 320, maxCardWidth: 430, gutter: UiTheme.SpaceSm);
+        familyRow.Controls.Add(_motherCard);
+        familyRow.Controls.Add(_fatherCard);
+        column.Controls.Add(familyRow);
+        UiLayout.TrackWidth(column, familyRow);
 
-        var friendsCard = new UiTheme.BorderedPanel { Height = 84, Margin = new Padding(0, 6, 0, 10), Padding = new Padding(18, 12, 18, 10) };
+        var friendsCard = new UiTheme.BorderedPanel { Height = 76, Margin = new Padding(0, 0, 0, 0), Padding = new Padding(UiTheme.SpaceLg, UiTheme.SpaceSm, UiTheme.SpaceMd, UiTheme.SpaceSm) };
         var friendsFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = UiTheme.SurfaceRaised, Margin = new Padding(0) };
-        friendsFlow.Controls.Add(new Label { Text = "FRIENDS", Font = UiTheme.FontSection, ForeColor = UiTheme.TextMuted, AutoSize = true, Margin = new Padding(0, 0, 0, 4) });
+        friendsFlow.Controls.Add(UiTheme.CreateTag("FRIENDS"));
         friendsFlow.Controls.Add(new Label { Text = "You haven't made any friends yet.", Font = UiTheme.FontBody, ForeColor = UiTheme.TextMuted, AutoSize = true });
         friendsCard.Controls.Add(friendsFlow);
-        flow.Controls.Add(friendsCard);
-        TrackWidth(flow, friendsCard);
-    }
-
-    private Control BuildPersonCard(string initial, Label nameLabel, Label infoLabel, Label closenessLabel, GameProgressBar bar, FlowLayoutPanel widthSource)
-    {
-        var card = new UiTheme.BorderedPanel { Height = 128, Margin = new Padding(0, 0, 0, 10), Padding = new Padding(16, 12, 16, 12) };
-        var layout = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            BackColor = UiTheme.SurfaceRaised,
-            Margin = new Padding(0)
-        };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 56));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-
-        var avatar = new UiTheme.BorderedPanel { Width = 48, Height = 48, Margin = new Padding(0, 4, 0, 0), BackColor = UiTheme.Surface, Padding = new Padding(0) };
-        avatar.BorderColor = UiTheme.Accent;
-        var avatarLabel = new Label
-        {
-            Text = initial,
-            Font = UiTheme.FontHeading,
-            ForeColor = UiTheme.Accent,
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleCenter,
-            BackColor = UiTheme.Surface,
-            Margin = new Padding(0)
-        };
-        avatar.Controls.Add(avatarLabel);
-        layout.Controls.Add(avatar, 0, 0);
-
-        var infoFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = false, BackColor = UiTheme.SurfaceRaised, Margin = new Padding(8, 0, 0, 0) };
-        nameLabel.Text = "";
-        nameLabel.Font = UiTheme.FontBodyBold;
-        nameLabel.ForeColor = UiTheme.TextPrimary;
-        nameLabel.AutoSize = true;
-        nameLabel.Margin = new Padding(0, 0, 0, 1);
-        infoLabel.Text = "";
-        infoLabel.Font = UiTheme.FontSmall;
-        infoLabel.ForeColor = UiTheme.TextSecondary;
-        infoLabel.AutoSize = true;
-        infoLabel.Margin = new Padding(0, 0, 0, 6);
-        closenessLabel.Text = "Closeness";
-        closenessLabel.Font = UiTheme.FontSmall;
-        closenessLabel.ForeColor = UiTheme.TextMuted;
-        closenessLabel.AutoSize = true;
-        closenessLabel.Margin = new Padding(0, 0, 0, 2);
-        bar.Height = 10;
-        bar.Width = 260;
-        bar.Margin = new Padding(0, 0, 0, 0);
-        infoFlow.Controls.Add(nameLabel);
-        infoFlow.Controls.Add(infoLabel);
-        infoFlow.Controls.Add(closenessLabel);
-        infoFlow.Controls.Add(bar);
-        TrackWidth(infoFlow, bar);
-        layout.Controls.Add(infoFlow, 1, 0);
-
-        card.Controls.Add(layout);
-        return card;
+        column.Controls.Add(friendsCard);
+        UiLayout.TrackWidth(column, friendsCard);
     }
 
     private void RefreshPeopleScreen()
     {
-        _lblMotherName.Text = _player.Family.Mother.Name;
-        _lblMotherInfo.Text = $"Mother · Age {_player.Family.Mother.GetAge(_clock)}";
-        _lblMotherCloseness.Text = $"Closeness  {_player.Relationships.MotherRelationship.Closeness:F1}";
-        _barMotherCloseness.Configure(0, 100);
-        _barMotherCloseness.Value = _player.Relationships.MotherRelationship.Closeness;
+        _motherCard.NameLabel.Text = _player.Family.Mother.Name;
+        _motherCard.RoleTag.Text = "MOTHER";
+        _motherCard.InfoLabel.Text = $"Age {_player.Family.Mother.GetAge(_clock)}";
+        _motherCard.ClosenessValue.Text = $"Closeness  {_player.Relationships.MotherRelationship.Closeness:F1}";
+        _motherCard.ClosenessBar.Configure(0, 100);
+        _motherCard.ClosenessBar.Value = _player.Relationships.MotherRelationship.Closeness;
 
-        _lblFatherName.Text = _player.Family.Father.Name;
-        _lblFatherInfo.Text = $"Father · Age {_player.Family.Father.GetAge(_clock)}";
-        _lblFatherCloseness.Text = $"Closeness  {_player.Relationships.FatherRelationship.Closeness:F1}";
-        _barFatherCloseness.Configure(0, 100);
-        _barFatherCloseness.Value = _player.Relationships.FatherRelationship.Closeness;
+        _fatherCard.NameLabel.Text = _player.Family.Father.Name;
+        _fatherCard.RoleTag.Text = "FATHER";
+        _fatherCard.InfoLabel.Text = $"Age {_player.Family.Father.GetAge(_clock)}";
+        _fatherCard.ClosenessValue.Text = $"Closeness  {_player.Relationships.FatherRelationship.Closeness:F1}";
+        _fatherCard.ClosenessBar.Configure(0, 100);
+        _fatherCard.ClosenessBar.Value = _player.Relationships.FatherRelationship.Closeness;
     }
 
     // =====================================================================
@@ -981,165 +914,149 @@ public class MainForm : Form
 
     private void BuildMoreScreen()
     {
-        var flow = CreateScreenFlow();
-        _screenMore.Controls.Add(flow);
+        var host = UiLayout.CreateCenteredColumn(UiTheme.ContentMaxWidth, 30, out var column);
+        _screenMore.Controls.Add(host);
 
-        flow.Controls.Add(new Label { Text = "MORE", Font = UiTheme.FontTitle, ForeColor = UiTheme.TextPrimary, AutoSize = true, Margin = new Padding(2, 4, 0, 12) });
+        column.Controls.Add(UiLayout.CreateScreenTitle("MORE", "Character, records, and settings."));
 
-        void AddMenu(string label, string targetKey)
+        var menuGrid = new FlowLayoutPanel
         {
-            var btn = new Button { Text = label, Margin = new Padding(0, 0, 0, 8), Height = 52 };
-            UiTheme.ApplySecondaryButtonStyle(btn);
-            btn.Click += (s, e) => ShowScreen(targetKey);
-            flow.Controls.Add(btn);
-            TrackWidth(flow, btn);
-        }
-
-        AddMenu("CHARACTER", "character");
-        AddMenu("EDUCATION", "education");
-        AddMenu("SAVE / LOAD", "saveload");
-        AddMenu("SETTINGS", "settings");
-    }
-
-    private static Button BuildBackButton(FlowLayoutPanel flow)
-    {
-        var btn = new Button { Text = "Back", AutoSize = true, Margin = new Padding(0, 0, 0, 10) };
-        UiTheme.ApplySecondaryButtonStyle(btn);
-        btn.Click += (s, e) => { /* target set by caller */ };
-        return btn;
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true,
+            AutoSize = true,
+            BackColor = UiTheme.Background,
+            Margin = new Padding(0)
+        };
+        UiLayout.EnableCardSizing(menuGrid, minCardWidth: 300, maxCardWidth: 560, gutter: UiTheme.SpaceSm);
+        menuGrid.Controls.Add(new UiLayout.MenuCard("CHARACTER", "Attributes, traits, and skills", () => ShowScreen("character")));
+        menuGrid.Controls.Add(new UiLayout.MenuCard("EDUCATION", "School and academic progress", () => ShowScreen("education")));
+        menuGrid.Controls.Add(new UiLayout.MenuCard("SAVE / LOAD", "Manage game data", () => ShowScreen("saveload")));
+        menuGrid.Controls.Add(new UiLayout.MenuCard("SETTINGS", "Interface and game preferences", () => ShowScreen("settings")));
+        column.Controls.Add(menuGrid);
+        UiLayout.TrackWidth(column, menuGrid);
     }
 
     private void BuildCharacterScreen()
     {
-        var flow = CreateScreenFlow();
-        _screenCharacter.Controls.Add(flow);
+        var bodyHost = CreateTwoColumnBody(UiTheme.ContentMaxWidth, 50, out _charLeft, out _charRight);
 
-        var back = new Button { Text = "Back", AutoSize = true, Margin = new Padding(0, 0, 0, 10) };
-        UiTheme.ApplySecondaryButtonStyle(back);
-        back.Click += (s, e) => ShowScreen("more");
-        flow.Controls.Add(back);
+        var host = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Background, Margin = new Padding(0) };
+        var headerHost = UiLayout.CreateCenteredColumn(UiTheme.ContentMaxWidth, 30, out var headerColumn);
+        headerColumn.Controls.Add(UiLayout.CreateScreenTitle("CHARACTER", "Your character sheet."));
+        headerColumn.Height = 70;
+        headerHost.Height = 70;
+        headerHost.Dock = DockStyle.Top;
+        bodyHost.Dock = DockStyle.Fill;
+        host.Controls.Add(bodyHost);
+        host.Controls.Add(headerHost);
+        _screenCharacter.Controls.Add(host);
 
-        var identityCard = new UiTheme.BorderedPanel { Height = 88, Margin = new Padding(0, 0, 0, 10), Padding = new Padding(18, 12, 18, 10) };
+        // LEFT: identity + attributes
+        var identityCard = new UiTheme.BorderedPanel { Height = 116, Margin = new Padding(0, 0, 0, UiTheme.SpaceMd), Padding = new Padding(UiTheme.SpaceLg, UiTheme.SpaceMd, UiTheme.SpaceMd, UiTheme.SpaceMd) };
         var identityFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = UiTheme.SurfaceRaised, Margin = new Padding(0) };
-        _lblCharAgeStage = new Label { Text = "Age 0 · Infant", Font = UiTheme.FontHeading, ForeColor = UiTheme.TextPrimary, AutoSize = true };
-        identityFlow.Controls.Add(_lblCharAgeStage);
+        _lblCharAge = new Label { Text = "Age 0", Font = UiTheme.FontDisplay, ForeColor = UiTheme.TextPrimary, AutoSize = true, Margin = new Padding(0) };
+        _lblCharStage = new Label { Text = "Infant", Font = UiTheme.FontBody, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(2, 0, 0, 0) };
+        identityFlow.Controls.Add(_lblCharAge);
+        identityFlow.Controls.Add(_lblCharStage);
         identityCard.Controls.Add(identityFlow);
-        flow.Controls.Add(identityCard);
-        TrackWidth(flow, identityCard);
+        _charLeft.Controls.Add(identityCard);
+        UiLayout.TrackWidth(_charLeft, identityCard);
 
-        flow.Controls.Add(new Label { Text = "ATTRIBUTES", Font = UiTheme.FontSection, ForeColor = UiTheme.TextMuted, AutoSize = true, Margin = new Padding(2, 6, 0, 6) });
-        _lblIntel = new Label();
-        _lblFitness = new Label();
-        _lblSocial = new Label();
-        _lblDiscipline = new Label();
-        _lblCreativity = new Label();
-        flow.Controls.Add(BuildStatRow("Intelligence", _lblIntel, null, flow));
-        flow.Controls.Add(BuildStatRow("Fitness", _lblFitness, null, flow));
-        flow.Controls.Add(BuildStatRow("Social", _lblSocial, null, flow));
-        flow.Controls.Add(BuildStatRow("Discipline", _lblDiscipline, null, flow));
-        flow.Controls.Add(BuildStatRow("Creativity", _lblCreativity, null, flow));
+        _charLeft.Controls.Add(UiTheme.CreateTag("ATTRIBUTES"));
+        AddStatRows(_charLeft, new[] { "Intelligence", "Fitness", "Social", "Discipline", "Creativity" });
 
-        flow.Controls.Add(new Label { Text = "TRAITS", Font = UiTheme.FontSection, ForeColor = UiTheme.TextMuted, AutoSize = true, Margin = new Padding(2, 10, 0, 6) });
-        _lblConfidence = new Label();
-        _lblCuriosity = new Label();
-        _lblPatience = new Label();
-        _lblAmbition = new Label();
-        _lblEmpathy = new Label();
-        flow.Controls.Add(BuildStatRow("Confidence", _lblConfidence, null, flow));
-        flow.Controls.Add(BuildStatRow("Curiosity", _lblCuriosity, null, flow));
-        flow.Controls.Add(BuildStatRow("Patience", _lblPatience, null, flow));
-        flow.Controls.Add(BuildStatRow("Ambition", _lblAmbition, null, flow));
-        flow.Controls.Add(BuildStatRow("Empathy", _lblEmpathy, null, flow));
+        // RIGHT: traits + skills
+        _charRight.Controls.Add(UiTheme.CreateTag("TRAITS"));
+        AddStatRows(_charRight, new[] { "Confidence", "Curiosity", "Patience", "Ambition", "Empathy" });
 
-        flow.Controls.Add(new Label { Text = "SKILLS", Font = UiTheme.FontSection, ForeColor = UiTheme.TextMuted, AutoSize = true, Margin = new Padding(2, 10, 0, 6) });
-        var skillCard = new UiTheme.BorderedPanel { Height = 108, Margin = new Padding(0, 0, 0, 10), Padding = new Padding(18, 12, 18, 10) };
+        _charRight.Controls.Add(UiTheme.CreateTag("SKILLS"));
+        var skillCard = new UiTheme.BorderedPanel { Height = 128, Margin = new Padding(0, 0, 0, UiTheme.SpaceMd), Padding = new Padding(UiTheme.SpaceLg, UiTheme.SpaceMd, UiTheme.SpaceMd, UiTheme.SpaceMd) };
         var skillFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = UiTheme.SurfaceRaised, Margin = new Padding(0) };
-        _lblAcademics = new Label { Text = "Academics — Level 0", Font = UiTheme.FontBodyBold, ForeColor = UiTheme.TextPrimary, AutoSize = true, Margin = new Padding(0, 0, 0, 6) };
-        _barAcademics.Height = 10;
-        _barAcademics.Width = 380;
+        _lblAcademics = new Label { Text = "Academics — Level 0", Font = UiTheme.FontValue, ForeColor = UiTheme.TextPrimary, AutoSize = true, Margin = new Padding(0, 0, 0, UiTheme.SpaceSm) };
+        _barAcademics = new GameProgressBar { Height = 10, Width = 360, Margin = new Padding(0, 0, 0, UiTheme.SpaceXs) };
+        _lblAcademicsXp = new Label { Text = "", Font = UiTheme.FontSmall, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(0, 0, 0, 0) };
         skillFlow.Controls.Add(_lblAcademics);
         skillFlow.Controls.Add(_barAcademics);
-        TrackWidth(skillFlow, _barAcademics);
+        UiLayout.TrackWidth(skillFlow, _barAcademics);
+        skillFlow.Controls.Add(_lblAcademicsXp);
         skillCard.Controls.Add(skillFlow);
-        flow.Controls.Add(skillCard);
-        TrackWidth(flow, skillCard);
+        _charRight.Controls.Add(skillCard);
+        UiLayout.TrackWidth(_charRight, skillCard);
     }
 
-    private Control BuildStatRow(string name, Label valueLabel, GameProgressBar? bar, FlowLayoutPanel widthSource)
+    private void AddStatRows(FlowLayoutPanel flow, string[] names)
     {
-        var row = new TableLayoutPanel
+        foreach (var name in names)
         {
-            ColumnCount = 3,
-            AutoSize = true,
-            BackColor = UiTheme.Background,
-            Margin = new Padding(0, 1, 0, 1)
-        };
-        row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
-        row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70));
-        row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            var valueLabel = new Label();
+            var bar = new GameProgressBar { Height = 8 };
+            _charValues[name] = valueLabel;
+            _charBars[name] = bar;
 
-        row.Controls.Add(new Label { Text = name, Font = UiTheme.FontBody, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(2, 6, 0, 0) }, 0, 0);
+            var row = new TableLayoutPanel
+            {
+                ColumnCount = 3,
+                AutoSize = true,
+                BackColor = UiTheme.Background,
+                Margin = new Padding(0, 2, 0, 2)
+            };
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 116));
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 64));
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
-        valueLabel.Text = "0";
-        valueLabel.Font = UiTheme.FontBodyBold;
-        valueLabel.ForeColor = UiTheme.TextPrimary;
-        valueLabel.AutoSize = true;
-        valueLabel.Margin = new Padding(0, 6, 0, 0);
-        row.Controls.Add(valueLabel, 1, 0);
+            row.Controls.Add(new Label { Text = name, Font = UiTheme.FontBody, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(UiTheme.SpaceXs, 6, 0, 0) }, 0, 0);
 
-        if (bar != null)
-        {
-            bar.Height = 10;
-            bar.Margin = new Padding(0, 9, 0, 0);
+            valueLabel.Text = "0";
+            valueLabel.Font = UiTheme.FontBodyBold;
+            valueLabel.ForeColor = UiTheme.TextPrimary;
+            valueLabel.AutoSize = true;
+            valueLabel.Margin = new Padding(0, 6, 0, 0);
+            row.Controls.Add(valueLabel, 1, 0);
+
+            bar.Margin = new Padding(UiTheme.SpaceSm, 10, 0, 0);
+            bar.Width = 180;
             row.Controls.Add(bar, 2, 0);
-        }
-        else
-        {
-            var inlineBar = new GameProgressBar { Height = 10, Margin = new Padding(8, 9, 0, 0) };
-            inlineBar.Tag = name;
-            row.Controls.Add(inlineBar, 2, 0);
-            _charBars[name] = inlineBar;
-        }
 
-        void Apply() => row.Width = Math.Max(260, widthSource.ClientSize.Width - row.Margin.Horizontal);
-        widthSource.Resize += (s, e) => Apply();
-        return row;
+            void Apply() => row.Width = Math.Max(240, flow.ClientSize.Width - row.Margin.Horizontal - UiTheme.SpaceXs);
+            flow.Resize += (s, e) => Apply();
+            flow.Controls.Add(row);
+            Apply();
+        }
     }
-
-    private readonly Dictionary<string, GameProgressBar> _charBars = new();
 
     private void RefreshCharacterScreen()
     {
-        _lblCharAgeStage.Text = $"Age {_player.Age} · {_player.LifeStage}";
-
-        _lblIntel.Text = FormatStat(_player.Attributes.Intelligence);
-        _lblFitness.Text = FormatStat(_player.Attributes.Fitness);
-        _lblSocial.Text = FormatStat(_player.Attributes.Social);
-        _lblDiscipline.Text = FormatStat(_player.Attributes.Discipline);
-        _lblCreativity.Text = FormatStat(_player.Attributes.Creativity);
-
-        _lblConfidence.Text = FormatStat(_player.Traits.Confidence);
-        _lblCuriosity.Text = FormatStat(_player.Traits.Curiosity);
-        _lblPatience.Text = FormatStat(_player.Traits.Patience);
-        _lblAmbition.Text = FormatStat(_player.Traits.Ambition);
-        _lblEmpathy.Text = FormatStat(_player.Traits.Empathy);
+        _lblCharAge.Text = $"Age {_player.Age}";
+        _lblCharStage.Text = _player.LifeStage.ToString();
 
         foreach (var pair in _charBars)
         {
             pair.Value.Configure(0, 100);
         }
-        if (_charBars.TryGetValue("Intelligence", out var b1)) b1.Value = _player.Attributes.Intelligence;
-        if (_charBars.TryGetValue("Fitness", out var b2)) b2.Value = _player.Attributes.Fitness;
-        if (_charBars.TryGetValue("Social", out var b3)) b3.Value = _player.Attributes.Social;
-        if (_charBars.TryGetValue("Discipline", out var b4)) b4.Value = _player.Attributes.Discipline;
-        if (_charBars.TryGetValue("Creativity", out var b5)) b5.Value = _player.Attributes.Creativity;
-        if (_charBars.TryGetValue("Confidence", out var b6)) b6.Value = _player.Traits.Confidence;
-        if (_charBars.TryGetValue("Curiosity", out var b7)) b7.Value = _player.Traits.Curiosity;
-        if (_charBars.TryGetValue("Patience", out var b8)) b8.Value = _player.Traits.Patience;
-        if (_charBars.TryGetValue("Ambition", out var b9)) b9.Value = _player.Traits.Ambition;
-        if (_charBars.TryGetValue("Empathy", out var b10)) b10.Value = _player.Traits.Empathy;
+        _charValues["Intelligence"].Text = FormatStat(_player.Attributes.Intelligence);
+        _charValues["Fitness"].Text = FormatStat(_player.Attributes.Fitness);
+        _charValues["Social"].Text = FormatStat(_player.Attributes.Social);
+        _charValues["Discipline"].Text = FormatStat(_player.Attributes.Discipline);
+        _charValues["Creativity"].Text = FormatStat(_player.Attributes.Creativity);
+        _charValues["Confidence"].Text = FormatStat(_player.Traits.Confidence);
+        _charValues["Curiosity"].Text = FormatStat(_player.Traits.Curiosity);
+        _charValues["Patience"].Text = FormatStat(_player.Traits.Patience);
+        _charValues["Ambition"].Text = FormatStat(_player.Traits.Ambition);
+        _charValues["Empathy"].Text = FormatStat(_player.Traits.Empathy);
+
+        _charBars["Intelligence"].Value = _player.Attributes.Intelligence;
+        _charBars["Fitness"].Value = _player.Attributes.Fitness;
+        _charBars["Social"].Value = _player.Attributes.Social;
+        _charBars["Discipline"].Value = _player.Attributes.Discipline;
+        _charBars["Creativity"].Value = _player.Attributes.Creativity;
+        _charBars["Confidence"].Value = _player.Traits.Confidence;
+        _charBars["Curiosity"].Value = _player.Traits.Curiosity;
+        _charBars["Patience"].Value = _player.Traits.Patience;
+        _charBars["Ambition"].Value = _player.Traits.Ambition;
+        _charBars["Empathy"].Value = _player.Traits.Empathy;
 
         _lblAcademics.Text = $"Academics — Level {_player.Skills.Academics.Level}";
+        _lblAcademicsXp.Text = $"{_player.Skills.Academics.Experience:N0} / {SkillProgress.MaxExperience:N0} XP";
         _barAcademics.Configure(0, SkillProgress.MaxExperience);
         _barAcademics.Value = _player.Skills.Academics.Experience;
     }
@@ -1148,26 +1065,23 @@ public class MainForm : Form
 
     private void BuildEducationScreen()
     {
-        var flow = CreateScreenFlow();
-        _screenEducation.Controls.Add(flow);
+        var host = UiLayout.CreateCenteredColumn(UiTheme.ContentMaxWidth, 30, out var column);
+        _screenEducation.Controls.Add(host);
 
-        var back = new Button { Text = "Back", AutoSize = true, Margin = new Padding(0, 0, 0, 10) };
-        UiTheme.ApplySecondaryButtonStyle(back);
-        back.Click += (s, e) => ShowScreen("more");
-        flow.Controls.Add(back);
+        column.Controls.Add(UiLayout.CreateScreenTitle("EDUCATION", "Formal learning and academic progress."));
 
-        var card = new UiTheme.BorderedPanel { Height = 300, Margin = new Padding(0, 0, 0, 10), Padding = new Padding(18, 14, 18, 12) };
+        var card = new UiTheme.BorderedPanel { Height = 330, Margin = new Padding(0, 0, 0, 0), Padding = new Padding(UiTheme.SpaceLg, UiTheme.SpaceMd, UiTheme.SpaceMd, UiTheme.SpaceMd) };
         var cardFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = UiTheme.SurfaceRaised, Margin = new Padding(0) };
 
-        _lblEduTitle = new Label { Text = "PRIMARY SCHOOL", Font = UiTheme.FontHeading, ForeColor = UiTheme.TextPrimary, AutoSize = true, Margin = new Padding(0, 0, 0, 6) };
-        _lblEduGrade = new Label { Text = "", Font = UiTheme.FontBody, ForeColor = UiTheme.TextSecondary, AutoSize = true };
-        _lblEduProgress = new Label { Text = "Education Progress", Font = UiTheme.FontSmall, ForeColor = UiTheme.TextMuted, AutoSize = true, Margin = new Padding(0, 8, 0, 2) };
-        _barEduProgress = new GameProgressBar { Height = 10, Width = 380 };
-        _lblEduYear = new Label { Text = "", Font = UiTheme.FontBody, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(0, 6, 0, 0) };
-        _lblEduAcademics = new Label { Text = "", Font = UiTheme.FontBody, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(0, 2, 0, 0) };
-        _lblEduStatus = new Label { Text = "", Font = UiTheme.FontBody, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(0, 2, 0, 0) };
+        _lblEduTitle = new Label { Text = "PRIMARY SCHOOL", Font = UiTheme.FontHeading, ForeColor = UiTheme.TextPrimary, AutoSize = true, Margin = new Padding(0, 0, 0, UiTheme.SpaceXs) };
+        _lblEduGrade = new Label { Text = "", Font = UiTheme.FontBody, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(0, 0, 0, UiTheme.SpaceSm) };
+        _lblEduProgress = new Label { Text = "Education Progress", Font = UiTheme.FontTag, ForeColor = UiTheme.TextMuted, AutoSize = true, Margin = new Padding(0, UiTheme.SpaceSm, 0, 2) };
+        _barEduProgress = new GameProgressBar { Height = 10, Width = 380, Margin = new Padding(0, 0, 0, UiTheme.SpaceSm) };
+        _lblEduYear = new Label { Text = "", Font = UiTheme.FontBody, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(0, UiTheme.SpaceXs, 0, 0) };
+        _lblEduAcademics = new Label { Text = "", Font = UiTheme.FontBody, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(0, UiTheme.SpaceXs, 0, 0) };
+        _lblEduStatus = new Label { Text = "", Font = UiTheme.FontBody, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(0, UiTheme.SpaceXs, 0, 0) };
 
-        _btnEnroll = new Button { Text = "Enroll in Primary School", AutoSize = true, Margin = new Padding(0, 10, 0, 0) };
+        _btnEnroll = new Button { Text = "Enroll in Primary School", AutoSize = true, Margin = new Padding(0, UiTheme.SpaceMd, 0, 0) };
         UiTheme.ApplyPrimaryButtonStyle(_btnEnroll);
         _btnEnroll.Click += (s, e) =>
         {
@@ -1179,7 +1093,7 @@ public class MainForm : Form
             RefreshUI();
         };
 
-        _lblEduFeedback = new Label { Text = "", Font = UiTheme.FontSmall, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(0, 6, 0, 0) };
+        _lblEduFeedback = new Label { Text = "", Font = UiTheme.FontSmall, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(0, UiTheme.SpaceSm, 0, 0) };
 
         cardFlow.Controls.Add(_lblEduTitle);
         cardFlow.Controls.Add(_lblEduGrade);
@@ -1190,10 +1104,10 @@ public class MainForm : Form
         cardFlow.Controls.Add(_lblEduStatus);
         cardFlow.Controls.Add(_btnEnroll);
         cardFlow.Controls.Add(_lblEduFeedback);
-        TrackWidth(cardFlow, _barEduProgress);
+        UiLayout.TrackWidth(cardFlow, _barEduProgress);
         card.Controls.Add(cardFlow);
-        flow.Controls.Add(card);
-        TrackWidth(flow, card);
+        column.Controls.Add(card);
+        UiLayout.TrackWidth(column, card);
     }
 
     private void RefreshEducationScreen()
@@ -1215,11 +1129,10 @@ public class MainForm : Form
             {
                 _lblEduTitle.Text = "PRIMARY SCHOOL";
                 _lblEduGrade.Text = $"Grade {_player.Education.PrimaryGrade}";
-                _lblEduProgress.Text = "Education Progress";
                 _barEduProgress.Visible = true;
                 _barEduProgress.Configure(0, 100);
                 _barEduProgress.Value = _player.Education.EducationProgress;
-                _lblEduProgress.Text = $"Education Progress   {_player.Education.EducationProgress} / 100";
+                _lblEduProgress.Text = $"EDUCATION PROGRESS   {_player.Education.EducationProgress} / 100";
                 long elapsed = Math.Min(_clock.Day - _player.Education.SchoolYearStartDay, 365);
                 _lblEduYear.Text = $"Academic Year — Day {elapsed} / 365";
                 _lblEduAcademics.Text = $"Academics — Level {_player.Skills.Academics.Level}";
@@ -1243,19 +1156,17 @@ public class MainForm : Form
 
     private void BuildSaveLoadScreen()
     {
-        var flow = CreateScreenFlow();
-        _screenSaveLoad.Controls.Add(flow);
+        var host = UiLayout.CreateCenteredColumn(UiTheme.ContentMaxWidth, 30, out var column);
+        _screenSaveLoad.Controls.Add(host);
 
-        var back = new Button { Text = "Back", AutoSize = true, Margin = new Padding(0, 0, 0, 10) };
-        UiTheme.ApplySecondaryButtonStyle(back);
-        back.Click += (s, e) => ShowScreen("more");
-        flow.Controls.Add(back);
+        column.Controls.Add(UiLayout.CreateScreenTitle("SAVE / LOAD", "Manage your game data."));
 
-        var card = new UiTheme.BorderedPanel { Height = 168, Margin = new Padding(0, 0, 0, 10), Padding = new Padding(18, 14, 18, 12) };
+        var card = new UiTheme.BorderedPanel { Height = 210, Margin = new Padding(0, 0, 0, 0), Padding = new Padding(UiTheme.SpaceLg, UiTheme.SpaceMd, UiTheme.SpaceMd, UiTheme.SpaceMd) };
         var cardFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = UiTheme.SurfaceRaised, Margin = new Padding(0) };
-        cardFlow.Controls.Add(new Label { Text = "SAVE / LOAD", Font = UiTheme.FontSection, ForeColor = UiTheme.TextMuted, AutoSize = true, Margin = new Padding(0, 0, 0, 8) });
+        cardFlow.Controls.Add(UiTheme.CreateTag("GAME DATA"));
+        cardFlow.Controls.Add(new Label { Text = "Your progress is stored locally on this computer.", Font = UiTheme.FontBody, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(0, 0, 0, UiTheme.SpaceMd) });
 
-        var saveBtn = new Button { Text = "SAVE GAME", AutoSize = true, Margin = new Padding(0, 0, 10, 0) };
+        var saveBtn = new Button { Text = "SAVE GAME", AutoSize = true, Margin = new Padding(0, 0, UiTheme.SpaceSm, 0) };
         UiTheme.ApplyPrimaryButtonStyle(saveBtn);
         saveBtn.Click += (s, e) =>
         {
@@ -1285,46 +1196,45 @@ public class MainForm : Form
         buttonRow.Controls.Add(saveBtn);
         buttonRow.Controls.Add(loadBtn);
         cardFlow.Controls.Add(buttonRow);
-        _lblSaveFeedback = new Label { Text = "", Font = UiTheme.FontSmall, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(0, 10, 0, 0) };
+        _lblSaveFeedback = new Label { Text = "", Font = UiTheme.FontSmall, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(0, UiTheme.SpaceMd, 0, 0) };
         cardFlow.Controls.Add(_lblSaveFeedback);
         card.Controls.Add(cardFlow);
-        flow.Controls.Add(card);
-        TrackWidth(flow, card);
+        column.Controls.Add(card);
+        UiLayout.TrackWidth(column, card);
     }
 
     private void BuildSettingsScreen()
     {
-        var flow = CreateScreenFlow();
-        _screenSettings.Controls.Add(flow);
+        var host = UiLayout.CreateCenteredColumn(UiTheme.ContentMaxWidth, 30, out var column);
+        _screenSettings.Controls.Add(host);
 
-        var back = new Button { Text = "Back", AutoSize = true, Margin = new Padding(0, 0, 0, 10) };
-        UiTheme.ApplySecondaryButtonStyle(back);
-        back.Click += (s, e) => ShowScreen("more");
-        flow.Controls.Add(back);
+        column.Controls.Add(UiLayout.CreateScreenTitle("SETTINGS", "Interface and game preferences."));
 
-        var card = new UiTheme.BorderedPanel { Height = 128, Margin = new Padding(0, 0, 0, 10), Padding = new Padding(18, 14, 18, 12) };
+        var card = new UiTheme.BorderedPanel { Height = 150, Margin = new Padding(0, 0, 0, 0), Padding = new Padding(UiTheme.SpaceLg, UiTheme.SpaceMd, UiTheme.SpaceMd, UiTheme.SpaceMd) };
         var cardFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = UiTheme.SurfaceRaised, Margin = new Padding(0) };
-        cardFlow.Controls.Add(new Label { Text = "INTERFACE", Font = UiTheme.FontSection, ForeColor = UiTheme.TextMuted, AutoSize = true, Margin = new Padding(0, 0, 0, 6) });
-        cardFlow.Controls.Add(new Label { Text = "More settings will be available later.", Font = UiTheme.FontBody, ForeColor = UiTheme.TextSecondary, AutoSize = true });
+        cardFlow.Controls.Add(UiTheme.CreateTag("INTERFACE"));
+        cardFlow.Controls.Add(new Label { Text = "More settings will be available later.", Font = UiTheme.FontBody, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(0, 0, 0, UiTheme.SpaceMd) });
+        cardFlow.Controls.Add(new Label { Text = "F2 opens the developer God Mode overlay.", Font = UiTheme.FontSmall, ForeColor = UiTheme.TextMuted, AutoSize = true });
         card.Controls.Add(cardFlow);
-        flow.Controls.Add(card);
-        TrackWidth(flow, card);
+        column.Controls.Add(card);
+        UiLayout.TrackWidth(column, card);
     }
 
     // =====================================================================
-    // GOD MODE OVERLAY (F2)
+    // GOD MODE OVERLAY (F2) — top-right floating developer panel
     // =====================================================================
 
     private void BuildGodModeOverlay()
     {
-        _godModePanel = new Panel
+        _godModePanel = new UiTheme.BorderedPanel
         {
-            Dock = DockStyle.Right,
-            Width = 250,
+            Width = 272,
+            Height = 474,
             BackColor = UiTheme.Surface,
             Visible = false,
-            Padding = new Padding(14)
+            Padding = new Padding(UiTheme.SpaceMd, UiTheme.SpaceMd, UiTheme.SpaceMd, UiTheme.SpaceMd)
         };
+        _godModePanel.BorderColor = UiTheme.Warning;
 
         var flow = new FlowLayoutPanel
         {
@@ -1336,12 +1246,12 @@ public class MainForm : Form
             Margin = new Padding(0)
         };
 
-        flow.Controls.Add(new Label { Text = "DEVELOPER — GOD MODE", Font = UiTheme.FontSection, ForeColor = UiTheme.Warning, AutoSize = true, Margin = new Padding(0, 0, 0, 8) });
-        flow.Controls.Add(new Label { Text = "Enabled (F2 to hide)", Font = UiTheme.FontSmall, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(0, 0, 0, 8) });
+        flow.Controls.Add(new Label { Text = "DEVELOPER — GOD MODE", Font = UiTheme.FontSection, ForeColor = UiTheme.Warning, AutoSize = true, Margin = new Padding(0, 0, 0, UiTheme.SpaceXs) });
+        flow.Controls.Add(new Label { Text = "Enabled · F2 to hide", Font = UiTheme.FontSmall, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(0, 0, 0, UiTheme.SpaceSm) });
 
         void AddGodButton(string text, Action action)
         {
-            var btn = new Button { Text = text, Margin = new Padding(0, 0, 0, 6), Width = 214 };
+            var btn = new Button { Text = text, Margin = new Padding(0, 0, 0, UiTheme.SpaceXs), Width = 224 };
             UiTheme.ApplySecondaryButtonStyle(btn);
             btn.Click += (s, e) => { action(); RefreshUI(); };
             flow.Controls.Add(btn);
@@ -1356,8 +1266,21 @@ public class MainForm : Form
         AddGodButton("Max Skills", () => _godMode.MaxSkills());
         AddGodButton("Max Traits", () => _godMode.MaxTraits());
 
+        var closeBtn = new Button { Text = "Close (F2)", Margin = new Padding(0, UiTheme.SpaceSm, 0, 0), Width = 224 };
+        UiTheme.ApplyDangerButtonStyle(closeBtn);
+        closeBtn.Click += (s, e) => { if (_godModeVisible) ToggleGodMode(); };
+        flow.Controls.Add(closeBtn);
+
         _godModePanel.Controls.Add(flow);
         Controls.Add(_godModePanel);
+
+        void PositionOverlay()
+        {
+            _godModePanel.Location = new Point(ClientSize.Width - _godModePanel.Width - UiTheme.SpaceMd, UiTheme.TopBarHeight + UiTheme.SpaceMd);
+            _godModePanel.BringToFront();
+        }
+        Resize += (s, e) => PositionOverlay();
+        PositionOverlay();
     }
 
     // =====================================================================
@@ -1375,7 +1298,7 @@ public class MainForm : Form
         else
         {
             _btnRunToggle.Text = "Paused";
-            _btnRunToggle.ForeColor = UiTheme.TextPrimary;
+            _btnRunToggle.ForeColor = UiTheme.TextSecondary;
         }
     }
 
@@ -1399,8 +1322,8 @@ public class MainForm : Form
 
         RefreshPendingEventCard();
         RefreshTimeline();
-        RefreshCurrentActivityCard();
-        RefreshActivityRows();
+        RefreshCurrentActivityHero();
+        RefreshActivityCards();
         RefreshActivityProgressCard();
         RefreshPeopleScreen();
         RefreshCharacterScreen();
