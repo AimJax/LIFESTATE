@@ -169,7 +169,10 @@ public class PlayerState
             Attributes.AddIntelligence(hoursStudied * 0.05);
             Skills.Academics.AddExperience(hoursStudied * 10);
             if (Education.Status == EducationStatus.PrimarySchool)
-                Education.AddProgress((int)hoursStudied);
+            {
+                int educationHours = (int)Math.Min(hoursStudied, 100L);
+                Education.AddProgress(educationHours);
+            }
             _studyMinutesAccumulator = (int)(totalStudyMinutes % 60);
         }
 

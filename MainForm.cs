@@ -156,6 +156,22 @@ public class MainForm : Form
         };
         panel.Controls.Add(btnLoad);
 
+        var btnEnroll = new Button { Text = "Enroll Primary School" };
+        btnEnroll.Click += (s, e) => {
+            if (_player.Age < 6)
+                _lblFeedback.Text = "Must be at least age 6 to enroll.";
+            else if (_player.Education.Status == EducationStatus.PrimarySchool)
+                _lblFeedback.Text = "Already enrolled in Primary School.";
+            else if (_player.Education.Status == EducationStatus.CompletedPrimary)
+                _lblFeedback.Text = "Primary School already completed.";
+            else if (_player.EnrollPrimarySchool())
+                _lblFeedback.Text = "Enrolled.";
+            else
+                _lblFeedback.Text = "Enrollment failed.";
+            RefreshUI();
+        };
+        panel.Controls.Add(btnEnroll);
+
         var btnToggleGodMode = new Button { Text = "GOD MODE: OFF" };
         _debugPanel = new FlowLayoutPanel { Visible = false, FlowDirection = FlowDirection.TopDown, AutoSize = true };
         btnToggleGodMode.Click += (s, e) => {
