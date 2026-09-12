@@ -114,17 +114,20 @@ public static class UiLayout
     /// <summary>
     /// One resolved life event in the timeline feed: vertical guide rail with a
     /// dot marker, age tag, event title, and muted outcome text.
+    /// <paramref name="onPage"/> renders the entry quietly on the page background
+    /// (a flowing life-history feed) instead of as a raised card.
     /// </summary>
     public sealed class TimelineEntry : Panel
     {
         private readonly bool _isNewest;
 
-        public TimelineEntry(string ageText, string title, string choiceText, bool isNewest)
+        public TimelineEntry(string ageText, string title, string choiceText, bool isNewest, bool onPage = false)
         {
             _isNewest = isNewest;
-            BackColor = UiTheme.SurfaceRaised;
-            Height = 84;
-            Margin = new Padding(0, 0, 0, UiTheme.SpaceXs);
+            Color surface = onPage ? UiTheme.Background : UiTheme.SurfaceRaised;
+            BackColor = surface;
+            Height = onPage ? 78 : 84;
+            Margin = new Padding(0, 0, 0, onPage ? UiTheme.SpaceSm : UiTheme.SpaceXs);
             Padding = new Padding(30, 10, UiTheme.SpaceSm, UiTheme.SpaceSm);
 
             var flow = new FlowLayoutPanel
@@ -132,7 +135,7 @@ public static class UiLayout
                 Dock = DockStyle.Fill,
                 FlowDirection = FlowDirection.TopDown,
                 WrapContents = false,
-                BackColor = UiTheme.SurfaceRaised,
+                BackColor = surface,
                 Margin = new Padding(0)
             };
             flow.Controls.Add(new Label

@@ -28,10 +28,12 @@ public class MainForm : Form
     private readonly Dictionary<string, Panel> _screens = new();
     private readonly Dictionary<string, UiTheme.GameNavButton> _navButtons = new();
 
-    // ---- Life screen ----
+    // ---- Life screen (single centered vertical life feed) ----
     private Panel _screenLife = new();
-    private FlowLayoutPanel _lifeLeft = new();
-    private FlowLayoutPanel _lifeRight = new();
+    private FlowLayoutPanel _lifeColumn = new();
+    private Label _lifeFeedHeader = new();
+    private Label _lifeEmptyLabel = new();
+    private readonly List<Control> _timelineEntries = new();
     private Label _lblLifeAge = new();
     private Label _lblLifeStage = new();
     private Label _lblLifeMoney = new();
@@ -46,7 +48,7 @@ public class MainForm : Form
     private Label _lblPendingEventTitle = new();
     private Label _lblPendingEventDesc = new();
     private FlowLayoutPanel _pendingEventChoices = new();
-    private FlowLayoutPanel _timelineBody = new();
+    private FlowLayoutPanel _pendingEventFlow = new();
     private PendingLifeEvent? _lastRenderedEvent;
     private int _lastTimelineCount = -1;
 
@@ -389,34 +391,85 @@ public class MainForm : Form
     // LIFE SCREEN
     // =====================================================================
 
+    /// <summary>
+    /// Life reads as one centered vertical feed: a compact identity header, a
+    /// compact needs section, an optional pending life event, then the dominant
+    /// life-history feed flowing directly on the page background.
+    /// </summary>
     private void BuildLifeScreen()
     {
-        _screenLife.Controls.Add(CreateTwoColumnBody(UiTheme.LifeContentMaxWidth, 54, out _lifeLeft, out _lifeRight));
+        var host = UiLayout.CreateCenteredColumn(UiTheme.LifeContentMaxWidth, 30, out _lifeColumn);
+        _screenLife.Controls.Add(host);
 
-        // LEFT: identity, activity, needs
-        var identityCard = new UiTheme.BorderedPanel { Height = 158, Margin = new Padding(0, 0, 0, UiTheme.SpaceMd), Padding = new Padding(UiTheme.SpaceLg, UiTheme.SpaceMd, UiTheme.SpaceMd, UiTheme.SpaceMd) };
-        var identityFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = UiTheme.SurfaceRaised, Margin = new Padding(0) };
-        _lblLifeAge = new Label { Text = "Age 0", Font = UiTheme.FontDisplay, ForeColor = UiTheme.TextPrimary, AutoSize = true, Margin = new Padding(0) };
-        _lblLifeStage = new Label { Text = "Infant", Font = UiTheme.FontBody, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(2, 0, 0, UiTheme.SpaceXs) };
-        _lblLifeMoney = new Label { Text = "$1,000", Font = UiTheme.FontValue, ForeColor = UiTheme.Positive, AutoSize = true, Margin = new Padding(0, UiTheme.SpaceXs, 0, 0) };
+        // ---- Compact identity header: age/stage left, money/activity right.
+        var headerCard = new UiTheme.BorderedPanel
+        {
+            Height = 100,
+            BackColor = UiTheme.Surface,
+            Margin = new Padding(0, 0, 0, UiTheme.SpaceMd),
+            Padding = new Padding(UiTheme.SpaceLg, UiTheme.SpaceMd, UiTheme.SpaceLg, UiTheme.SpaceMd)
+        };
+        var headerTable = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            BackColor = UiTheme.Surface,
+            Margin = new Padding(0)
+        };
+        headerTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        headerTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+
+        var identityFlow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            BackColor = UiTheme.Surface,
+            Margin = new Padding(0)
+        };
+        _lblLifeAge = new Label { Text = "Age 0", Font = UiTheme.FontLifeAge, ForeColor = UiTheme.TextPrimary, AutoSize = true, Margin = new Padding(0) };
+        _lblLifeStage = new Label { Text = "Infant", Font = UiTheme.FontBody, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(2, 0, 0, 0) };
         identityFlow.Controls.Add(_lblLifeAge);
         identityFlow.Controls.Add(_lblLifeStage);
-        identityFlow.Controls.Add(_lblLifeMoney);
-        identityCard.Controls.Add(identityFlow);
-        _lifeLeft.Controls.Add(identityCard);
-        UiLayout.TrackWidth(_lifeLeft, identityCard);
 
-        var activityCard = new UiTheme.BorderedPanel { Height = 96, Margin = new Padding(0, 0, 0, UiTheme.SpaceMd), Padding = new Padding(UiTheme.SpaceLg, UiTheme.SpaceMd, UiTheme.SpaceMd, UiTheme.SpaceMd) };
-        var activityFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = UiTheme.SurfaceRaised, Margin = new Padding(0) };
-        activityFlow.Controls.Add(UiTheme.CreateTag("CURRENT ACTIVITY"));
-        _lblLifeActivity = new Label { Text = "Idle", Font = UiTheme.FontHeading, ForeColor = UiTheme.TextPrimary, AutoSize = true, Margin = new Padding(0) };
-        activityFlow.Controls.Add(_lblLifeActivity);
-        activityCard.Controls.Add(activityFlow);
-        _lifeLeft.Controls.Add(activityCard);
-        UiLayout.TrackWidth(_lifeLeft, activityCard);
+        var statusTable = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            BackColor = UiTheme.Surface,
+            Margin = new Padding(0)
+        };
+        statusTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+        statusTable.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        _lblLifeMoney = new Label { Text = "$0", Font = UiTheme.FontValue, ForeColor = UiTheme.Positive, AutoSize = false, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, Margin = new Padding(0) };
+        _lblLifeActivity = new Label { Text = "Currently Idle", Font = UiTheme.FontSmall, ForeColor = UiTheme.TextSecondary, AutoSize = false, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, Margin = new Padding(0) };
+        statusTable.Controls.Add(_lblLifeMoney, 0, 0);
+        statusTable.Controls.Add(_lblLifeActivity, 0, 1);
 
-        var needsCard = new UiTheme.BorderedPanel { Height = 176, Margin = new Padding(0, 0, 0, UiTheme.SpaceMd), Padding = new Padding(UiTheme.SpaceLg, UiTheme.SpaceMd, UiTheme.SpaceMd, UiTheme.SpaceMd) };
-        var needsFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = UiTheme.SurfaceRaised, Margin = new Padding(0) };
+        headerTable.Controls.Add(identityFlow, 0, 0);
+        headerTable.Controls.Add(statusTable, 1, 0);
+        headerCard.Controls.Add(headerTable);
+        _lifeColumn.Controls.Add(headerCard);
+        UiLayout.TrackWidth(_lifeColumn, headerCard);
+
+        // ---- Compact needs section (one section, three long readable bars).
+        var needsCard = new UiTheme.BorderedPanel
+        {
+            Height = 144,
+            BackColor = UiTheme.Surface,
+            Margin = new Padding(0, 0, 0, UiTheme.SpaceMd),
+            Padding = new Padding(UiTheme.SpaceLg, UiTheme.SpaceMd, UiTheme.SpaceLg, UiTheme.SpaceMd)
+        };
+        var needsFlow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            BackColor = UiTheme.Surface,
+            Margin = new Padding(0)
+        };
         needsFlow.Controls.Add(UiTheme.CreateTag("NEEDS"));
         _barEnergy = new GameProgressBar { BarColor = UiTheme.Accent };
         _barHunger = new GameProgressBar { BarColor = UiTheme.Warning };
@@ -425,32 +478,79 @@ public class MainForm : Form
         needsFlow.Controls.Add(CreateNeedRow("Hunger", _barHunger, _lblHungerValue, needsFlow));
         needsFlow.Controls.Add(CreateNeedRow("Thirst", _barThirst, _lblThirstValue, needsFlow));
         needsCard.Controls.Add(needsFlow);
-        _lifeLeft.Controls.Add(needsCard);
-        UiLayout.TrackWidth(_lifeLeft, needsCard);
+        _lifeColumn.Controls.Add(needsCard);
+        UiLayout.TrackWidth(_lifeColumn, needsCard);
 
-        // RIGHT: pending event + life timeline
-        _pendingEventCard = new UiTheme.BorderedPanel { Height = 250, Margin = new Padding(0, 0, 0, UiTheme.SpaceMd), Padding = new Padding(UiTheme.SpaceLg, UiTheme.SpaceMd, UiTheme.SpaceMd, UiTheme.SpaceMd), Visible = false };
+        // ---- Pending event: raised accent card, integrated above the feed.
+        _pendingEventCard = new UiTheme.BorderedPanel
+        {
+            Height = 210,
+            Margin = new Padding(0, 0, 0, UiTheme.SpaceMd),
+            Padding = new Padding(UiTheme.SpaceLg, UiTheme.SpaceMd, UiTheme.SpaceLg, UiTheme.SpaceMd),
+            Visible = false
+        };
         _pendingEventCard.BorderColor = UiTheme.Accent;
-        var pendingFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, BackColor = UiTheme.SurfaceRaised, Margin = new Padding(0) };
-        pendingFlow.Controls.Add(UiTheme.CreateTag("LIFE EVENT", UiTheme.Accent));
+        _pendingEventFlow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            BackColor = UiTheme.SurfaceRaised,
+            Margin = new Padding(0)
+        };
+        _pendingEventFlow.Controls.Add(UiTheme.CreateTag("LIFE EVENT", UiTheme.Accent));
         _lblPendingEventTitle = new Label { Text = "", Font = UiTheme.FontHeading, ForeColor = UiTheme.TextPrimary, AutoSize = true };
         _lblPendingEventDesc = new Label { Text = "", Font = UiTheme.FontBody, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(0, UiTheme.SpaceXs, 0, UiTheme.SpaceSm) };
-        _pendingEventChoices = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, BackColor = UiTheme.SurfaceRaised, Margin = new Padding(0) };
-        pendingFlow.Controls.Add(_lblPendingEventTitle);
-        pendingFlow.Controls.Add(_lblPendingEventDesc);
-        pendingFlow.Controls.Add(_pendingEventChoices);
-        _pendingEventCard.Controls.Add(pendingFlow);
-        _lifeRight.Controls.Add(_pendingEventCard);
-        UiLayout.TrackWidth(_lifeRight, _pendingEventCard);
+        _pendingEventChoices = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, BackColor = UiTheme.SurfaceRaised, Margin = new Padding(0) };
+        _pendingEventFlow.Controls.Add(_lblPendingEventTitle);
+        _pendingEventFlow.Controls.Add(_lblPendingEventDesc);
+        _pendingEventFlow.Controls.Add(_pendingEventChoices);
 
-        var timelineCard = new UiTheme.BorderedPanel { Height = 452, Margin = new Padding(0, 0, 0, 0), Padding = new Padding(UiTheme.SpaceMd, UiTheme.SpaceMd, UiTheme.SpaceMd, UiTheme.SpaceMd) };
-        var timelineHead = new FlowLayoutPanel { Dock = DockStyle.Top, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoSize = true, BackColor = UiTheme.SurfaceRaised, Margin = new Padding(0) };
-        timelineHead.Controls.Add(UiTheme.CreateTag("LIFE TIMELINE"));
-        _timelineBody = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, BackColor = UiTheme.SurfaceRaised, Margin = new Padding(0) };
-        timelineCard.Controls.Add(_timelineBody);
-        timelineCard.Controls.Add(timelineHead);
-        _lifeRight.Controls.Add(timelineCard);
-        UiLayout.TrackWidth(_lifeRight, timelineCard);
+        // Choice buttons span the card so the pending event reads as the primary action.
+        void SizeChoiceButtons()
+        {
+            int w = Math.Max(220, _pendingEventFlow.ClientSize.Width);
+            foreach (Control choice in _pendingEventChoices.Controls) choice.Width = w;
+        }
+        _pendingEventFlow.Resize += (s, e) => SizeChoiceButtons();
+
+        _pendingEventCard.Controls.Add(_pendingEventFlow);
+        _lifeColumn.Controls.Add(_pendingEventCard);
+        UiLayout.TrackWidth(_lifeColumn, _pendingEventCard);
+
+        // ---- Life feed: heading plus entries flowing directly on the page.
+        _lifeFeedHeader = new Label
+        {
+            Text = "LIFE",
+            Font = UiTheme.FontHeading,
+            ForeColor = UiTheme.TextPrimary,
+            AutoSize = true,
+            Margin = new Padding(0, UiTheme.SpaceSm, 0, UiTheme.SpaceSm)
+        };
+        _lifeColumn.Controls.Add(_lifeFeedHeader);
+
+        _lifeEmptyLabel = new Label
+        {
+            Text = "Your life story is just beginning.",
+            Font = UiTheme.FontBody,
+            ForeColor = UiTheme.TextMuted,
+            AutoSize = true,
+            Margin = new Padding(UiTheme.SpaceXs, UiTheme.SpaceSm, 0, 0),
+            Visible = false
+        };
+        _lifeColumn.Controls.Add(_lifeEmptyLabel);
+
+        // Timeline entries track the column in one place (histories can grow large).
+        _lifeColumn.Resize += (s, e) => FitTimelineEntries();
+    }
+
+    private void FitTimelineEntries()
+    {
+        int width = Math.Max(240, _lifeColumn.ClientSize.Width);
+        foreach (var entry in _timelineEntries)
+        {
+            entry.Width = width - entry.Margin.Horizontal;
+        }
     }
 
     private static TableLayoutPanel CreateNeedRow(string name, GameProgressBar bar, Label valueLabel, FlowLayoutPanel widthSource)
@@ -458,8 +558,11 @@ public class MainForm : Form
         var row = new TableLayoutPanel
         {
             ColumnCount = 3,
-            AutoSize = true,
-            BackColor = UiTheme.SurfaceRaised,
+            // Fixed height + explicit width: an auto-sized row would collapse the
+            // percent bar column instead of stretching the gauge.
+            AutoSize = false,
+            Height = 24,
+            BackColor = UiTheme.Surface,
             Margin = new Padding(0, 2, 0, 2)
         };
         row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 76));
@@ -468,16 +571,16 @@ public class MainForm : Form
 
         row.Controls.Add(new Label { Text = name, Font = UiTheme.FontBody, ForeColor = UiTheme.TextSecondary, AutoSize = true, Margin = new Padding(0, 5, 0, 0) }, 0, 0);
 
-        bar.Height = 12;
-        bar.Margin = new Padding(0, 9, UiTheme.SpaceSm, 0);
-        bar.Width = 200;
+        // Fill the middle column so bars read as long gauges rather than tiny chips.
+        bar.Dock = DockStyle.Fill;
+        bar.Margin = new Padding(0, 5, UiTheme.SpaceSm, 5);
         row.Controls.Add(bar, 1, 0);
 
         valueLabel.Text = "100";
         valueLabel.Font = UiTheme.FontSmall;
         valueLabel.ForeColor = UiTheme.TextPrimary;
         valueLabel.AutoSize = true;
-        valueLabel.Margin = new Padding(0, 6, 0, 0);
+        valueLabel.Margin = new Padding(0, 5, 0, 0);
         row.Controls.Add(valueLabel, 2, 0);
 
         void Apply() => row.Width = Math.Max(220, widthSource.ClientSize.Width - row.Margin.Horizontal - UiTheme.SpaceXs);
@@ -510,11 +613,15 @@ public class MainForm : Form
 
         _lblPendingEventTitle.Text = definition.Title;
         _lblPendingEventDesc.Text = definition.Description;
+        // Height follows the number of choices so the card never presumes a size.
+        _pendingEventCard.Height = 124 + definition.Choices.Count * (UiTheme.ButtonHeight + UiTheme.SpaceSm);
         foreach (var choice in definition.Choices)
         {
             var captured = choice;
-            var btn = new Button { Text = captured.Text, AutoSize = true, Margin = new Padding(0, 2, 0, 2) };
+            var btn = new Button { Text = captured.Text, AutoSize = false, Height = UiTheme.ButtonHeight, Width = 320, Margin = new Padding(0, 0, 0, UiTheme.SpaceSm) };
             UiTheme.ApplyPrimaryButtonStyle(btn);
+            btn.AutoSize = false;
+            btn.Height = UiTheme.ButtonHeight;
             btn.Click += (s, e) =>
             {
                 if (_player.ResolveEventChoice(captured.Id))
@@ -532,6 +639,12 @@ public class MainForm : Form
         _pendingEventCard.Visible = true;
     }
 
+    /// <summary>
+    /// Rebuilds the life-history feed only when the history actually changes, so
+    /// the per-second refresh never resets scroll position or flickers. Entries
+    /// flow directly in the page column beneath the LIFE heading, which keeps the
+    /// feed dominant and avoids a giant empty timeline panel.
+    /// </summary>
     private void RefreshTimeline()
     {
         if (_player.Events.History.Count == _lastTimelineCount)
@@ -540,25 +653,21 @@ public class MainForm : Form
         }
         _lastTimelineCount = _player.Events.History.Count;
 
-        for (int i = _timelineBody.Controls.Count - 1; i >= 0; i--)
-        {
-            _timelineBody.Controls.RemoveAt(i);
-        }
+        _lifeColumn.SuspendLayout();
+        foreach (var entry in _timelineEntries) _lifeColumn.Controls.Remove(entry);
+        _timelineEntries.Clear();
 
         if (_player.Events.History.Count == 0)
         {
-            _timelineBody.Controls.Add(new Label
-            {
-                Text = "Your life story is just beginning.",
-                Font = UiTheme.FontBody,
-                ForeColor = UiTheme.TextMuted,
-                AutoSize = true,
-                Margin = new Padding(UiTheme.SpaceXs, UiTheme.SpaceSm, 0, 0)
-            });
+            _lifeEmptyLabel.Visible = true;
+            _lifeColumn.ResumeLayout();
             return;
         }
+        _lifeEmptyLabel.Visible = false;
 
         // Newest first; the newest entry carries the accent marker.
+        int insertAt = _lifeColumn.Controls.GetChildIndex(_lifeFeedHeader) + 1;
+        int width = Math.Max(240, _lifeColumn.ClientSize.Width);
         bool isFirst = true;
         foreach (var entry in _player.Events.History.Reverse())
         {
@@ -567,9 +676,14 @@ public class MainForm : Form
             string choiceText = definition?.Choices.FirstOrDefault(c => c.Id == entry.ChoiceId)?.Text ?? entry.ChoiceId;
             int age = (int)(entry.TriggeredDay / 365);
 
-            _timelineBody.Controls.Add(new UiLayout.TimelineEntry($"AGE {age}", title, choiceText, isFirst));
+            var row = new UiLayout.TimelineEntry($"AGE {age}", title, choiceText, isFirst, onPage: true);
+            row.Width = width - row.Margin.Horizontal;
+            _lifeColumn.Controls.Add(row);
+            _lifeColumn.Controls.SetChildIndex(row, insertAt++);
+            _timelineEntries.Add(row);
             isFirst = false;
         }
+        _lifeColumn.ResumeLayout();
     }
 
     // =====================================================================
@@ -781,7 +895,7 @@ public class MainForm : Form
     private void RefreshCurrentActivityHero()
     {
         string name = CurrentActivityName(_player);
-        _lblLifeActivity.Text = name;
+        _lblLifeActivity.Text = name == "Idle" ? "Currently Idle" : $"Currently {name}";
         _lblCurrentActivityName.Text = name.ToUpperInvariant();
 
         if (name == "Idle")
@@ -1308,7 +1422,7 @@ public class MainForm : Form
 
         _lblLifeAge.Text = $"Age {_player.Age}";
         _lblLifeStage.Text = _player.LifeStage.ToString();
-        _lblLifeMoney.Text = $"{_player.Money:N0}";
+        _lblLifeMoney.Text = $"${_player.Money:N0}";
 
         _lblEnergyValue.Text = _player.Energy.ToString();
         _lblHungerValue.Text = _player.Hunger.ToString();

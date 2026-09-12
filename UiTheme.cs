@@ -44,7 +44,8 @@ public static class UiTheme
 
     // ---- Size system -----------------------------------------------------
     public const int ContentMaxWidth = 1180;
-    public const int LifeContentMaxWidth = 1240;
+    /// <summary>Life is a single vertical feed, so it uses a narrower reading column.</summary>
+    public const int LifeContentMaxWidth = 1000;
     public const int TopBarHeight = 56;
     public const int NavHeight = 64;
     public const int CardPadding = 18;
@@ -55,6 +56,8 @@ public static class UiTheme
     public static readonly Font FontTitle = new("Segoe UI", 20f, FontStyle.Bold);
     public static readonly Font FontScreenTitle = new("Segoe UI", 16f, FontStyle.Bold);
     public static readonly Font FontDisplay = new("Segoe UI", 24f, FontStyle.Bold);
+    /// <summary>Life identity age: the strongest value on the screen, but kept inside the heading range.</summary>
+    public static readonly Font FontLifeAge = new("Segoe UI", 20f, FontStyle.Bold);
     public static readonly Font FontHeading = new("Segoe UI", 15f, FontStyle.Bold);
     public static readonly Font FontValue = new("Segoe UI", 12.5f, FontStyle.Bold);
     public static readonly Font FontSection = new("Segoe UI", 10.5f, FontStyle.Bold);
