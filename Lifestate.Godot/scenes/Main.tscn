@@ -1,0 +1,103 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/MainScreen.gd" id="1_mainscreen"]
+
+[node name="Main" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_mainscreen")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.0509804, 0.0666667, 0.0901961, 1)
+
+[node name="Layout" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 0
+
+[node name="TopBar" type="PanelContainer" parent="Layout"]
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+
+[node name="TopBarRow" type="HBoxContainer" parent="Layout/TopBar"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="TitleLabel" type="Label" parent="Layout/TopBar/TopBarRow"]
+layout_mode = 2
+size_flags_vertical = 4
+text = "LIFESTATE"
+theme_override_font_sizes/font_size = 22
+
+[node name="TopSpacer" type="Control" parent="Layout/TopBar/TopBarRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+
+[node name="ClockLabel" type="Label" parent="Layout/TopBar/TopBarRow"]
+layout_mode = 2
+size_flags_vertical = 4
+text = "Day 0  00:00"
+theme_override_colors/font_color = Color(0.545098, 0.596078, 0.654902, 1)
+theme_override_font_sizes/font_size = 13
+
+[node name="RunButton" type="Button" parent="Layout/TopBar/TopBarRow"]
+custom_minimum_size = Vector2(110, 30)
+layout_mode = 2
+size_flags_vertical = 4
+text = "Running"
+theme_override_font_sizes/font_size = 10
+
+[node name="ScreenHost" type="MarginContainer" parent="Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="FeedbackLabel" type="Label" parent="Layout"]
+layout_mode = 2
+text = " "
+theme_override_colors/font_color = Color(0.545098, 0.596078, 0.654902, 1)
+theme_override_font_sizes/font_size = 10
+
+[node name="NavBar" type="HBoxContainer" parent="Layout"]
+custom_minimum_size = Vector2(0, 64)
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="LifeButton" type="Button" parent="Layout/NavBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "LIFE"
+theme_override_font_sizes/font_size = 11
+
+[node name="ActivitiesButton" type="Button" parent="Layout/NavBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "ACTIVITIES"
+theme_override_font_sizes/font_size = 11
+
+[node name="PeopleButton" type="Button" parent="Layout/NavBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "PEOPLE"
+theme_override_font_sizes/font_size = 11
+
+[node name="MoreButton" type="Button" parent="Layout/NavBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "MORE"
+theme_override_font_sizes/font_size = 11

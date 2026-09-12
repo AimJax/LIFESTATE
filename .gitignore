@@ -26,3 +26,14 @@ SimulationTests.cs.bak
 SimulationTests.cs.restored
 
 *.swn
+
+# Godot 4 — editor cache/import output is regenerated on open; never commit it.
+# Source resources (project.godot, .tscn, .tres, .gd, .gd.uid) ARE committed.
+Lifestate.Godot/.godot/
+Lifestate.Godot/exports/
+Lifestate.Godot/export_presets.cfg.bak
+.godot/
+
+# Godot export output
+Lifestate.Godot/build/
+*.translation

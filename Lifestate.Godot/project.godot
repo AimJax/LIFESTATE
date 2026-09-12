@@ -1,0 +1,36 @@
+; LIFESTATE — Godot 4 configuration.
+;
+; Run:   godot --path Lifestate.Godot
+; Tests: godot --headless --path Lifestate.Godot --script res://tests/run_tests.gd
+
+config_version=5
+
+[application]
+
+config/name="LIFESTATE"
+config/description="BitLife x Melvor life simulation. Godot front-end over the authoritative simulation core."
+run/main_scene="res://scenes/Main.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+
+[autoload]
+
+GameService="*res://scripts/GameService.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/size/mode=0
+window/stretch/mode="disabled"
+window/handheld/orientation=1
+
+[gui]
+
+theme/custom="res://themes/Lifestate.tres"
+theme/default_font_multichannel_signed_distance_field=true
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
