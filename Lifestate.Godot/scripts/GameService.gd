@@ -26,7 +26,7 @@ var clock: GameClock
 var player: PlayerState
 var god_mode: GodMode
 
-var is_running: bool = true
+var is_running: bool = false
 
 var _accumulator: float = 0.0
 var _last_activity_name: String = "Idle"

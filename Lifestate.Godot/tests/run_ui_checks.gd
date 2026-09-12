@@ -10,10 +10,19 @@ extends SceneTree
 var _harness := TestHarness.new()
 var _main: Node
 var _frames: int = 0
+var _stage: int = 0
+var _settle_frames: int = 0
+var _resolution_index: int = 0
+var _screen_index: int = 0
+
+const RESOLUTIONS := [Vector2i(1100, 720), Vector2i(1280, 720), Vector2i(1366, 768), Vector2i(1600, 900)]
+const SCREEN_KEYS := ["life", "activities", "people", "more", "character", "education", "save_load", "settings"]
 
 
 func _initialize() -> void:
 	print("LIFESTATE — Godot UI checks")
+	print("Godot %s" % Engine.get_version_info()["string"])
+	print("")
 	var packed: PackedScene = load("res://scenes/Main.tscn")
 	if packed == null:
 		push_error("Could not load res://scenes/Main.tscn")
@@ -25,33 +34,37 @@ func _initialize() -> void:
 
 func _process(_delta: float) -> bool:
 	_frames += 1
-	if _frames < 3:
+	if _stage == 0:
+		if _frames < 3:
+			return false
+		# Preflight: if the scene script failed to load, every later lookup would
+		# silently error out and the run would falsely report success.
+		if not _check_scene_loaded():
+			return _finish("aborted — main scene script did not load")
+		_check_autoload()
+		_check_shell()
+		_check_screens()
+		_check_startup_state()
+		_check_navigation()
+		_check_live_data()
+		_check_developer_overlay()
+		_check_palette()
+		_stage = 1
+		_prepare_geometry_case()
 		return false
 
-	# Preflight: if the scene script failed to load, every later lookup would
-	# silently error out and the run would falsely report success.
-	if not _check_scene_loaded():
-		print("")
-		print("UI RESULT: aborted — main scene script did not load")
-		quit(1)
-		return true
-
-	_check_autoload()
-	_check_shell()
-	_check_screens()
-	_check_navigation()
-	_check_live_data()
-	_check_developer_overlay()
-	_check_palette()
-
-	print("")
-	print("==================================================")
-	print("UI RESULT: %d passed, %d failed" % [_harness.passed, _harness.failed])
-	for failure in _harness.failures:
-		print("  - %s" % failure)
-	print("==================================================")
-	quit(1 if _harness.failed > 0 else 0)
-	return true
+	_settle_frames += 1
+	if _settle_frames < 3:
+		return false
+	_check_geometry_case()
+	_screen_index += 1
+	if _screen_index == SCREEN_KEYS.size():
+		_screen_index = 0
+		_resolution_index += 1
+	if _resolution_index == RESOLUTIONS.size():
+		return _finish()
+	_prepare_geometry_case()
+	return false
 
 
 func _check_scene_loaded() -> bool:
@@ -75,7 +88,7 @@ func _check_autoload() -> void:
 	_harness.check("session owns a GameClock", service.clock is GameClock)
 	_harness.check("session owns a PlayerState", service.player is PlayerState)
 	_harness.check("session owns GodMode", service.god_mode is GodMode)
-	_harness.eq_int("session starts unpaused", 1 if service.is_running else 0, 1)
+	_harness.eq_bool("session starts paused  C# parity", service.is_running, false)
 
 
 func _check_shell() -> void:
@@ -91,7 +104,7 @@ func _check_shell() -> void:
 	var clock_label: Label = _main.get_node("Layout/TopBar/TopBarRow/ClockLabel")
 	_harness.check("clock label shows a day and time", clock_label.text.begins_with("Day "), clock_label.text)
 	var run_button: Button = _main.get_node("Layout/TopBar/TopBarRow/RunButton")
-	_harness.eq_string("run button reflects running state", run_button.text, "Running")
+	_harness.eq_string("run button reflects paused state", run_button.text, "Paused")
 
 	var labels: PackedStringArray = []
 	for index in nav_bar.get_child_count():
@@ -105,15 +118,24 @@ func _check_shell() -> void:
 
 func _check_screens() -> void:
 	_harness.section("Screens")
-	var expected: PackedStringArray = PackedStringArray([
-		"life", "activities", "people", "more", "character", "education", "save_load", "settings",
-	])
-	for key in expected:
+	for key in SCREEN_KEYS:
 		_harness.check("screen '%s' built" % key, _main._screen_roots.has(key))
 
 	var host: MarginContainer = _main.get_node("Layout/ScreenHost")
 	_harness.eq_int("all screens are hosted", host.get_child_count(), 8)
 	_harness.eq_string("Life is the default screen", _main._current_screen, "life")
+	_harness.check("screen roots are Controls",
+		_main._screen_roots.size() == 8
+		and _main._screen_roots.values().filter(func(n): return n is Control).size() == 8)
+
+
+func _check_startup_state() -> void:
+	_harness.section("Startup")
+	var service: Node = root.get_node("GameService")
+	_harness.eq_bool("session starts paused  C# parity", service.is_running, false)
+	_harness.eq_string("top bar starts paused", _main._run_button.text, "Paused")
+	_harness.eq_bool("God Mode backend starts disabled", service.god_mode.is_enabled, false)
+	_harness.eq_bool("developer overlay starts hidden", _main.is_god_mode_visible(), false)
 
 
 func _check_navigation() -> void:
@@ -260,3 +282,104 @@ func _check_palette() -> void:
 		and UiTheme.theme().has_stylebox("panel", "PanelContainer"))
 	_harness.check("progress bars use themed fill",
 		UiTheme.theme().has_stylebox("fill", "ProgressBar"))
+
+
+func _prepare_geometry_case() -> void:
+	root.size = RESOLUTIONS[_resolution_index]
+	_main.go_to(SCREEN_KEYS[_screen_index])
+	_settle_frames = 0
+
+
+func _check_geometry_case() -> void:
+	var resolution: Vector2i = RESOLUTIONS[_resolution_index]
+	var key: String = SCREEN_KEYS[_screen_index]
+	var host: Control = _main.get_node("Layout/ScreenHost")
+	var screen: Control = _main._screen_roots[key]
+	var representatives: Array[Control] = _representatives(key)
+	var prefix := "%dx%d %s" % [resolution.x, resolution.y, key.to_upper()]
+
+	_harness.section("Geometry " + prefix)
+	_harness.check(prefix + " ScreenHost has non-zero geometry", _nonzero(host), _size(host))
+	_harness.check(prefix + " screen root has non-zero geometry", _nonzero(screen), _size(screen))
+	_harness.check(prefix + " screen root fills ScreenHost",
+		screen.get_global_rect().is_equal_approx(host.get_global_rect()),
+		"host=%s root=%s" % [_rect(host), _rect(screen)])
+	for control in representatives:
+		_harness.check(prefix + " representative content has non-zero geometry",
+			_nonzero(control), _size(control))
+		_harness.check(prefix + " representative content intersects ScreenHost",
+			_intersects(control, host), "host=%s content=%s" % [_rect(host), _rect(control)])
+		_harness.check(prefix + " representative content stays inside ScreenHost horizontally",
+			_within_host_horizontal(control, host), "host=%s content=%s" % [_rect(host), _rect(control)])
+
+	print("GEOMETRY %s host=%s root=%s content=%s intersects=%s" % [
+		prefix, _size(host), _size(screen), _size(representatives[0]), _intersects(representatives[0], host)])
+
+
+func _representatives(key: String) -> Array[Control]:
+	var screen = _main._screens[key]
+	match key:
+		"life":
+			return [screen._column.get_child(0), screen._age_label, screen._column.get_child(1)]
+		"activities":
+			return [screen._column.get_child(0), screen._hero_card, screen._cards["sleep"]["card"]]
+		"people":
+			return [screen._mother_card, screen._father_card]
+		"more":
+			return [screen._grid.get_child(0)]
+		"character":
+			return [screen._age_label]
+		"education":
+			return [screen._enroll_button]
+		"save_load":
+			return [screen._status_label]
+		"settings":
+			return [_first_button(_main._screen_roots[key])]
+	return []
+
+
+func _first_button(node: Node) -> Button:
+	var queue: Array[Node] = [node]
+	while not queue.is_empty():
+		var current: Node = queue.pop_front()
+		if current is Button:
+			return current as Button
+		queue.append_array(current.get_children())
+	return null
+
+
+static func _nonzero(control: Control) -> bool:
+	return control != null and control.size.x > 0.0 and control.size.y > 0.0
+
+
+static func _intersects(control: Control, host: Control) -> bool:
+	return _nonzero(control) and control.get_global_rect().intersects(host.get_global_rect())
+
+
+static func _within_host_horizontal(control: Control, host: Control) -> bool:
+	if not _nonzero(control):
+		return false
+	var inner := control.get_global_rect()
+	var outer := host.get_global_rect()
+	return inner.position.x >= outer.position.x - 1.0 and inner.end.x <= outer.end.x + 1.0
+
+
+static func _size(control: Control) -> String:
+	return "MISSING" if control == null else "%sx%s" % [control.size.x, control.size.y]
+
+
+static func _rect(control: Control) -> String:
+	return "MISSING" if control == null else str(control.get_global_rect())
+
+
+func _finish(note: String = "") -> bool:
+	print("")
+	print("==================================================")
+	if not note.is_empty():
+		print("UI RESULT: " + note)
+	print("UI RESULT: %d passed, %d failed" % [_harness.passed, _harness.failed])
+	for failure in _harness.failures:
+		print("  - %s" % failure)
+	print("==================================================")
+	quit(1 if _harness.failed > 0 else 0)
+	return true

@@ -47,6 +47,7 @@ func _process(_delta: float) -> bool:
 				return _finish()
 			if not _check_initial_state():
 				return _finish()
+			_check_clickable_path()
 			if not _check_deterministic_driver():
 				return _finish()
 			# Hand the tick back to the engine and let real time flow.
@@ -90,7 +91,7 @@ func _check_session() -> bool:
 	_harness.check("session owns a real PlayerState", _service.player is PlayerState)
 	_harness.check("clock and player are wired together", _service.player._clock == _service.clock)
 	_harness.check("session owns GodMode", _service.god_mode is GodMode)
-	_harness.check("session starts running", _service.is_running)
+	_harness.eq_bool("session starts paused like the C# reference", _service.is_running, false)
 	return true
 
 
@@ -113,6 +114,7 @@ func _check_initial_state() -> bool:
 ## different slice sizes has to produce identical advancement.
 func _check_deterministic_driver() -> bool:
 	_harness.section("TickDriver")
+	_service.set_running(true)
 	var before: int = _total_minutes(_service.clock)
 
 	# 2.5 accumulated real seconds => two whole-second steps => 8 game minutes.
@@ -151,6 +153,39 @@ func _check_deterministic_driver() -> bool:
 	_harness.check("time advancement drained hunger",
 		_service.player.hunger < 100, str(_service.player.hunger))
 	return true
+
+
+func _check_clickable_path() -> void:
+	_harness.section("ClickablePath")
+	var run_button: Button = _main.get_node("Layout/TopBar/TopBarRow/RunButton")
+	run_button.pressed.emit()
+	_harness.eq_bool("run button starts the simulation", _service.is_running, true)
+	run_button.pressed.emit()
+	_harness.eq_bool("run button stops the simulation", _service.is_running, false)
+
+	for key in ["activities", "people", "more", "life"]:
+		_main._nav_buttons[key].pressed.emit()
+		_harness.eq_string("clicking %s navigates there" % key, _main._current_screen, key)
+
+	_main._nav_buttons["activities"].pressed.emit()
+	var wait_button := _find_button(_main._screen_roots["activities"], "Wait 1 Hour")
+	_harness.check("Wait 1 Hour button is present", wait_button != null)
+	if wait_button != null:
+		var before: int = _total_minutes(_service.clock)
+		wait_button.pressed.emit()
+		_harness.eq_int("Wait 1 Hour advances exactly 60 game minutes",
+			_total_minutes(_service.clock) - before, 60)
+	_main._nav_buttons["life"].pressed.emit()
+
+
+static func _find_button(node: Node, text: String) -> Button:
+	var queue: Array[Node] = [node]
+	while not queue.is_empty():
+		var current: Node = queue.pop_front()
+		if current is Button and (current as Button).text == text:
+			return current as Button
+		queue.append_array(current.get_children())
+	return null
 
 
 func _check_live_loop() -> void:
