@@ -79,8 +79,8 @@ func _build_screens() -> void:
 		host.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		host.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		host.visible = false
-		host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		_screen_host.add_child(host)
+		host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		_screen_roots[key] = host
 		_screens[key].build(host)
 

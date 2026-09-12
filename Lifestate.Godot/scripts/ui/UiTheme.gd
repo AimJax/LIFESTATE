@@ -199,23 +199,30 @@ static func progress_bar(value: float, bar_color: Color = ACCENT) -> ProgressBar
 
 
 ## Centered reading column, so wide windows do not stretch cards absurdly.
-## The width is recomputed on resize: capped at max_width on desktop sizes and
-## allowed to shrink on narrower windows, which prevents clipping.
+##
+## The visible host fills the parent Control, and inside it the ScrollContainer
+## fills the usable vertical area while its width is capped on desktop sizes and
+## allowed to shrink on narrow windows. Vertical scrolling works when content
+## exceeds available height.
 static func centered_column(parent: Control, max_width: int, horizontal_pad: int = SPACE_LG) -> VBoxContainer:
 	var host := Control.new()
-	host.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	host.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	host.name = "CenteredColumnHost"
 	parent.add_child(host)
 	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
-	var center := CenterContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var center := HBoxContainer.new()
+	center.name = "CenteredColumnCenter"
+	center.alignment = BoxContainer.ALIGNMENT_CENTER
 	center.mouse_filter = Control.MOUSE_FILTER_PASS
 	host.add_child(center)
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	var scroll := ScrollContainer.new()
+	scroll.name = "CenteredColumnScroll"
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	scroll.size_flags_horizontal = Control.SIZE_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.custom_minimum_size = Vector2(max_width, 0)
 	center.add_child(scroll)
 
