@@ -171,6 +171,7 @@ func _build_god_overlay() -> void:
 	_add_god_button(body, "Max Attributes", func() -> void: GameService.god_mode.max_attributes())
 	_add_god_button(body, "Max Skills", func() -> void: GameService.god_mode.max_skills())
 	_add_god_button(body, "Max Traits", func() -> void: GameService.god_mode.max_traits())
+	_add_god_button(body, "Complete Current School Grade", func() -> void: _on_complete_school_grade())
 
 	var close_button := UiTheme.button("Close (F2)", UiTheme.NEGATIVE, UiTheme.BUTTON_HEIGHT_SMALL)
 	close_button.pressed.connect(toggle_god_mode)
@@ -197,6 +198,15 @@ func _position_god_overlay() -> void:
 		UiTheme.TOP_BAR_HEIGHT + UiTheme.SPACE_MD
 	)
 
+
+func _on_complete_school_grade() -> void:
+	var result := GameService.god_mode.complete_current_school_grade()
+	if result["ok"]:
+		set_feedback(result["message"], UiTheme.POSITIVE)
+	else:
+		set_feedback(result["message"], UiTheme.WARNING)
+	_refresh_all()
+	_show_screen("education")
 
 ## Enabled state and visibility move together, so a hidden overlay can never be
 ## left silently active.

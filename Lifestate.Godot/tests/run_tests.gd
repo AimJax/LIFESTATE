@@ -13,6 +13,7 @@ const TestFamilyEvents = preload("res://tests/test_family_events.gd")
 const TestPersistence = preload("res://tests/test_persistence.gd")
 const TestGodMode = preload("res://tests/test_godmode.gd")
 const TestEducation = preload("res://tests/test_education.gd")
+const TestGodModeEducation = preload("res://tests/test_godmode_education.gd")
 
 func _initialize() -> void:
 	var harness := TestHarness.new()
@@ -27,6 +28,7 @@ func _initialize() -> void:
 	TestPersistence.run(harness)
 	TestGodMode.run(harness)
 	TestEducation.run(harness)
+	TestGodModeEducation.run(harness)
 
 	print("")
 	print("==================================================")
