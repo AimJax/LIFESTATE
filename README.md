@@ -41,6 +41,11 @@ they read the session and render it.
 - **Needs:** Energy −1/hour awake, +5/hour sleeping; Hunger −1/hour; Thirst −2/hour.
 - **Activities:** Sleep, Work, Study, Play, Family Time. Mutually exclusive, with
   per-activity minute accumulators carried across sub-hour boundaries.
+- **Career (Godot-only, post-migration):** deterministic job foundation with
+  Laborer ($10/h), Retail Worker ($12/h, Primary completed, Social 15+),
+  Delivery Driver ($15/h, Primary completed, Discipline 20+) and Office Clerk
+  ($18/h, Secondary completed, Intelligence 20+). Work requires a held job;
+  hourly pay comes from the job definition. No promotions, firing or RNG yet.
 - **Progression:** Study grants StudyXP, Academics XP and Intelligence; Play and
   Family Time grant Attributes/Traits; Skills are XP-based with derived levels;
   formal education spans Primary Grades 1–6 and Secondary Grades 7–12.
@@ -69,7 +74,7 @@ The project boots straight into `scenes/Main.tscn`. Navigation is
 **LIFE / ACTIVITIES / PEOPLE / MORE**, with Character, Education, Save/Load and
 Settings under MORE. `F2` toggles the developer overlay.
 
-### GDScript regression suite (618 assertions)
+### GDScript regression suite (700+ assertions)
 
 ```bash
 godot --headless --path Lifestate.Godot --script res://tests/run_tests.gd
@@ -138,9 +143,12 @@ dotnet run -- --test          # 287 assertions, also via bin/…/Lifestate.exe -
 
 ## Save compatibility
 
-The JSON schema is intentionally PascalCase and `Version` is **7** in both
-implementations, so the two can read each other's files. Version 2–6 saves are
-migrated on load by both.
+The Godot build is at Save **Version 9** (`CurrentJobId` added by the career
+foundation; v2–v8 all still load). Pre-v9 saves have no career state: on load,
+a save that was actively working migrates to **Laborer** (the historical flat
+10/hour generic Work wage), an unemployed save stays unemployed. The retained
+C# reference remains Version 7 and cannot read Godot v8/v9 saves; Godot still
+imports C# v7 saves (they upgrade to v9 with an empty `CurrentJobId`).
 
 | Build | Save location |
 | --- | --- |

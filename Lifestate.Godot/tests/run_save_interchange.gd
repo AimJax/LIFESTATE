@@ -9,7 +9,8 @@ extends SceneTree
 ##   1. load a save file WRITTEN BY THE C# BUILD (tests/fixtures/csharp_save_v7.json)
 ##   2. re-serialize it and compare every persisted key against the C# original
 ##   3. compare a canonical integer summary against the C# save-time summary
-## Godot Version 8 -> C# Version 7 loading is intentionally unsupported.
+## Godot Version 9 (with career state) -> C# loading is intentionally
+## unsupported. The career system is Godot-only post-migration functionality.
 ##
 ## Exits 0 only when every check passes.
 
@@ -71,14 +72,15 @@ func _initialize() -> void:
 			changed.append("%s (%s != %s)" % [key, reserialized[key], original[key]])
 	var extra: PackedStringArray = []
 	for key in reserialized:
-		if not original.has(key) and key != "SecondaryGrade":
+		if not original.has(key) and key != "SecondaryGrade" and key != "CurrentJobId":
 			extra.append(str(key))
 
 	_harness.eq_int("every C# key is re-serialized", missing.size(), 0)
 	_harness.eq_int("no key changes value on round trip", changed.size(), 0)
 	_harness.eq_int("port adds no unexpected keys", extra.size(), 0)
-	_harness.eq_int("re-serialized C# save upgrades to Version 8", reserialized["Version"], 8)
+	_harness.eq_int("re-serialized C# save upgrades to Version 9", reserialized["Version"], 9)
 	_harness.eq_int("legacy C# save defaults SecondaryGrade to zero", reserialized["SecondaryGrade"], 0)
+	_harness.eq_string("legacy C# save defaults CurrentJobId to unemployed", reserialized["CurrentJobId"], "")
 	for key in missing:
 		_harness.check("  missing key %s" % key, false)
 	for entry in changed:

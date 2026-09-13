@@ -9,7 +9,7 @@ const ACTIVITY_DEFS: Array = [
 	["STUDY", "Improve your academic ability.", "study", "Age 6+"],
 	["PLAY", "Have fun and develop through childhood.", "play", "Age 2+"],
 	["FAMILY TIME", "Spend time with your parents.", "family", ""],
-	["WORK", "Earn money.", "work", "Age 18+"],
+	["WORK", "Earn money at your current job.", "work", "Get a job first."],
 ]
 
 var _service
@@ -195,6 +195,8 @@ func _toggle(key: String) -> void:
 
 func _rejection_reason(key: String) -> String:
 	var player: PlayerState = _service.player
+	if key == "work" and not player.career.is_employed():
+		return "Get a job first."
 	if key == "work" and player.age < PlayerState.WORK_MIN_AGE:
 		return "You must be at least 18 to work."
 	if key == "study" and player.age < PlayerState.STUDY_MIN_AGE:
@@ -254,7 +256,7 @@ func _refresh_progress(player: PlayerState, activity: String) -> void:
 		_progress_tag.text = "WORK"
 		_progress_bar.visible = false
 		_progress_value.text = UiTheme.format_money(player.money)
-		_progress_detail.text = "10 money per completed hour."
+		_progress_detail.text = "%d money per completed hour." % player.career.hourly_wage()
 	else:
 		_progress_tag.text = "SLEEP"
 		_progress_bar.max_value = 100
@@ -289,8 +291,13 @@ func _refresh_cards(player: PlayerState) -> void:
 			action.add_theme_color_override("font_hover_color", UiTheme.NEGATIVE)
 		else:
 			card.add_theme_stylebox_override("panel", UiTheme.panel_style(UiTheme.SURFACE, UiTheme.BORDER))
-			status.text = requirement if not requirement.is_empty() else "Available"
-			status.add_theme_color_override("font_color", UiTheme.TEXT_MUTED)
+			if key == "work" and player.career.is_employed():
+				var job: JobDefinition = player.career.current_job()
+				status.text = "%s · $%d/hour" % [job.display_name, job.hourly_wage]
+				status.add_theme_color_override("font_color", UiTheme.TEXT_PRIMARY)
+			else:
+				status.text = requirement if not requirement.is_empty() else "Available"
+				status.add_theme_color_override("font_color", UiTheme.TEXT_MUTED)
 			action.text = "START"
 			action.add_theme_color_override("font_color", UiTheme.TEXT_PRIMARY)
 			action.add_theme_color_override("font_hover_color", UiTheme.ACCENT)

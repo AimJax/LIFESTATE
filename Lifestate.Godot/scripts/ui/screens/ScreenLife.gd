@@ -140,6 +140,9 @@ func refresh() -> void:
 	_money_label.text = UiTheme.format_money(player.money)
 	var activity_name: String = player.current_activity_name()
 	_activity_label.text = "Currently " + activity_name
+	if player.is_working:
+		# Job identity rides along with the working label; Life stays lean.
+		_activity_label.text = "Currently Working · %s" % player.career.current_job().display_name
 
 	_set_need("Energy", player.energy)
 	_set_need("Hunger", player.hunger)

@@ -102,6 +102,8 @@ static func load_game(clock: GameClock, player: PlayerState, path: String = "", 
 	temp_player.skills.academics.restore(v["AcademicsExperience"])
 	temp_player.education.restore(v["EducationStatus"], v["PrimaryGrade"], v["EducationProgress"], v["SchoolYearStartDay"], v["SecondaryGrade"])
 	temp_player.traits.restore(v["Confidence"], v["Curiosity"], v["Patience"], v["Ambition"], v["Empathy"])
+	if not temp_player.career.restore(v["CurrentJobId"]):
+		return _result(false, "Career state is invalid.")
 
 	if v["has_event_data"]:
 		temp_player.restore_total_play_hours(v["TotalPlayHours"])
@@ -118,6 +120,20 @@ static func load_game(clock: GameClock, player: PlayerState, path: String = "", 
 			Relationship.new(v["MotherId"], v["MotherCloseness"]),
 			Relationship.new(v["FatherId"], v["FatherCloseness"])
 		)
+
+	# ---- Legacy career migration (version 9 semantics) ---------------------
+	# Pre-v9 saves have no career state. The historical generic Work paid a flat
+	# 10/hour, so a save that was actively working migrates to Laborer (+10/hour)
+	# to preserve its economics exactly; an unemployed save stays unemployed.
+	if v["version"] < 9 and temp_player.is_working:
+		if not temp_player.career.restore(JobCatalog.LABORER_ID):
+			return _result(false, "Career state is invalid.")
+
+	# Invariant: an active Work session requires a valid held job. Version 9
+	# validation guarantees this pairing; the migration above guarantees it for
+	# legacy saves; this is defense-in-depth for anything else.
+	if temp_player.is_working and not temp_player.career.is_employed():
+		return _result(false, "A save cannot be working without a job.")
 
 	# ---- Offline progression (O(1)) ---------------------------------------
 	var now: float = now_unix if not is_nan(now_unix) else Time.get_unix_time_from_system()
@@ -162,6 +178,7 @@ static func load_game(clock: GameClock, player: PlayerState, path: String = "", 
 	)
 	player.family.restore(temp_player.family.mother, temp_player.family.father)
 	player.relationships.restore(temp_player.relationships.mother_relationship, temp_player.relationships.father_relationship)
+	player.career.restore(temp_player.career.current_job_id)
 	player.restore_total_play_hours(temp_player.total_play_hours)
 	player.events.clear_pending()
 	player.events.restore_history(temp_player.events.duplicate_history())
@@ -324,6 +341,20 @@ static func validate_and_extract(data: Dictionary) -> Dictionary:
 			return _result(false, "Parent closeness is out of range.")
 		if values["MotherRelationshipPersonId"] != values["MotherId"] or values["FatherRelationshipPersonId"] != values["FatherId"]:
 			return _result(false, "Relationship cross-reference does not match parent identity.")
+
+	# ---- Career (version 9+) ----------------------------------------------
+	values["CurrentJobId"] = ""
+	if version >= 9:
+		var job_raw: Variant = data.get("CurrentJobId", null)
+		if job_raw != null:
+			if typeof(job_raw) != TYPE_STRING:
+				return _result(false, "CurrentJobId is not a string.")
+			values["CurrentJobId"] = job_raw
+		if not values["CurrentJobId"].is_empty() and not JobCatalog.is_known_job(values["CurrentJobId"]):
+			return _result(false, "CurrentJobId references an unknown job.")
+		# A save that claims an active Work session must name a valid job.
+		if values["IsWorking"] and values["CurrentJobId"].is_empty():
+			return _result(false, "IsWorking is true without a current job.")
 
 	# ---- Events + TotalPlayHours (version 7+) -----------------------------
 	values["TotalPlayHours"] = 0

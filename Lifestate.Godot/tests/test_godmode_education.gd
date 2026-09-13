@@ -202,10 +202,10 @@ static func no_study_rewards(h: TestHarness) -> void:
 	god.complete_current_school_grade()
 	h.eq_int("EduGod-R1 StudyXP unchanged", player.study_xp, before.study_xp)
 	h.eq_int("EduGod-R2 Academics XP unchanged", player.skills.academics.experience, before.academics_xp)
-	h.eq_float_near("EduGod-R3 Intelligence unchanged", player.attributes.intelligence, before.intelligence)
-	h.eq_float_near("EduGod-R4 Curiosity unchanged", player.traits.curiosity, before.curiosity)
-	h.eq_float_near("EduGod-R5 Patience unchanged", player.traits.patience, before.patience)
-	h.eq_float_near("EduGod-R6 Ambition unchanged", player.traits.ambition, before.ambition)
+	eq_float_near("EduGod-R3 Intelligence unchanged", player.attributes.intelligence, before.intelligence)
+	eq_float_near("EduGod-R4 Curiosity unchanged", player.traits.curiosity, before.curiosity)
+	eq_float_near("EduGod-R5 Patience unchanged", player.traits.patience, before.patience)
+	eq_float_near("EduGod-R6 Ambition unchanged", player.traits.ambition, before.ambition)
 
 
 static func no_needs_simulation(h: TestHarness) -> void:

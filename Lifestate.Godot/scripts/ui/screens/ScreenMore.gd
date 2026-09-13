@@ -5,6 +5,7 @@ extends RefCounted
 const ENTRIES: Array = [
 	["CHARACTER", "Attributes, traits, and skills", "character"],
 	["EDUCATION", "School and academic progress", "education"],
+	["CAREER", "Jobs, wages and applications", "career"],
 	["SAVE / LOAD", "Manage game data", "save_load"],
 	["SETTINGS", "Interface and game preferences", "settings"],
 ]

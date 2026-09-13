@@ -121,7 +121,7 @@ static func _schema(h: TestHarness) -> void:
 	h.check("Schema-S1 save file parses as JSON", typeof(data) == TYPE_DICTIONARY)
 	var save: Dictionary = data
 
-	h.eq_int("Schema-S2 version is 8", save["Version"], 8)
+	h.eq_int("Schema-S2 version is 9", save["Version"], 9)
 	var required: PackedStringArray = [
 		"Day", "Hour", "Minute", "Money", "Energy", "Hunger", "Thirst", "StudyXP",
 		"IsSleeping", "IsWorking", "IsStudying", "IsPlaying", "IsSpendingFamilyTime",
@@ -245,6 +245,7 @@ static func _offline(h: TestHarness) -> void:
 	var clock: GameClock = pair[0]
 	var player: PlayerState = pair[1]
 	advance_days(clock, 19 * 365)
+	player.apply_for_job(JobCatalog.LABORER_ID)
 	player.start_working()
 	player.advance_simulation(60 * 3)
 	SaveManager.save_game(clock, player, TEST_PATH, FIXED_NOW)
@@ -314,6 +315,7 @@ static func _offline(h: TestHarness) -> void:
 	var overflowing_player: PlayerState = overflowing[1]
 	advance_days(overflowing_clock, 19 * 365)
 	overflowing_player.money = PlayerState.INT32_MAX - 10
+	overflowing_player.apply_for_job(JobCatalog.LABORER_ID)
 	overflowing_player.start_working()
 	SaveManager.save_game(overflowing_clock, overflowing_player, TEST_PATH, FIXED_NOW)
 	var overflow_result: Dictionary = SaveManager.load_game(overflowing_clock, overflowing_player, TEST_PATH, FIXED_NOW + 86400.0)
@@ -475,6 +477,9 @@ static func _legacy_fixture(version: int) -> Dictionary:
 			{"EventId": LifeEventCatalog.BROKEN_TOY_ID, "ChoiceId": LifeEventCatalog.TRY_FIX,
 			 "TriggeredDay": 1500, "ResolvedDay": 1500},
 		]
+
+	if version >= 8:
+		data["SecondaryGrade"] = 0
 
 	return data
 

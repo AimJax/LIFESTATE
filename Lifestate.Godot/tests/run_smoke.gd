@@ -22,6 +22,7 @@ var _frames: int = 0
 var _real_time_started: int = 0
 var _real_time_baseline: int = 0
 var _stage: int = 0
+var _career_done: bool = false
 
 
 func _initialize() -> void:
@@ -64,9 +65,58 @@ func _process(_delta: float) -> bool:
 			_harness.check("shell survived live simulation", is_instance_valid(_main))
 			_harness.check("session still owns the same PlayerState",
 				_service.player != null and _service.player is PlayerState)
+			if not _check_career_path():
+				return _finish()
 			return _finish()
 
 	return _finish()
+
+
+## Career smoke path through the REAL UI: reach 18, apply Laborer, work one
+## game hour via the real Activities screen, verify +10, quit, verify idle.
+func _check_career_path() -> bool:
+	if _career_done:
+		return true
+	_career_done = true
+
+	_harness.section("CareerPath")
+	var player: PlayerState = _service.player
+	var career_screen = _main._screens["career"]
+
+	# Age to 18 through God Mode time control.
+	_main.toggle_god_mode()
+	_service.god_mode.advance_days(18 * 365)
+	_main.toggle_god_mode()
+	_harness.eq_int("career path reaches age 18", player.age, 18)
+
+	# Open Career through MORE navigation and apply through the real button.
+	_main._nav_buttons["more"].pressed.emit()
+	_main.go_to("career")
+	_harness.eq_string("career screen is reachable", _main._current_screen, "career")
+	var laborer_entry: Dictionary = career_screen._job_cards[JobCatalog.LABORER_ID]
+	laborer_entry["apply_button"].pressed.emit()
+	_harness.eq_string("UI apply hires Laborer", player.career.current_job_id, JobCatalog.LABORER_ID)
+
+	# Work one game hour through the real Activities screen.
+	_main._nav_buttons["activities"].pressed.emit()
+	var work_button: Button = _main._screens["activities"]._cards["work"]["action"]
+	work_button.pressed.emit()
+	_harness.eq_bool("Work starts while employed", player.is_working, true)
+	var money_before: int = player.money
+	player.advance_simulation(60)
+	_harness.eq_int("one game hour of Laborer pays +10", player.money, money_before + 10)
+
+	# Quit through the real Career screen button and verify the state returns.
+	_main.go_to("career")
+	career_screen._quit_button.pressed.emit()
+	_harness.eq_string("UI quit clears the job", player.career.current_job_id, "")
+	_harness.eq_bool("UI quit stops Work", player.is_working, false)
+
+	# Navigating back re-renders Activities from live state, like a real user.
+	_main._nav_buttons["activities"].pressed.emit()
+	_harness.eq_string("Activities Work card returns to unemployed state",
+		_main._screens["activities"]._cards["work"]["status"].text, "Get a job first.")
+	return true
 
 
 func _boot_scene() -> bool:

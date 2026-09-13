@@ -10,6 +10,7 @@ const ScreenPeopleClass = preload("res://scripts/ui/screens/ScreenPeople.gd")
 const ScreenMoreClass = preload("res://scripts/ui/screens/ScreenMore.gd")
 const ScreenCharacterClass = preload("res://scripts/ui/screens/ScreenCharacter.gd")
 const ScreenEducationClass = preload("res://scripts/ui/screens/ScreenEducation.gd")
+const ScreenCareerClass = preload("res://scripts/ui/screens/ScreenCareer.gd")
 const ScreenSaveLoadClass = preload("res://scripts/ui/screens/ScreenSaveLoad.gd")
 const ScreenSettingsClass = preload("res://scripts/ui/screens/ScreenSettings.gd")
 
@@ -69,6 +70,7 @@ func _build_screens() -> void:
 		"more": ScreenMoreClass.new(GameService, self),
 		"character": ScreenCharacterClass.new(GameService),
 		"education": ScreenEducationClass.new(GameService),
+		"career": ScreenCareerClass.new(GameService),
 		"save_load": ScreenSaveLoadClass.new(GameService),
 		"settings": ScreenSettingsClass.new(GameService),
 	}

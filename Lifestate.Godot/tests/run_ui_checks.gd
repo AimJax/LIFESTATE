@@ -10,10 +10,12 @@ var _settle_frames := 0
 var _resolution_index := 0
 var _screen_index := 0
 var _education_case_index := 0
+var _career_case_index := 0
 
 const RESOLUTIONS := [Vector2i(1100, 720), Vector2i(1280, 720), Vector2i(1366, 768), Vector2i(1600, 900)]
-const SCREEN_KEYS := ["life", "activities", "people", "more", "character", "education", "save_load", "settings"]
+const SCREEN_KEYS := ["life", "activities", "people", "more", "character", "education", "career", "save_load", "settings"]
 const EDUCATION_CASES := ["primary_enroll", "primary_active", "primary_completed_wait", "secondary_enroll", "secondary_active", "secondary_completed"]
+const CAREER_CASES := ["unemployed", "employed"]
 
 
 func _initialize() -> void:
@@ -63,13 +65,81 @@ func _process(_delta: float) -> bool:
 		_prepare_geometry_case()
 		return false
 
+	if _stage == 3:
+		_check_career_case()
+		_career_case_index += 1
+		if _career_case_index == CAREER_CASES.size():
+			_check_live_data()
+			return _finish()
+		_prepare_career_case()
+		return false
+
 	_check_education_case()
 	_education_case_index += 1
 	if _education_case_index == EDUCATION_CASES.size():
-		_check_live_data()
-		return _finish()
+		_stage = 3
+		_prepare_career_case()
+		return false
 	_prepare_education_case()
 	return false
+
+
+func _prepare_career_case() -> void:
+	var service: Node = root.get_node("GameService")
+	var player: PlayerState = service.player
+	var case_name: String = CAREER_CASES[_career_case_index]
+	match case_name:
+		"unemployed":
+			service.clock.restore(20 * 365, 0, 0)
+			player.career.restore("")
+			if player.is_working:
+				player.stop_working()
+		"employed":
+			service.clock.restore(20 * 365, 0, 0)
+			player.career.restore("")
+			player.apply_for_job(JobCatalog.OFFICE_CLERK_ID)
+			player.education.restore(EducationState.Status.COMPLETED_SECONDARY, 6, 100, service.clock.day - 365, 12)
+			player.attributes.restore(20.0, 10.0, 10.0, 10.0, 10.0)
+			player.apply_for_job(JobCatalog.OFFICE_CLERK_ID)
+	_main.go_to("career")
+	_main._screens["career"].refresh()
+	_settle_frames = 0
+
+
+func _check_career_case() -> void:
+	var screen = _main._screens["career"]
+	var host: Control = _main.get_node("Layout/ScreenHost")
+	var service: Node = root.get_node("GameService")
+	var player: PlayerState = service.player
+	var case_name: String = CAREER_CASES[_career_case_index]
+	var control: Control
+	var expected_text: String
+	match case_name:
+		"unemployed":
+			control = screen._status_title
+			expected_text = "UNEMPLOYED"
+		"employed":
+			control = screen._status_detail
+			expected_text = "Office Clerk · $18/hour"
+	var visible_rect := _visible_rect(control, host)
+	_harness.section("Career " + case_name)
+	_harness.check(case_name + " representative has non-zero visible geometry",
+		visible_rect.size.x > 0.0 and visible_rect.size.y > 0.0,
+		"control=%s visible=%s" % [_rect(control), visible_rect])
+	_harness.eq_string(case_name + " visible text", control.text, expected_text)
+	# A job card and its Apply button must be genuinely visible.
+	var laborer_entry: Dictionary = screen._job_cards[JobCatalog.LABORER_ID]
+	var card_rect := _visible_rect(laborer_entry["card"], host)
+	_harness.check(case_name + " Laborer card has non-zero visible geometry",
+		card_rect.size.x > 0.0 and card_rect.size.y > 0.0, "%s" % card_rect)
+	var apply_rect := _visible_rect(laborer_entry["apply_button"], host)
+	_harness.check(case_name + " Laborer Apply button has non-zero visible geometry",
+		apply_rect.size.x > 0.0 and apply_rect.size.y > 0.0, "%s" % apply_rect)
+	_harness.eq_bool(case_name + " employed flag matches player",
+		screen._service.player.career.is_employed(), case_name == "employed")
+	if case_name == "employed":
+		_harness.eq_bool("employed career disables Apply buttons", laborer_entry["apply_button"].disabled, true)
+		_harness.eq_bool("employed career shows Quit button", screen._quit_button.visible, true)
 
 
 func _check_scene_loaded() -> bool:
@@ -79,8 +149,8 @@ func _check_scene_loaded() -> bool:
 	if not loaded:
 		return false
 	var roots: Variant = _main.get("_screen_roots")
-	var has_roots: bool = typeof(roots) == TYPE_DICTIONARY and (roots as Dictionary).size() == 8
-	_harness.check("all eight screen roots exist", has_roots, str(roots))
+	var has_roots: bool = typeof(roots) == TYPE_DICTIONARY and (roots as Dictionary).size() == 9
+	_harness.check("all nine screen roots exist", has_roots, str(roots))
 	return has_roots
 
 
@@ -123,11 +193,11 @@ func _check_screens() -> void:
 	for key in SCREEN_KEYS:
 		_harness.check("screen '%s' built" % key, _main._screen_roots.has(key))
 	var host: MarginContainer = _main.get_node("Layout/ScreenHost")
-	_harness.eq_int("all screens are hosted", host.get_child_count(), 8)
+	_harness.eq_int("all screens are hosted", host.get_child_count(), 9)
 	_harness.eq_string("Life is the default screen", _main._current_screen, "life")
 	_harness.check("screen roots are Controls",
-		_main._screen_roots.size() == 8
-		and _main._screen_roots.values().filter(func(node): return node is Control).size() == 8)
+		_main._screen_roots.size() == 9
+		and _main._screen_roots.values().filter(func(node): return node is Control).size() == 9)
 
 
 func _check_startup_state() -> void:
@@ -163,6 +233,9 @@ func _check_navigation() -> void:
 	_harness.check("Character screen is visible", _main._screen_roots["character"].visible)
 	_main.go_to("education")
 	_harness.check("Education screen is visible", _main._screen_roots["education"].visible)
+	_main.go_to("career")
+	_harness.eq_string("More can open Career", _main._current_screen, "career")
+	_harness.check("Career screen is visible", _main._screen_roots["career"].visible)
 	_main.go_to("save_load")
 	_harness.check("Save/Load screen is visible", _main._screen_roots["save_load"].visible)
 	_main.go_to("settings")
@@ -353,7 +426,6 @@ func _check_education_case() -> void:
 		"control=%s visible=%s" % [_rect(control), visible_rect])
 	_harness.eq_string(case_name + " visible text", control.text, expected_text)
 
-
 static func _layout_chain(screen: Control) -> Array[Control]:
 	var centered_host: Control = screen.get_child(0)
 	var center: Control = centered_host.get_child(0)
@@ -393,7 +465,7 @@ static func _required_texts(key: String) -> PackedStringArray:
 		"people":
 			return PackedStringArray(["MOTHER", "FATHER"])
 		"more":
-			return PackedStringArray(["CHARACTER", "EDUCATION", "SAVE / LOAD", "SETTINGS"])
+			return PackedStringArray(["CHARACTER", "EDUCATION", "CAREER", "SAVE / LOAD", "SETTINGS"])
 	return PackedStringArray()
 
 

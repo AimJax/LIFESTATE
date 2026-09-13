@@ -86,7 +86,13 @@ static func _work(h: TestHarness) -> void:
 	advance_days(clock, 365)
 	h.eq_int("Work-W4 now 18", player.age, 18)
 	player.start_working()
-	h.eq_bool("Work-W5 work allowed at 18", player.is_working, true)
+	h.eq_bool("Work-W5 unemployed cannot work", player.is_working, false)
+
+	# Career foundation: Work requires a held job. Laborer matches the
+	# historical flat 10/hour wage, so the pay expectations are unchanged.
+	player.apply_for_job(JobCatalog.LABORER_ID)
+	player.start_working()
+	h.eq_bool("Work-W5b work allowed at 18 once employed", player.is_working, true)
 
 	var money_before: int = player.money
 	player.advance_simulation(60)
@@ -263,6 +269,7 @@ static func _bulk_parity(h: TestHarness) -> void:
 	var work_stepped_clock: GameClock = work_stepped[0]
 	var work_stepped_player: PlayerState = work_stepped[1]
 	advance_days(work_stepped_clock, 19 * 365)
+	work_stepped_player.apply_for_job(JobCatalog.LABORER_ID)
 	work_stepped_player.start_working()
 	for _i in range(12):
 		work_stepped_player.advance_simulation(60)
@@ -271,6 +278,7 @@ static func _bulk_parity(h: TestHarness) -> void:
 	var work_bulk_clock: GameClock = work_bulk[0]
 	var work_bulk_player: PlayerState = work_bulk[1]
 	advance_days(work_bulk_clock, 19 * 365)
+	work_bulk_player.apply_for_job(JobCatalog.LABORER_ID)
 	work_bulk_player.start_working()
 	var work_rewards: Dictionary = work_bulk_player.bulk_advance_simulation(720)
 	work_bulk_player.apply_rewards(work_rewards["money_earned"], work_rewards["xp_earned"])

@@ -20,6 +20,9 @@ const ENERGY_PER_SLEEP_HOUR: int = 5
 const ENERGY_PER_AWAKE_HOUR: int = 1
 const HUNGER_PER_HOUR: int = 1
 const THIRST_PER_HOUR: int = 2
+## Historical flat work wage, kept for reference/legacy-tooling parity only.
+## It no longer drives gameplay: work pay comes from the held JobDefinition
+## (CareerState.hourly_wage). Laborer matches this value exactly.
 const MONEY_PER_WORK_HOUR: int = 10
 const STUDY_XP_PER_HOUR: int = 10
 const INTELLIGENCE_PER_STUDY_HOUR: float = 0.05
@@ -53,6 +56,7 @@ var traits: PlayerTraits = PlayerTraits.new()
 var family: PlayerFamily = PlayerFamily.new()
 var relationships: PlayerRelationships
 var events: LifeEventSystem
+var career: CareerState = CareerState.new()
 
 var total_play_hours: int = 0
 var money: int = STARTING_MONEY
@@ -134,7 +138,9 @@ func stop_sleeping() -> void:
 
 
 func start_working() -> void:
-	if age < WORK_MIN_AGE or is_sleeping or is_studying or is_playing or is_spending_family_time:
+	# Invariant: only an employed adult may Work. Hiring already enforced the
+	# job's minimum age, but the check is preserved here defensively.
+	if not career.is_employed() or age < WORK_MIN_AGE or is_sleeping or is_studying or is_playing or is_spending_family_time:
 		return
 	is_working = true
 
@@ -183,6 +189,73 @@ func enroll_primary_school() -> bool:
 		# Enrolment can immediately make events eligible (First Day of School).
 		events.evaluate_triggers(_clock.day)
 	return enrolled
+
+# =====================================================================
+# Career (Godot-only post-migration system)
+# =====================================================================
+
+## Centralized deterministic job-requirement evaluation. UI reads the reason;
+## apply_for_job enforces it. Never duplicate this logic in screens.
+func evaluate_application(job_id: String) -> Dictionary:
+	if not JobCatalog.is_known_job(job_id):
+		return {"ok": false, "reason": "That job does not exist."}
+	if career.is_employed():
+		return {"ok": false, "reason": "Quit your current job first."}
+
+	var job: JobDefinition = JobCatalog.get_by_id(job_id)
+	if age < job.minimum_age:
+		return {"ok": false, "reason": "You must be at least %d years old." % job.minimum_age}
+
+	match job.education_requirement:
+		JobDefinition.EducationRequirement.PRIMARY_COMPLETED:
+			if education.status != EducationState.Status.COMPLETED_PRIMARY and education.status != EducationState.Status.COMPLETED_SECONDARY:
+				return {"ok": false, "reason": "Complete primary school first."}
+		JobDefinition.EducationRequirement.SECONDARY_COMPLETED:
+			if education.status != EducationState.Status.COMPLETED_SECONDARY:
+				return {"ok": false, "reason": "Complete secondary school first."}
+
+	if not job.required_attribute.is_empty():
+		var value: float = _attribute_value(job.required_attribute)
+		if value < job.required_attribute_min:
+			return {"ok": false, "reason": "%s must be at least %d." % [job.required_attribute.capitalize(), int(job.required_attribute_min)]}
+
+	return {"ok": true, "reason": ""}
+
+
+func can_apply(job_id: String) -> bool:
+	return evaluate_application(job_id)["ok"]
+
+
+## Deterministic hire: requirements met means hired immediately.
+func apply_for_job(job_id: String) -> bool:
+	if not evaluate_application(job_id)["ok"]:
+		return false
+	if not career.hire(job_id):
+		return false
+	events.evaluate_triggers(_clock.day)
+	return true
+
+
+## Quitting clears the job and stops an active Work session so the
+## is_working == true while unemployed invariant can never hold.
+func quit_job() -> bool:
+	if not career.quit():
+		return false
+	if is_working:
+		stop_working()
+	return true
+
+
+func _attribute_value(name: String) -> float:
+	match name:
+		"intelligence":
+			return attributes.intelligence
+		"social":
+			return attributes.social
+		"discipline":
+			return attributes.discipline
+	return 0.0
+
 
 func enroll_secondary_school() -> bool:
 	if age < SECONDARY_ENROLL_MIN_AGE:
@@ -257,7 +330,7 @@ func update_work(elapsed_minutes: int) -> void:
 	_work_minutes_accumulator += elapsed_minutes
 	var hours_worked: int = _work_minutes_accumulator / MINUTES_PER_HOUR
 	if hours_worked > 0:
-		money += hours_worked * MONEY_PER_WORK_HOUR
+		money += hours_worked * career.hourly_wage()
 		_work_minutes_accumulator %= MINUTES_PER_HOUR
 
 
@@ -361,7 +434,7 @@ func bulk_advance_simulation(elapsed_minutes: int) -> Dictionary:
 	# Work/Study rewards are linear.
 	if is_working:
 		var total_work_minutes: int = _work_minutes_accumulator + elapsed_minutes
-		result["money_earned"] = (total_work_minutes / MINUTES_PER_HOUR) * MONEY_PER_WORK_HOUR
+		result["money_earned"] = (total_work_minutes / MINUTES_PER_HOUR) * career.hourly_wage()
 		_work_minutes_accumulator = total_work_minutes % MINUTES_PER_HOUR
 
 	if is_studying:
@@ -414,7 +487,7 @@ func preflight_work_and_study(elapsed_minutes: int) -> Dictionary:
 
 	if is_working:
 		var total_work_minutes: int = _work_minutes_accumulator + elapsed_minutes
-		total_money += (total_work_minutes / MINUTES_PER_HOUR) * MONEY_PER_WORK_HOUR
+		total_money += (total_work_minutes / MINUTES_PER_HOUR) * career.hourly_wage()
 
 	if is_studying:
 		var total_study_minutes: int = _study_minutes_accumulator + elapsed_minutes
