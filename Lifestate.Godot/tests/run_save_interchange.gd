@@ -4,19 +4,17 @@ extends SceneTree
 ##
 ##   godot --headless --path Lifestate.Godot --script res://tests/run_save_interchange.gd
 ##
-## Proves the GDScript port and the C# reference build share one save format:
+## Proves the Godot build remains compatible with Version 7 C# saves:
 ##
 ##   1. load a save file WRITTEN BY THE C# BUILD (tests/fixtures/csharp_save_v7.json)
 ##   2. re-serialize it and compare every persisted key against the C# original
 ##   3. compare a canonical integer summary against the C# save-time summary
-##   4. write the same state back out so the C# build can load it in turn
+## Godot Version 8 -> C# Version 7 loading is intentionally unsupported.
 ##
 ## Exits 0 only when every check passes.
 
 const CSHARP_SAVE := "res://tests/fixtures/csharp_save_v7.json"
 const CSHARP_SUMMARY := "res://tests/fixtures/csharp_summary.json"
-const GODOT_SAVE := "res://tests/fixtures/godot_save_v7.json"
-const GODOT_SUMMARY := "res://tests/fixtures/godot_summary.json"
 const GODOT_OFFLINE_SUMMARY := "res://tests/fixtures/godot_offline_summary.json"
 const LEGACY_V1_SAVE := "res://tests/fixtures/legacy_v1_save.json"
 
@@ -67,18 +65,20 @@ func _initialize() -> void:
 		if not reserialized.has(key):
 			missing.append(str(key))
 			continue
-		if str(key) in STAMP_KEYS:
+		if str(key) in STAMP_KEYS or key == "Version":
 			continue
 		if _canonical(reserialized[key]) != _canonical(original[key]):
 			changed.append("%s (%s != %s)" % [key, reserialized[key], original[key]])
 	var extra: PackedStringArray = []
 	for key in reserialized:
-		if not original.has(key):
+		if not original.has(key) and key != "SecondaryGrade":
 			extra.append(str(key))
 
 	_harness.eq_int("every C# key is re-serialized", missing.size(), 0)
 	_harness.eq_int("no key changes value on round trip", changed.size(), 0)
 	_harness.eq_int("port adds no unexpected keys", extra.size(), 0)
+	_harness.eq_int("re-serialized C# save upgrades to Version 8", reserialized["Version"], 8)
+	_harness.eq_int("legacy C# save defaults SecondaryGrade to zero", reserialized["SecondaryGrade"], 0)
 	for key in missing:
 		_harness.check("  missing key %s" % key, false)
 	for entry in changed:
@@ -111,12 +111,6 @@ func _initialize() -> void:
 		for entry in load_errors:
 			_harness.check("  %s" % entry, false)
 
-	# --- Direction B: the C# build can load a save the port wrote ----------
-	_harness.section("GodotToCSharp")
-	var write := SaveManager.save_game(clock, player, GODOT_SAVE, FIXED_STAMP)
-	_harness.check("port writes a save the C# build can read", write["ok"], str(write.get("error", "")))
-	_write_text(GODOT_SUMMARY, JSON.stringify(_summary(clock, player)))
-
 	# --- Offline parity: the same C# save, loaded one hour later -------------
 	_harness.section("Offline")
 	var offline_clock := GameClock.new()
@@ -128,7 +122,13 @@ func _initialize() -> void:
 	_harness.eq_int("offline seconds are exactly 3600", offline["offline_seconds"], 3600)
 	_harness.check("offline time advances the clock",
 		offline_clock.day > clock.day, "%d vs %d" % [offline_clock.day, clock.day])
-	_write_text(GODOT_OFFLINE_SUMMARY, JSON.stringify(_summary(offline_clock, offline_player)))
+	var offline_summary: Variant = JSON.parse_string(FileAccess.get_file_as_string(GODOT_OFFLINE_SUMMARY))
+	_harness.check("offline summary fixture is valid JSON", typeof(offline_summary) == TYPE_DICTIONARY)
+	if typeof(offline_summary) == TYPE_DICTIONARY:
+		var offline_errors: PackedStringArray = _compare(offline_clock, offline_player, offline_summary)
+		_harness.eq_int("offline state still matches the Version 7 reference", offline_errors.size(), 0)
+		for entry in offline_errors:
+			_harness.check("  %s" % entry, false)
 
 	# --- Version gating and transactional rejection --------------------------
 	_harness.section("LegacySave")

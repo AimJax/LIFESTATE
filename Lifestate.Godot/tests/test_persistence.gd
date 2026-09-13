@@ -121,7 +121,7 @@ static func _schema(h: TestHarness) -> void:
 	h.check("Schema-S1 save file parses as JSON", typeof(data) == TYPE_DICTIONARY)
 	var save: Dictionary = data
 
-	h.eq_int("Schema-S2 version is 7", save["Version"], 7)
+	h.eq_int("Schema-S2 version is 8", save["Version"], 8)
 	var required: PackedStringArray = [
 		"Day", "Hour", "Minute", "Money", "Energy", "Hunger", "Thirst", "StudyXP",
 		"IsSleeping", "IsWorking", "IsStudying", "IsPlaying", "IsSpendingFamilyTime",

@@ -1,7 +1,6 @@
 extends RefCounted
 
-## Education screen — the existing Primary School system only. No secondary
-## school, no new tiers.
+## Education screen — Primary and Secondary School tiers.
 
 var _service
 var _column: VBoxContainer
@@ -13,9 +12,11 @@ var _year_label: Label
 var _academics_label: Label
 var _academics_bar: ProgressBar
 var _enroll_button: Button
+var _secondary_enroll_button: Button
 var _empty_label: Label
 var _body_card: PanelContainer
 var _detail_box: VBoxContainer
+var _secondary_hint_label: Label
 
 
 func _init(service) -> void:
@@ -55,6 +56,13 @@ func build(parent: Control) -> void:
 	_enroll_button.pressed.connect(_on_enroll)
 	_column.add_child(_enroll_button)
 
+	_secondary_enroll_button = UiTheme.button("ENROLL IN SECONDARY SCHOOL", UiTheme.ACCENT)
+	_secondary_enroll_button.pressed.connect(_on_secondary_enroll)
+	_column.add_child(_secondary_enroll_button)
+
+	_secondary_hint_label = UiTheme.label("", UiTheme.FONT_BODY, UiTheme.TEXT_SECONDARY)
+	_column.add_child(_secondary_hint_label)
+
 	_body_card = UiTheme.card(UiTheme.SURFACE)
 	_column.add_child(_body_card)
 	_detail_box = UiTheme.card_body(_body_card, UiTheme.SPACE_XS)
@@ -92,25 +100,54 @@ func _on_enroll() -> void:
 	refresh()
 
 
+func _on_secondary_enroll() -> void:
+	var player: PlayerState = _service.player
+	if player.enroll_secondary_school():
+		_service.request_feedback("Enrolled in secondary school.", UiTheme.POSITIVE)
+	else:
+		if player.education.status != EducationState.Status.COMPLETED_PRIMARY:
+			_service.request_feedback("Complete primary school first.", UiTheme.WARNING)
+		elif player.age < PlayerState.SECONDARY_ENROLL_MIN_AGE:
+			_service.request_feedback("You must be at least 12 years old to enroll in secondary school.", UiTheme.WARNING)
+		else:
+			_service.request_feedback("You cannot enroll again.", UiTheme.WARNING)
+	refresh()
+
+
 func refresh() -> void:
 	var player: PlayerState = _service.player
 	var education: EducationState = player.education
-	var enrolled: bool = education.status != EducationState.Status.NOT_ENROLLED
-	var eligible: bool = player.age >= PlayerState.ENROLL_MIN_AGE
+	var not_enrolled: bool = education.status == EducationState.Status.NOT_ENROLLED
+	var primary_eligible: bool = player.age >= PlayerState.ENROLL_MIN_AGE
+	var secondary_eligible: bool = (
+		player.age >= PlayerState.SECONDARY_ENROLL_MIN_AGE
+		and education.status == EducationState.Status.COMPLETED_PRIMARY
+	)
 
 	_status_label.text = EducationState.display_name(education.status)
-	_empty_label.visible = not enrolled and not eligible
-	_enroll_button.visible = not enrolled and eligible
-	_body_card.visible = enrolled
+	_empty_label.visible = not_enrolled and not primary_eligible
+	_enroll_button.visible = not_enrolled and primary_eligible
+	_secondary_enroll_button.visible = secondary_eligible
+	_secondary_hint_label.visible = (
+		education.status == EducationState.Status.COMPLETED_PRIMARY
+		and not secondary_eligible
+	)
+	_body_card.visible = not not_enrolled
+
+	_secondary_hint_label.text = "Secondary school becomes available at age 12."
 
 	if education.status == EducationState.Status.NOT_ENROLLED:
 		_grade_label.text = "PRIMARY SCHOOL"
 	elif education.status == EducationState.Status.COMPLETED_PRIMARY:
 		_grade_label.text = "PRIMARY SCHOOL COMPLETED"
+	elif education.status == EducationState.Status.SECONDARY_SCHOOL:
+		_grade_label.text = "SECONDARY SCHOOL · GRADE %d" % education.secondary_grade
+	elif education.status == EducationState.Status.COMPLETED_SECONDARY:
+		_grade_label.text = "SECONDARY SCHOOL COMPLETED"
 	else:
 		_grade_label.text = "PRIMARY SCHOOL · GRADE %d" % education.primary_grade
 
-	if not enrolled:
+	if not_enrolled:
 		return
 
 	_progress_bar.value = education.education_progress

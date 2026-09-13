@@ -42,7 +42,8 @@ they read the session and render it.
 - **Activities:** Sleep, Work, Study, Play, Family Time. Mutually exclusive, with
   per-activity minute accumulators carried across sub-hour boundaries.
 - **Progression:** Study grants StudyXP, Academics XP and Intelligence; Play and
-  Family Time grant Attributes/Traits; Skills are XP-based with derived levels.
+  Family Time grant Attributes/Traits; Skills are XP-based with derived levels;
+  formal education spans Primary Grades 1–6 and Secondary Grades 7–12.
 - **Life events:** `LifeEventCatalog` holds immutable definitions; one pending
   event at a time; choices resolve deterministically into ordered history.
 - **Offline progression** uses O(1) bulk arithmetic, never a per-minute loop.
@@ -68,7 +69,7 @@ The project boots straight into `scenes/Main.tscn`. Navigation is
 **LIFE / ACTIVITIES / PEOPLE / MORE**, with Character, Education, Save/Load and
 Settings under MORE. `F2` toggles the developer overlay.
 
-### GDScript regression suite (509 assertions)
+### GDScript regression suite (618 assertions)
 
 ```bash
 godot --headless --path Lifestate.Godot --script res://tests/run_tests.gd
@@ -78,7 +79,7 @@ Exits non-zero on any failure. Coverage: clock, age, life stages, needs, every
 activity, attributes, traits, skills, education, family, relationships, life
 events and history, total play hours, save/load, offline progression, God Mode.
 
-### Godot UI structure checks (69 assertions)
+### Godot UI structure checks (453 assertions)
 
 ```bash
 godot --headless --path Lifestate.Godot --script res://tests/run_ui_checks.gd
@@ -88,7 +89,7 @@ Instantiates the real `Main.tscn` and verifies the scene tree, navigation wiring
 that displayed values come from the live `PlayerState`, that navigation mutates
 nothing, the F2 overlay's enable/visibility coupling, and the colour palette.
 
-### Godot runtime smoke test (36 assertions)
+### Godot runtime smoke test (44 assertions)
 
 ```bash
 godot --headless --path Lifestate.Godot --script res://tests/run_smoke.gd
@@ -100,27 +101,28 @@ autoload session, initial values, the frame-rate-independent tick accumulator
 loop over three seconds of real time, pause/resume, and that the scene displays
 the session's actual numbers.
 
-### C# / GDScript save interchange (20 assertions)
+### C# → Godot save compatibility (23 assertions)
 
 ```bash
-# 1. regenerate the C# golden fixture (only needed if the schema changes)
+# 1. regenerate only when the retained C# Version 7 reference changes
 dotnet run -- --save-fixture Lifestate.Godot/tests/fixtures/csharp_save_v7.json \
                             Lifestate.Godot/tests/fixtures/csharp_summary.json
 
-# 2. run the port's side of the test
+# 2. prove Godot still imports the Version 7 C# save
 godot --headless --path Lifestate.Godot --script res://tests/run_save_interchange.gd
 
-# 3. run the C# side of the test
+# 3. keep the retained Version 7 C# golden fixture regression green
 bin/Debug/net10.0-windows/Lifestate.exe --verify-fixture \
     Lifestate.Godot/tests/fixtures/godot_save_v7.json \
     Lifestate.Godot/tests/fixtures/godot_summary.json
 ```
 
-The port loads the C#-written save, re-serializes it and compares every persisted
-key in both directions, matches a canonical integer summary field by field,
-writes its own save for the C# build to read back, reproduces C# offline
-progression for the same fixture, and rejects a legacy `Version 1` save without
-touching live state. Fixtures live in `Lifestate.Godot/tests/fixtures/`.
+The port loads the C#-written Version 7 save, preserves every legacy field while
+upgrading it to Version 8 with `SecondaryGrade = 0`, matches a canonical summary,
+reproduces C# offline progression, and rejects Version 1 transactionally. The
+retained Version 7 Godot fixture keeps the old C# reader regression-covered;
+Version 8 Godot saves are not compatible with the old C# build. Fixtures live in
+`Lifestate.Godot/tests/fixtures/`.
 
 The C# executable exposes the test-only flags `--save-fixture`, `--load-fixture`,
 `--verify-fixture` and `--reject-fixture` for this (see

@@ -100,7 +100,7 @@ static func load_game(clock: GameClock, player: PlayerState, path: String = "", 
 	)
 	temp_player.attributes.restore(v["Intelligence"], v["Fitness"], v["Social"], v["Discipline"], v["Creativity"])
 	temp_player.skills.academics.restore(v["AcademicsExperience"])
-	temp_player.education.restore(v["EducationStatus"], v["PrimaryGrade"], v["EducationProgress"], v["SchoolYearStartDay"])
+	temp_player.education.restore(v["EducationStatus"], v["PrimaryGrade"], v["EducationProgress"], v["SchoolYearStartDay"], v["SecondaryGrade"])
 	temp_player.traits.restore(v["Confidence"], v["Curiosity"], v["Patience"], v["Ambition"], v["Empathy"])
 
 	if v["has_event_data"]:
@@ -153,7 +153,8 @@ static func load_game(clock: GameClock, player: PlayerState, path: String = "", 
 	player.skills.academics.restore(temp_player.skills.academics.experience)
 	player.education.restore(
 		temp_player.education.status, temp_player.education.primary_grade,
-		temp_player.education.education_progress, temp_player.education.school_year_start_day
+		temp_player.education.education_progress, temp_player.education.school_year_start_day,
+		temp_player.education.secondary_grade
 	)
 	player.traits.restore(
 		temp_player.traits.confidence, temp_player.traits.curiosity, temp_player.traits.patience,
@@ -261,18 +262,22 @@ static func validate_and_extract(data: Dictionary) -> Dictionary:
 	# ---- Education (version 3+) -------------------------------------------
 	values["EducationStatus"] = EducationState.Status.NOT_ENROLLED
 	values["PrimaryGrade"] = 0
+	values["SecondaryGrade"] = 0
 	values["EducationProgress"] = 0
 	values["SchoolYearStartDay"] = 0
 	if version >= 3:
 		values["EducationStatus"] = _get_int(data, "EducationStatus", 0, errors)
 		values["PrimaryGrade"] = _get_int(data, "PrimaryGrade", 0, errors)
+		if version >= 8:
+			values["SecondaryGrade"] = _get_int(data, "SecondaryGrade", 0, errors)
 		values["EducationProgress"] = _get_int(data, "EducationProgress", 0, errors)
 		values["SchoolYearStartDay"] = _get_int(data, "SchoolYearStartDay", 0, errors)
 		if not errors.is_empty():
 			return _result(false, "Save contains malformed education fields.")
 		if not _validate_education(
 			values["EducationStatus"], values["PrimaryGrade"],
-			values["EducationProgress"], values["SchoolYearStartDay"], values["Day"]
+			values["SecondaryGrade"], values["EducationProgress"],
+			values["SchoolYearStartDay"], values["Day"]
 		):
 			return _result(false, "Education state is invalid.")
 
@@ -381,17 +386,20 @@ static func validate_and_extract(data: Dictionary) -> Dictionary:
 
 	return {"ok": true, "error": "", "values": values}
 
-
-static func _validate_education(status: int, grade: int, progress: int, start_day: int, current_day: int) -> bool:
+static func _validate_education(status: int, primary_grade: int, secondary_grade: int, progress: int, start_day: int, current_day: int) -> bool:
 	if start_day < 0 or start_day > current_day:
 		return false
 
 	if status == EducationState.Status.NOT_ENROLLED:
-		return grade == 0 and progress == 0 and start_day == 0
+		return primary_grade == 0 and secondary_grade == 0 and progress == 0 and start_day == 0
 	if status == EducationState.Status.PRIMARY_SCHOOL:
-		return grade >= 1 and grade <= EducationState.GRADE_COUNT and progress >= 0 and progress <= EducationState.PROGRESS_MAX
+		return primary_grade >= 1 and primary_grade <= EducationState.PRIMARY_LAST_GRADE and secondary_grade == 0 and progress >= 0 and progress <= EducationState.PROGRESS_MAX
 	if status == EducationState.Status.COMPLETED_PRIMARY:
-		return grade == EducationState.GRADE_COUNT and progress == EducationState.PROGRESS_MAX
+		return primary_grade == EducationState.PRIMARY_LAST_GRADE and secondary_grade == 0 and progress == EducationState.PROGRESS_MAX
+	if status == EducationState.Status.SECONDARY_SCHOOL:
+		return primary_grade == EducationState.PRIMARY_LAST_GRADE and secondary_grade >= EducationState.SECONDARY_FIRST_GRADE and secondary_grade <= EducationState.SECONDARY_LAST_GRADE and progress >= 0 and progress <= EducationState.PROGRESS_MAX
+	if status == EducationState.Status.COMPLETED_SECONDARY:
+		return primary_grade == EducationState.PRIMARY_LAST_GRADE and secondary_grade == EducationState.SECONDARY_LAST_GRADE and progress == EducationState.PROGRESS_MAX
 	return false
 
 

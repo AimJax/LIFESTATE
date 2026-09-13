@@ -40,6 +40,7 @@ const WORK_MIN_AGE: int = 18
 const STUDY_MIN_AGE: int = 6
 const PLAY_MIN_AGE: int = 2
 const ENROLL_MIN_AGE: int = 6
+const SECONDARY_ENROLL_MIN_AGE: int = 12
 
 const MAX_EDUCATION_PROGRESS_PER_BULK: int = 100
 
@@ -183,6 +184,16 @@ func enroll_primary_school() -> bool:
 		events.evaluate_triggers(_clock.day)
 	return enrolled
 
+func enroll_secondary_school() -> bool:
+	if age < SECONDARY_ENROLL_MIN_AGE:
+		return false
+	if education.status != EducationState.Status.COMPLETED_PRIMARY:
+		return false
+	var enrolled: bool = education.try_enroll_secondary(_clock.day)
+	if enrolled:
+		events.evaluate_triggers(_clock.day)
+	return enrolled
+
 
 func resolve_event_choice(choice_id: String) -> bool:
 	return events.resolve_choice(choice_id, _clock.day)
@@ -260,7 +271,7 @@ func update_study(elapsed_minutes: int) -> void:
 		study_xp += hours_studied * STUDY_XP_PER_HOUR
 		attributes.add_intelligence(hours_studied * INTELLIGENCE_PER_STUDY_HOUR)
 		skills.academics.add_experience(hours_studied * ACADEMICS_XP_PER_STUDY_HOUR)
-		if education.status == EducationState.Status.PRIMARY_SCHOOL:
+		if education.status == EducationState.Status.PRIMARY_SCHOOL or education.status == EducationState.Status.SECONDARY_SCHOOL:
 			education.add_progress(hours_studied)
 			education.evaluate_progression(_clock.day)
 		traits.add_curiosity(hours_studied * CURIOSITY_PER_STUDY_HOUR)
@@ -359,7 +370,7 @@ func bulk_advance_simulation(elapsed_minutes: int) -> Dictionary:
 		result["xp_earned"] = hours_studied * STUDY_XP_PER_HOUR
 		attributes.add_intelligence(hours_studied * INTELLIGENCE_PER_STUDY_HOUR)
 		skills.academics.add_experience(hours_studied * ACADEMICS_XP_PER_STUDY_HOUR)
-		if education.status == EducationState.Status.PRIMARY_SCHOOL:
+		if education.status == EducationState.Status.PRIMARY_SCHOOL or education.status == EducationState.Status.SECONDARY_SCHOOL:
 			var education_hours: int = mini(hours_studied, MAX_EDUCATION_PROGRESS_PER_BULK)
 			education.add_progress(education_hours)
 		traits.add_curiosity(hours_studied * CURIOSITY_PER_STUDY_HOUR)

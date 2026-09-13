@@ -9,9 +9,11 @@ var _stage := 0
 var _settle_frames := 0
 var _resolution_index := 0
 var _screen_index := 0
+var _education_case_index := 0
 
 const RESOLUTIONS := [Vector2i(1100, 720), Vector2i(1280, 720), Vector2i(1366, 768), Vector2i(1600, 900)]
 const SCREEN_KEYS := ["life", "activities", "people", "more", "character", "education", "save_load", "settings"]
+const EDUCATION_CASES := ["primary_enroll", "primary_active", "primary_completed_wait", "secondary_enroll", "secondary_active", "secondary_completed"]
 
 
 func _initialize() -> void:
@@ -48,15 +50,25 @@ func _process(_delta: float) -> bool:
 	_settle_frames += 1
 	if _settle_frames < 3:
 		return false
-	_check_geometry_case()
-	_screen_index += 1
-	if _screen_index == SCREEN_KEYS.size():
-		_screen_index = 0
-		_resolution_index += 1
-	if _resolution_index == RESOLUTIONS.size():
+	if _stage == 1:
+		_check_geometry_case()
+		_screen_index += 1
+		if _screen_index == SCREEN_KEYS.size():
+			_screen_index = 0
+			_resolution_index += 1
+		if _resolution_index == RESOLUTIONS.size():
+			_stage = 2
+			_prepare_education_case()
+			return false
+		_prepare_geometry_case()
+		return false
+
+	_check_education_case()
+	_education_case_index += 1
+	if _education_case_index == EDUCATION_CASES.size():
 		_check_live_data()
 		return _finish()
-	_prepare_geometry_case()
+	_prepare_education_case()
 	return false
 
 
@@ -280,6 +292,68 @@ func _check_geometry_case() -> void:
 		_size(chain[4]), _visible_rect(representatives[0], host)])
 
 
+func _prepare_education_case() -> void:
+	var service: Node = root.get_node("GameService")
+	var player: PlayerState = service.player
+	var education: EducationState = player.education
+	var case_name: String = EDUCATION_CASES[_education_case_index]
+	match case_name:
+		"primary_enroll":
+			service.clock.restore(6 * 365, 0, 0)
+			education.restore(EducationState.Status.NOT_ENROLLED, 0, 0, 0)
+		"primary_active":
+			service.clock.restore(8 * 365, 0, 0)
+			education.restore(EducationState.Status.PRIMARY_SCHOOL, 3, 50, service.clock.day - 100)
+		"primary_completed_wait":
+			service.clock.restore(11 * 365, 0, 0)
+			education.restore(EducationState.Status.COMPLETED_PRIMARY, 6, 100, service.clock.day - 365)
+		"secondary_enroll":
+			service.clock.restore(12 * 365, 0, 0)
+			education.restore(EducationState.Status.COMPLETED_PRIMARY, 6, 100, service.clock.day - 365)
+		"secondary_active":
+			service.clock.restore(14 * 365, 0, 0)
+			education.restore(EducationState.Status.SECONDARY_SCHOOL, 6, 50, service.clock.day - 100, 9)
+		"secondary_completed":
+			service.clock.restore(18 * 365, 0, 0)
+			education.restore(EducationState.Status.COMPLETED_SECONDARY, 6, 100, service.clock.day - 365, 12)
+	_main.go_to("education")
+	_main._screens["education"].refresh()
+	_settle_frames = 0
+
+
+func _check_education_case() -> void:
+	var screen = _main._screens["education"]
+	var host: Control = _main.get_node("Layout/ScreenHost")
+	var case_name: String = EDUCATION_CASES[_education_case_index]
+	var control: Control
+	var expected_text: String
+	match case_name:
+		"primary_enroll":
+			control = screen._enroll_button
+			expected_text = "ENROLL IN PRIMARY SCHOOL"
+		"primary_active":
+			control = screen._grade_label
+			expected_text = "PRIMARY SCHOOL · GRADE 3"
+		"primary_completed_wait":
+			control = screen._secondary_hint_label
+			expected_text = "Secondary school becomes available at age 12."
+		"secondary_enroll":
+			control = screen._secondary_enroll_button
+			expected_text = "ENROLL IN SECONDARY SCHOOL"
+		"secondary_active":
+			control = screen._grade_label
+			expected_text = "SECONDARY SCHOOL · GRADE 9"
+		"secondary_completed":
+			control = screen._grade_label
+			expected_text = "SECONDARY SCHOOL COMPLETED"
+	var visible_rect := _visible_rect(control, host)
+	_harness.section("Education " + case_name)
+	_harness.check(case_name + " representative has non-zero visible geometry",
+		visible_rect.size.x > 0.0 and visible_rect.size.y > 0.0,
+		"control=%s visible=%s" % [_rect(control), visible_rect])
+	_harness.eq_string(case_name + " visible text", control.text, expected_text)
+
+
 static func _layout_chain(screen: Control) -> Array[Control]:
 	var centered_host: Control = screen.get_child(0)
 	var center: Control = centered_host.get_child(0)
@@ -302,7 +376,7 @@ func _representatives(key: String) -> Array[Control]:
 		"character":
 			return [screen._age_label]
 		"education":
-			return [screen._enroll_button]
+			return [screen._grade_label]
 		"save_load":
 			return [screen._status_label]
 		"settings":
@@ -346,7 +420,7 @@ static func _first_button(node: Node) -> Button:
 
 
 static func _visible_rect(control: Control, stop_at: Control) -> Rect2:
-	if not _nonzero(control):
+	if not _nonzero(control) or not control.is_visible_in_tree():
 		return Rect2()
 	var visible_rect := control.get_global_rect()
 	var current: Node = control
