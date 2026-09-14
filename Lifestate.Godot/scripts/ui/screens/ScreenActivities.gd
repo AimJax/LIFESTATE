@@ -25,6 +25,7 @@ var _progress_value: Label
 var _progress_detail: Label
 var _progress_bar: ProgressBar
 var _cards: Dictionary = {}
+var _support_buttons: Array = []
 var _last_activity: String = ""
 
 
@@ -101,6 +102,9 @@ func _build_support_actions() -> void:
 		refresh()
 	)
 	row.add_child(drink_button)
+
+	# Support actions are gameplay mutations: they must die with the player.
+	_support_buttons = [wait_button, eat_button, drink_button]
 
 
 func _build_grid() -> void:
@@ -209,6 +213,24 @@ func _rejection_reason(key: String) -> String:
 func refresh() -> void:
 	var player: PlayerState = _service.player
 	var activity: String = player.current_activity_name()
+
+	# Terminal state: all mutation controls disabled, hero replaced by the
+	# life-record message. The domain still enforces its own guards; this is
+	# presentation only.
+	if player.is_dead:
+		_hero_name.text = "LIFE HAS ENDED"
+		_hero_detail.text = "Life has ended. Activities are unavailable."
+		_hero_card.add_theme_stylebox_override("panel", UiTheme.panel_style(UiTheme.SURFACE_RAISED, UiTheme.NEGATIVE))
+		_progress_card.visible = false
+		for key in _cards:
+			var entry: Dictionary = _cards[key]
+			(entry["action"] as Button).disabled = true
+			(entry["status"] as Label).text = "—"
+			(entry["status"] as Label).add_theme_color_override("font_color", UiTheme.TEXT_MUTED)
+		for button in _support_buttons:
+			button.disabled = true
+		_last_activity = activity
+		return
 
 	_hero_name.text = activity.to_upper()
 	if activity == "Idle":

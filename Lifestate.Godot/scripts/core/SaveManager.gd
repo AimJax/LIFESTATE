@@ -135,6 +135,23 @@ static func load_game(clock: GameClock, player: PlayerState, path: String = "", 
 	if temp_player.is_working and not temp_player.career.is_employed():
 		return _result(false, "A save cannot be working without a job.")
 
+	# ---- Life / death state (version 10+, with legacy migration) -----------
+	# Restored BEFORE offline progression: offline old-age mortality rolls are
+	# derived from the LifeSeed, so it must be final before any time advances.
+	# v2–v9 migration: Health 100, living, and a LifeSeed derived
+	# deterministically from stable saved clock/money state, so the same legacy
+	# save always produces the same seed (no per-load reroll).
+	if v["version"] >= 10:
+		temp_player.restore_life_state(
+			v["Health"], v["IsDead"], v["DeathDay"], v["DeathAge"],
+			v["CauseOfDeath"], v["LifeSeed"]
+		)
+	else:
+		temp_player.restore_life_state(
+			PlayerState.HEALTH_MAX, false, -1, -1, "",
+			PlayerState.migration_seed(v["Day"], v["Hour"], v["Minute"], v["Money"])
+		)
+
 	# ---- Offline progression (O(1)) ---------------------------------------
 	var now: float = now_unix if not is_nan(now_unix) else Time.get_unix_time_from_system()
 	var elapsed_seconds: int = int(now - v["SavedAtUtc"])
@@ -144,19 +161,24 @@ static func load_game(clock: GameClock, player: PlayerState, path: String = "", 
 	if elapsed_seconds > 0:
 		var elapsed_minutes: int = elapsed_seconds * GameClock.MINUTES_PER_REAL_SECOND
 
-		if not temp_clock.advance_game_minutes(elapsed_minutes):
-			return _result(false, "Save time would overflow the game clock.")
-
 		if not temp_player.preflight_work_and_study(elapsed_minutes)["ok"]:
 			return _result(false, "Offline progression would overflow money or experience.")
+		# Also gate against clock-day overflow for LIVING saves: the engine
+		# freezes at death long before its day range, so only a pathological
+		# future timestamp reaches this. Dead saves skip the gate — their engine
+		# step is a no-op regardless of elapsed time. Conservative bound: 1440
+		# game-minutes per real second (all MINUTES_PER_REAL_SECOND rates are 4).
+		if not temp_player.is_dead and v["Day"] > GameClock.MAX_DAY - elapsed_minutes / 1440:
+			return _result(false, "Offline progression would overflow the clock.")
 
-		var rewards: Dictionary = temp_player.bulk_advance_simulation(elapsed_minutes)
-		temp_player.apply_rewards(rewards["money_earned"], rewards["xp_earned"])
-		temp_player.education.evaluate_progression(temp_clock.day)
+		# The simulation engine owns the clock (advancing and freezing it at
+		# death) and applies rewards inline; callers only gate overflow.
+		temp_player.bulk_advance_simulation(elapsed_minutes)
 
 	# Eligibility is evaluated ONCE against the final state; TriggeredDay is the
-	# final current day.
-	temp_player.events.evaluate_triggers(temp_clock.day)
+	# final current day. Never for a dead player.
+	if not temp_player.is_dead:
+		temp_player.events.evaluate_triggers(temp_clock.day)
 
 	# ---- Commit to the live objects --------------------------------------
 	clock.restore(temp_clock.day, temp_clock.hour, temp_clock.minute)
@@ -341,6 +363,59 @@ static func validate_and_extract(data: Dictionary) -> Dictionary:
 			return _result(false, "Parent closeness is out of range.")
 		if values["MotherRelationshipPersonId"] != values["MotherId"] or values["FatherRelationshipPersonId"] != values["FatherId"]:
 			return _result(false, "Relationship cross-reference does not match parent identity.")
+
+	# ---- Health / Death (version 10+) --------------------------------------
+	values["Health"] = PlayerState.HEALTH_MAX
+	values["IsDead"] = false
+	values["DeathDay"] = -1
+	values["DeathAge"] = -1
+	values["CauseOfDeath"] = ""
+	values["LifeSeed"] = -1
+	if version >= 10:
+		if not errors.is_empty():
+			return _result(false, "Save contains malformed fields: %s" % ", ".join(errors))
+
+		var health_raw: Variant = data.get("Health", null)
+		if health_raw == null or not _is_number(health_raw):
+			return _result(false, "Health is missing or not a number.")
+		var health_value: float = float(health_raw)
+		if is_nan(health_value) or is_inf(health_value) or health_value < 0.0 or health_value > 100.0:
+			return _result(false, "Health is out of range.")
+		values["Health"] = health_value
+
+		values["IsDead"] = _get_bool(data, "IsDead", false, errors)
+		values["DeathDay"] = _get_int(data, "DeathDay", -1, errors)
+		values["DeathAge"] = _get_int(data, "DeathAge", -1, errors)
+		values["CauseOfDeath"] = _get_string(data, "CauseOfDeath", "", errors)
+		values["LifeSeed"] = _get_int(data, "LifeSeed", -1, errors)
+		if not errors.is_empty():
+			return _result(false, "Save contains malformed life fields: %s" % ", ".join(errors))
+
+		if values["LifeSeed"] < 0 or values["LifeSeed"] > PlayerState.LIFE_SEED_MAX:
+			return _result(false, "LifeSeed is out of range.")
+
+		if not values["IsDead"]:
+			if values["Health"] <= 0.0:
+				return _result(false, "A living save cannot have Health 0.")
+			if values["CauseOfDeath"] != "" or values["DeathDay"] != -1 or values["DeathAge"] != -1:
+				return _result(false, "A living save cannot carry death state.")
+		else:
+			if values["Health"] != 0.0:
+				return _result(false, "A dead save must have Health 0.")
+			if not PlayerState.DEATH_CAUSES.has(values["CauseOfDeath"]):
+				return _result(false, "CauseOfDeath is missing or unknown.")
+			if values["DeathDay"] < 0 or values["DeathAge"] < 0:
+				return _result(false, "A dead save must record death day and age.")
+			# The clock stops at death, so a saved dead player's clock equals the
+			# death day exactly.
+			if values["DeathDay"] != values["Day"]:
+				return _result(false, "DeathDay must equal the saved clock day.")
+
+		# Dead saves cannot carry an active activity.
+		if values["IsDead"]:
+			for key in ["IsSleeping", "IsWorking", "IsStudying", "IsPlaying", "IsSpendingFamilyTime"]:
+				if values[key]:
+					return _result(false, "A dead save cannot have an active activity.")
 
 	# ---- Career (version 9+) ----------------------------------------------
 	values["CurrentJobId"] = ""

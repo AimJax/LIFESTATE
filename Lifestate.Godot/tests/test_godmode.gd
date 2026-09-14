@@ -94,7 +94,7 @@ static func _time_skip(h: TestHarness) -> void:
 	student_god.advance_days(6 * 365)
 	student_player.enroll_primary_school()
 	student_player.start_studying()
-	student_player.advance_simulation(60 * 120)
+	TestHarness.advance_kept_alive(student_player, 60 * 120)
 	h.eq_int("GodMode-T15 studying earns education progress", student_player.education.education_progress, 100)
 	var grade_before: int = student_player.education.primary_grade
 	student_god.advance_days(400)

@@ -76,11 +76,14 @@ static func secondary_enrollment(h: TestHarness) -> void:
 		player.enroll_secondary_school(), false)
 	h.eq_int("EduSec-E17 status unchanged", player.education.status, EducationState.Status.SECONDARY_SCHOOL)
 
-	# Completing primary later and trying again must still fail.
+	# Completing primary later and trying again must still fail. Needs are kept
+	# alive: the Health/Death foundation would otherwise starve the student.
 	player.stop_studying()
 	player.start_studying()
-	player.advance_simulation(60 * 50)
+	TestHarness.advance_kept_alive(player, 60 * 50)
 	player.stop_studying()
+	h.check("EduSec-E18a long study session is survivable with needs kept alive",
+		not player.is_dead)
 	advance_days(clock, 365)
 	h.eq_int("EduSec-E18 still secondary after another year of study", player.education.status, EducationState.Status.SECONDARY_SCHOOL)
 
@@ -106,10 +109,12 @@ static func secondary_grade_progression(h: TestHarness) -> void:
 
 	h.eq_int("EduSec-G2 grade 7 requires progress too", player.education.secondary_grade, 7)
 	player.start_studying()
-	player.advance_simulation(60 * 101)
+	TestHarness.advance_kept_alive(player, 60 * 101)
 	player.stop_studying()
 	h.eq_int("EduSec-G3 progress clamps to 100", player.education.education_progress, 100)
-	advance_days(clock, 364)
+	# The 101 study hours themselves consumed ~4-5 days of calendar time; jump
+	# 364 days from the year start instead of a fixed count from "now".
+	advance_days(clock, 364 - (clock.day - player.education.school_year_start_day))
 	player.education.evaluate_progression(clock.day)
 	h.eq_int("EduSec-G4 progress alone does not advance", player.education.secondary_grade, 7)
 
@@ -121,7 +126,7 @@ static func secondary_grade_progression(h: TestHarness) -> void:
 
 	for target in [9, 10, 11]:
 		player.start_studying()
-		player.advance_simulation(60 * 100)
+		TestHarness.advance_kept_alive(player, 60 * 100)
 		player.stop_studying()
 		advance_days(clock, 365)
 		player.education.evaluate_progression(clock.day)
@@ -130,7 +135,7 @@ static func secondary_grade_progression(h: TestHarness) -> void:
 
 	# Grade 12 completion.
 	player.start_studying()
-	player.advance_simulation(60 * 100)
+	TestHarness.advance_kept_alive(player, 60 * 100)
 	player.stop_studying()
 	advance_days(clock, 365)
 	player.education.evaluate_progression(clock.day)
@@ -138,9 +143,9 @@ static func secondary_grade_progression(h: TestHarness) -> void:
 	h.eq_int("EduSec-G13 progress reset at grade 12", player.education.education_progress, 0)
 
 	player.start_studying()
-	player.advance_simulation(60 * 100)
+	TestHarness.advance_kept_alive(player, 60 * 100)
 	player.stop_studying()
-	advance_days(clock, 365)
+	advance_days(clock, 365 - (clock.day - player.education.school_year_start_day))
 	player.education.evaluate_progression(clock.day)
 	h.eq_int("EduSec-G14 completed secondary", player.education.status, EducationState.Status.COMPLETED_SECONDARY)
 	h.eq_int("EduSec-G15 final grade is 12", player.education.secondary_grade, 12)
@@ -170,9 +175,10 @@ static func secondary_study_integration(h: TestHarness) -> void:
 	var ambition_before: float = player.traits.ambition
 
 	# Study while in secondary should advance education progress AND usual study
-	# rewards.
+	# rewards. Needs are kept alive across the two 50-hour sessions (the shared
+	# engine now consumes calendar time, so chunks are hunger-safe).
 	player.start_studying()
-	player.advance_simulation(60 * 50)
+	TestHarness.advance_kept_alive(player, 60 * 50)
 	player.stop_studying()
 
 	h.eq_int("EduSec-ST1 secondary progress advanced", player.education.education_progress, 50)
@@ -180,11 +186,13 @@ static func secondary_study_integration(h: TestHarness) -> void:
 	h.eq_int("EduSec-ST3 academics xp advanced", player.skills.academics.experience, academics_before + 500)
 	h.near_float("EduSec-ST4 intelligence advanced", player.attributes.intelligence, intelligence_before + 50.0 * 0.05)
 
-	# Study enough to advance, then finish the year.
+	# Study enough to advance, then finish the year. The engine itself consumed
+	# calendar time (~5 days per 100 study hours), so the remaining year is
+	# measured from the actual year start rather than a fixed count.
 	player.start_studying()
-	player.advance_simulation(60 * 50)
+	TestHarness.advance_kept_alive(player, 60 * 50)
 	player.stop_studying()
-	advance_days(clock, 365)
+	advance_days(clock, 365 - (clock.day - player.education.school_year_start_day))
 	player.education.evaluate_progression(clock.day)
 	h.eq_int("EduSec-ST5 advanced to next grade", player.education.secondary_grade, 8)
 
@@ -204,7 +212,7 @@ static func secondary_save_round_trip(h: TestHarness) -> void:
 	complete_primary(player, clock)
 	h.eq_bool("EduSec-R0 enrolled secondary", player.enroll_secondary_school(), true)
 	player.start_studying()
-	player.advance_simulation(60 * 100)
+	TestHarness.advance_kept_alive(player, 60 * 100)
 	player.stop_studying()
 	advance_days(clock, 365)
 	player.education.evaluate_progression(clock.day)
@@ -244,7 +252,7 @@ static func secondary_save_round_trip(h: TestHarness) -> void:
 	h.eq_bool("EduSec-R14 enrolled secondary (completed path)", player2.enroll_secondary_school(), true)
 	advance_grade_to(player2, clock2, 12)
 	player2.start_studying()
-	player2.advance_simulation(60 * 100)
+	TestHarness.advance_kept_alive(player2, 60 * 100)
 	player2.stop_studying()
 	advance_days(clock2, 365)
 	player2.education.evaluate_progression(clock2.day)
@@ -342,6 +350,8 @@ static func legacy_v7_still_loads(h: TestHarness) -> void:
 static func secondary_offline_progression(h: TestHarness) -> void:
 	h.section("EduSec-O")
 
+	# Short offline: 10 real minutes = 2400 game minutes = 40 game hours.
+	# Studying survives (thirst 100 -> 20), rewards accrue normally.
 	var pair := fresh()
 	var clock: GameClock = pair[0]
 	var player: PlayerState = pair[1]
@@ -351,36 +361,48 @@ static func secondary_offline_progression(h: TestHarness) -> void:
 	player.start_studying()
 	SaveManager.save_game(clock, player, TEST_EDU_PATH, FIXED_NOW)
 
-	var one_hour := fresh()
-	var result: Dictionary = SaveManager.load_game(one_hour[0], one_hour[1], TEST_EDU_PATH, FIXED_NOW + 3600.0)
+	var short := fresh()
+	var result: Dictionary = SaveManager.load_game(short[0], short[1], TEST_EDU_PATH, FIXED_NOW + 600.0)
 	h.check("EduSec-O1 offline secondary load succeeds", result["ok"], result["error"])
-	h.eq_int("EduSec-O2 offline Study adds capped education progress", one_hour[1].education.education_progress, 100)
-	h.eq_int("EduSec-O3 offline Study adds normal StudyXP", one_hour[1].study_xp, 2400)
-	h.eq_int("EduSec-O4 ten elapsed days do not advance Grade 7", one_hour[1].education.secondary_grade, 7)
+	h.check("EduSec-O1a 40 offline game-hours are survivable", not short[1].is_dead)
+	h.eq_int("EduSec-O2 offline Study advances education progress", short[1].education.education_progress, 40)
+	h.eq_int("EduSec-O3 offline Study adds normal StudyXP", short[1].study_xp, 400)
+	h.eq_int("EduSec-O4 grade 7 unchanged by offline study", short[1].education.secondary_grade, 7)
 
+	# One real-world hour = 240 game hours. The character cannot eat or drink
+	# while away, so the Health/Death foundation now ends the life during
+	# progression. Death must land at the exact fatal point (70 game hours:
+	# 50 to drain thirst, then 20 deprivation hours at 5 damage), not at the
+	# end of the interval.
 	var large := fresh()
 	var started: int = Time.get_ticks_msec()
-	var large_result: Dictionary = SaveManager.load_game(large[0], large[1], TEST_EDU_PATH, FIXED_NOW + 10000000.0)
+	var large_result: Dictionary = SaveManager.load_game(large[0], large[1], TEST_EDU_PATH, FIXED_NOW + 3600.0)
 	var elapsed_ms: int = Time.get_ticks_msec() - started
 	h.check("EduSec-O5 large offline load succeeds", large_result["ok"], large_result["error"])
 	h.check("EduSec-O6 large offline load remains O(1)", elapsed_ms < 2000, "%d ms" % elapsed_ms)
-	h.eq_int("EduSec-O7 large offline period advances only one grade", large[1].education.secondary_grade, 8)
-	h.eq_int("EduSec-O8 grade advance consumes current progress", large[1].education.education_progress, 0)
+	h.eq_bool("EduSec-O7 one real hour offline ends in death", large[1].is_dead, true)
+	h.eq_string("EduSec-O7a cause is dehydration", large[1].cause_of_death, PlayerState.CAUSE_DEHYDRATION)
+	# 70 game hours after day 4380 00:00 = day 4382 22:00.
+	h.eq_int("EduSec-O7b death lands on the exact fatal day", large[0].day, 4382)
+	h.eq_int("EduSec-O7c death lands on the exact fatal hour", large[0].hour, 22)
+	h.eq_int("EduSec-O8 grade never advances past 7", large[1].education.secondary_grade, 7)
+	h.eq_int("EduSec-O8a study rewards stop at death", large[1].study_xp, 700)
+	h.eq_int("EduSec-O8b education progress stopped at death", large[1].education.education_progress, 70)
 
 
 static func complete_primary(player: PlayerState, clock: GameClock) -> void:
 	for _grade in range(6):
 		player.start_studying()
-		player.advance_simulation(60 * 100)
+		TestHarness.advance_kept_alive(player, 60 * 100)
 		player.stop_studying()
 		advance_days(clock, 365)
 		player.education.evaluate_progression(clock.day)
 
 
 static func advance_grade_to(player: PlayerState, clock: GameClock, target: int) -> void:
-	while player.education.secondary_grade < target:
+	while player.education.secondary_grade < target and not player.is_dead:
 		player.start_studying()
-		player.advance_simulation(60 * 100)
+		TestHarness.advance_kept_alive(player, 60 * 100)
 		player.stop_studying()
 		advance_days(clock, 365)
 		player.education.evaluate_progression(clock.day)

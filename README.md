@@ -143,12 +143,17 @@ dotnet run -- --test          # 287 assertions, also via bin/…/Lifestate.exe -
 
 ## Save compatibility
 
-The Godot build is at Save **Version 9** (`CurrentJobId` added by the career
-foundation; v2–v8 all still load). Pre-v9 saves have no career state: on load,
-a save that was actively working migrates to **Laborer** (the historical flat
+The Godot build is at Save **Version 10** (`Health`/`IsDead`/`DeathDay`/
+`DeathAge`/`CauseOfDeath`/`LifeSeed`/deprivation accumulators added by the
+Health + Death foundation; v2–v9 all still load). Pre-v10 saves have no life
+state: on load they migrate to a healthy living character with a LifeSeed
+derived deterministically from stable saved state, so offline mortality rolls
+are stable across reloads. Pre-v9 saves also have no career state: on load, a
+save that was actively working migrates to **Laborer** (the historical flat
 10/hour generic Work wage), an unemployed save stays unemployed. The retained
-C# reference remains Version 7 and cannot read Godot v8/v9 saves; Godot still
-imports C# v7 saves (they upgrade to v9 with an empty `CurrentJobId`).
+C# reference remains Version 7 and cannot read Godot v8+ saves; Godot still
+imports C# v7 saves (they upgrade to v10 with living defaults and an empty
+`CurrentJobId`).
 
 | Build | Save location |
 | --- | --- |

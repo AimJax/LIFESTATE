@@ -341,9 +341,9 @@ static func fresh() -> Array:
 
 static func finish_primary(player: PlayerState, clock: GameClock) -> void:
 	var guard: int = 0
-	while player.education.status == EducationState.Status.PRIMARY_SCHOOL and guard < 12:
+	while player.education.status == EducationState.Status.PRIMARY_SCHOOL and guard < 12 and not player.is_dead:
 		player.start_studying()
-		player.advance_simulation(60 * 100)
+		TestHarness.advance_kept_alive(player, 60 * 100)
 		player.stop_studying()
 		advance_days(clock, 365)
 		player.education.evaluate_progression(clock.day)
@@ -352,9 +352,9 @@ static func finish_primary(player: PlayerState, clock: GameClock) -> void:
 
 static func finish_grade(player: PlayerState, clock: GameClock, target_grade: int) -> void:
 	var guard: int = 0
-	while player.education.status == EducationState.Status.PRIMARY_SCHOOL and player.education.primary_grade < target_grade:
+	while player.education.status == EducationState.Status.PRIMARY_SCHOOL and player.education.primary_grade < target_grade and not player.is_dead:
 		player.start_studying()
-		player.advance_simulation(60 * 100)
+		TestHarness.advance_kept_alive(player, 60 * 100)
 		player.stop_studying()
 		advance_days(clock, 365)
 		player.education.evaluate_progression(clock.day)
@@ -362,9 +362,9 @@ static func finish_grade(player: PlayerState, clock: GameClock, target_grade: in
 		if guard > 12:
 			return
 	guard = 0
-	while player.education.status == EducationState.Status.SECONDARY_SCHOOL and player.education.secondary_grade < target_grade:
+	while player.education.status == EducationState.Status.SECONDARY_SCHOOL and player.education.secondary_grade < target_grade and not player.is_dead:
 		player.start_studying()
-		player.advance_simulation(60 * 100)
+		TestHarness.advance_kept_alive(player, 60 * 100)
 		player.stop_studying()
 		advance_days(clock, 365)
 		player.education.evaluate_progression(clock.day)

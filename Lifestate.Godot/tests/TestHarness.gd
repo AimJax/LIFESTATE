@@ -52,3 +52,19 @@ func near_float(name: String, actual: float, expected: float, epsilon: float = F
 ## the harness output stays readable at scale.
 func group(name: String, condition: bool, detail: String = "") -> bool:
 	return check(name, condition, detail)
+
+
+## Advances the simulation in hunger-safe chunks, topping needs up between
+## chunks so long activity sessions survive the Health/Death mortality rules.
+## Inside a 10-hour chunk the worst drain is 20 thirst, so a topped-up player
+## can never cross zero and deprivation damage never starts. Tests whose actual
+## subject IS deprivation or death must drive advance_simulation directly.
+static func advance_kept_alive(player: PlayerState, total_minutes: int) -> void:
+	var chunk: int = 60 * 10
+	var remaining: int = total_minutes
+	while remaining > 0 and not player.is_dead:
+		player.eat(100)
+		player.drink(100)
+		var step: int = mini(chunk, remaining)
+		player.advance_simulation(step)
+		remaining -= step

@@ -197,7 +197,7 @@ static func _play(h: TestHarness) -> void:
 	h.eq_int("Play-P10 stopped play adds no hours", player.total_play_hours, hours_after)
 
 	player.start_playing()
-	player.advance_simulation(60 * 3000)
+	TestHarness.advance_kept_alive(player, 60 * 3000)
 	h.near_float("Play-P11 fitness caps at 100", player.attributes.fitness, 100.0)
 
 
@@ -220,7 +220,7 @@ static func _family_time(h: TestHarness) -> void:
 	h.near_float("FamilyTime-F5 empathy +0.02 per hour", player.traits.empathy, 50.02)
 	h.near_float("FamilyTime-F6 confidence +0.01 per hour", player.traits.confidence, 50.01)
 
-	player.advance_simulation(60 * 199)
+	TestHarness.advance_kept_alive(player, 60 * 199)
 	h.near_float("FamilyTime-F7 closeness caps at 100",
 		player.relationships.mother_relationship.closeness, 100.0)
 
@@ -250,8 +250,9 @@ static func _bulk_parity(h: TestHarness) -> void:
 	advance_days(bulk_clock, 6 * 365)
 	bulk_player.enroll_primary_school()
 	bulk_player.start_studying()
-	var rewards: Dictionary = bulk_player.bulk_advance_simulation(600)
-	bulk_player.apply_rewards(rewards["money_earned"], rewards["xp_earned"])
+	# Rewards are applied inline by the shared engine; the bulk path no longer
+	# reports them for manual re-application (that would double-pay).
+	bulk_player.bulk_advance_simulation(600)
 
 	h.eq_int("Bulk-B1 StudyXP parity", bulk_player.study_xp, stepped_player.study_xp)
 	h.near_float("Bulk-B2 intelligence parity",
@@ -280,8 +281,7 @@ static func _bulk_parity(h: TestHarness) -> void:
 	advance_days(work_bulk_clock, 19 * 365)
 	work_bulk_player.apply_for_job(JobCatalog.LABORER_ID)
 	work_bulk_player.start_working()
-	var work_rewards: Dictionary = work_bulk_player.bulk_advance_simulation(720)
-	work_bulk_player.apply_rewards(work_rewards["money_earned"], work_rewards["xp_earned"])
+	work_bulk_player.bulk_advance_simulation(720)
 	h.eq_int("Bulk-B8 work money parity", work_bulk_player.money, work_stepped_player.money)
 	h.eq_int("Bulk-B9 work day earnings", work_bulk_player.money, 1000 + 120)
 

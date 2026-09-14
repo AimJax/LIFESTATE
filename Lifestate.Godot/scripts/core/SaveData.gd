@@ -7,8 +7,8 @@ extends RefCounted
 ## System.Text.Json output so a save written by the C# build loads here and
 ## vice versa. Do not rename or reorder-couple these keys to GDScript style.
 
-const VERSION: int = 9
-static var SUPPORTED_VERSIONS: PackedInt32Array = PackedInt32Array([2, 3, 4, 5, 6, 7, 8, 9])
+const VERSION: int = 10
+static var SUPPORTED_VERSIONS: PackedInt32Array = PackedInt32Array([2, 3, 4, 5, 6, 7, 8, 9, 10])
 
 static var HISTORY_KEYS: PackedStringArray = PackedStringArray([
 	"EventId", "ChoiceId", "TriggeredDay", "ResolvedDay",
@@ -88,6 +88,17 @@ static func to_dict(clock: GameClock, player: PlayerState, now_unix: float = NAN
 		"Social": player.attributes.social,
 		"Discipline": player.attributes.discipline,
 		"Creativity": player.attributes.creativity,
+		# ---- Health / Death foundation (Godot-only, version 10+) -------------
+		"Health": player.health,
+		"IsDead": player.is_dead,
+		"DeathDay": player.death_day,
+		"DeathAge": player.death_age,
+		"CauseOfDeath": player.cause_of_death,
+		"LifeSeed": player.life_seed,
+		# Deprivation streaks persist so a save taken mid-damage-hour resumes
+		# with identical offline death timing.
+		"StarvingMinutesAccumulator": player.get_starving_minutes_accumulator(),
+		"DehydratedMinutesAccumulator": player.get_dehydrated_minutes_accumulator(),
 		"SavedAtUtc": format_utc(stamp),
 	}
 

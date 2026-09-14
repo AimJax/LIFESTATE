@@ -125,6 +125,19 @@ func refresh() -> void:
 	var career: CareerState = player.career
 	var employed: bool = career.is_employed()
 
+	# Terminal state: the occupation stays inspectable as part of the life
+	# record, but no posthumous hiring or quitting.
+	if player.is_dead:
+		_status_title.text = "FINAL OCCUPATION"
+		var final_job: JobDefinition = career.current_job()
+		_status_detail.text = final_job.display_name if final_job != null else "Unemployed"
+		_status_detail.add_theme_color_override("font_color", UiTheme.TEXT_SECONDARY)
+		_quit_button.visible = false
+		if employed != _cards_last_employed or _requirements_changed(player):
+			_refresh_job_cards(player, true)
+			_cards_last_employed = true
+		return
+
 	if employed:
 		var job: JobDefinition = career.current_job()
 		_status_title.text = "CURRENT JOB"

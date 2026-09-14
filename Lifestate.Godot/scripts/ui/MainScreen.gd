@@ -175,6 +175,14 @@ func _build_god_overlay() -> void:
 	_add_god_button(body, "Max Traits", func() -> void: GameService.god_mode.max_traits())
 	_add_god_button(body, "Complete Current School Grade", func() -> void: _on_complete_school_grade())
 
+	# ---- Health / Death testing tools (developer-only) -----------------------
+	body.add_child(UiTheme.spacer(UiTheme.SPACE_XS))
+	body.add_child(UiTheme.tag("HEALTH / DEATH TESTING", UiTheme.WARNING))
+	_add_god_feedback_button(body, "Set Health to 10", func() -> Dictionary: return GameService.god_mode.set_health(10.0))
+	_add_god_feedback_button(body, "Set Hunger to 0", func() -> Dictionary: return GameService.god_mode.set_hunger(0))
+	_add_god_feedback_button(body, "Set Thirst to 0", func() -> Dictionary: return GameService.god_mode.set_thirst(0))
+	_add_god_feedback_button(body, "Force Old Age Death", func() -> Dictionary: return GameService.god_mode.force_old_age_death())
+
 	var close_button := UiTheme.button("Close (F2)", UiTheme.NEGATIVE, UiTheme.BUTTON_HEIGHT_SMALL)
 	close_button.pressed.connect(toggle_god_mode)
 	body.add_child(close_button)
@@ -187,6 +195,21 @@ func _add_god_button(parent: Control, text: String, action: Callable) -> void:
 	var button := UiTheme.button(text, UiTheme.TEXT_PRIMARY, UiTheme.BUTTON_HEIGHT_SMALL)
 	button.pressed.connect(func() -> void:
 		action.call()
+		_refresh_all()
+	)
+	parent.add_child(button)
+
+
+## God Mode buttons whose tool returns {"ok", "message"}: the feedback line
+## reports the tool result so rejection ("Life has ended.") is always visible.
+func _add_god_feedback_button(parent: Control, text: String, action: Callable) -> void:
+	var button := UiTheme.button(text, UiTheme.TEXT_PRIMARY, UiTheme.BUTTON_HEIGHT_SMALL)
+	button.pressed.connect(func() -> void:
+		var result: Dictionary = action.call()
+		if result["ok"]:
+			set_feedback(result["message"], UiTheme.POSITIVE)
+		else:
+			set_feedback(result["message"], UiTheme.WARNING)
 		_refresh_all()
 	)
 	parent.add_child(button)

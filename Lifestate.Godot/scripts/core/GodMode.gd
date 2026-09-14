@@ -25,8 +25,16 @@ func set_enabled(enabled: bool) -> void:
 func advance_days(days: int) -> void:
 	if not is_enabled:
 		return
+	# A dead player's clock is frozen at death; skips must not move it.
+	if _player.is_dead:
+		return
 	var real_seconds: int = days * 24 * 60 / GameClock.MINUTES_PER_REAL_SECOND
 	_clock.advance_seconds(real_seconds)
+	# Skips are navigation/testing cheats: they must be predictable and must
+	# NEVER kill. The mortality pointer is synced WITHOUT evaluating, so the
+	# skipped days are marked as lived and only midnights crossed during real
+	# engine time can roll old-age mortality.
+	_player.sync_mortality_to_clock()
 	# Time skips can make age-based events eligible (e.g. Found Money at age 8).
 	_player.events.evaluate_triggers(_clock.day)
 
@@ -59,6 +67,49 @@ func max_traits() -> void:
 	if not is_enabled:
 		return
 	_player.traits.set_all_max()
+
+
+# ---- Health / Death testing tools (Godot-only) ---------------------------
+
+## Sets Health to an exact value (clamped 0..100). Rejected while dead —
+## God Mode can provoke death but can never resurrect.
+## Returns {"ok": bool, "message": String}.
+func set_health(value: float) -> Dictionary:
+	if not is_enabled:
+		return {"ok": false, "message": "God Mode is disabled."}
+	if _player.is_dead:
+		return {"ok": false, "message": "Life has ended."}
+	_player.debug_set_health(value)
+	return {"ok": true, "message": "Health set to %d." % int(value)}
+
+
+func set_hunger(value: int) -> Dictionary:
+	if not is_enabled:
+		return {"ok": false, "message": "God Mode is disabled."}
+	if _player.is_dead:
+		return {"ok": false, "message": "Life has ended."}
+	_player.debug_set_hunger(value)
+	return {"ok": true, "message": "Hunger set to %d." % value}
+
+
+func set_thirst(value: int) -> Dictionary:
+	if not is_enabled:
+		return {"ok": false, "message": "God Mode is disabled."}
+	if _player.is_dead:
+		return {"ok": false, "message": "Life has ended."}
+	_player.debug_set_thirst(value)
+	return {"ok": true, "message": "Thirst set to %d." % value}
+
+
+## Force Old Age Death: invokes the REAL centralized death transition so the
+## terminal state is exactly what natural old-age mortality produces.
+func force_old_age_death() -> Dictionary:
+	if not is_enabled:
+		return {"ok": false, "message": "God Mode is disabled."}
+	if _player.is_dead:
+		return {"ok": false, "message": "Life has ended."}
+	_player.die(PlayerState.CAUSE_OLD_AGE)
+	return {"ok": true, "message": "Life has ended. Cause: Old Age."}
 
 
 ## Developer-only helper: satisfies the requirements of the current active

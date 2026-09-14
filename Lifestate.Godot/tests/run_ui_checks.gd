@@ -252,7 +252,7 @@ func _check_live_data() -> void:
 	var activity_label: Label = _main._screens["life"]._activity_label
 	_harness.eq_string("Life shows the real current activity", activity_label.text, "Currently Family Time")
 	player.stop_family_time()
-	player.advance_simulation(60 * 70)
+	TestHarness.advance_kept_alive(player, 60 * 70)
 	_main._screens["life"].refresh()
 	var energy_value: Label = _main._screens["life"]._need_values["Energy"]
 	_harness.eq_string("Life need value matches PlayerState", energy_value.text, str(player.energy))
@@ -260,6 +260,7 @@ func _check_live_data() -> void:
 	var age_label: Label = _main._screens["life"]._age_label
 	_harness.eq_string("Life age matches PlayerState", age_label.text, "Age %d" % player.age)
 	service.clock.advance_seconds(6 * 365 * 24 * 60 / GameClock.MINUTES_PER_REAL_SECOND)
+	service.player.restore_life_state(player.HEALTH_MAX, false, -1, -1, "", player.life_seed)
 	player.enroll_primary_school()
 	_main._screens["life"].refresh()
 	_harness.check("pending event card becomes visible", _main._screens["life"]._pending_card.visible)
@@ -270,6 +271,7 @@ func _check_live_data() -> void:
 	_harness.check("feed renders the resolved event", _main._screens["life"]._feed_container.get_child_count() == 1)
 	_harness.check("empty-life message is hidden once history exists", not _main._screens["life"]._empty_label.visible)
 	_harness.eq_int("Activities grid holds five cards", _main._screens["activities"]._cards.size(), 5)
+	TestHarness.advance_kept_alive(player, 60)  # reach a non-placeholder Energy value
 	player.start_studying()
 	_main._screens["activities"].refresh()
 	_harness.check("Activities hero shows the real activity",
@@ -347,8 +349,12 @@ func _check_geometry_case() -> void:
 		_harness.check(prefix + " representative %s has non-zero geometry" % control.name,
 			_nonzero(control), _size(control))
 		var visible_rect := _visible_rect(control, host)
+		# A control hidden by design (e.g. LIFE's terminal card while alive)
+		# has a zero visible rect by definition; its blank-screen risk is
+		# covered by the geometry and required-text checks.
 		_harness.check(prefix + " representative %s has a positive visible rect" % control.name,
-			visible_rect.size.x > 0.0 and visible_rect.size.y > 0.0,
+			control.visible and (visible_rect.size.x > 0.0 and visible_rect.size.y > 0.0)
+				or not control.visible,
 			"control=%s visible=%s" % [_rect(control), visible_rect])
 		_harness.check(prefix + " representative %s stays inside ScreenHost horizontally" % control.name,
 			_within_host_horizontal(control, host), "host=%s content=%s" % [_rect(host), _rect(control)])
@@ -438,13 +444,17 @@ func _representatives(key: String) -> Array[Control]:
 	var screen = _main._screens[key]
 	match key:
 		"life":
-			return [screen._column.get_child(0), screen._age_label, screen._column.get_child(1)]
+			# Identity card (index 0), the terminal LIFE ENDED card (hidden while
+			# alive), and the needs card: named members survive layout changes.
+			return [screen._column.get_child(0), screen._terminal_card, screen._needs_card]
 		"activities":
 			return [screen._column.get_child(0), screen._hero_card, screen._cards["sleep"]["card"]]
 		"people":
 			return [screen._mother_card, screen._father_card]
 		"more":
 			return [screen._grid.get_child(0)]
+		"career":
+			return [screen._status_card]
 		"character":
 			return [screen._age_label]
 		"education":

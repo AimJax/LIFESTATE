@@ -83,17 +83,18 @@ func toggle_running() -> void:
 
 
 ## Advances the simulation by real seconds (1 second = 4 game minutes).
+## The engine owns the clock: it advances time itself and freezes it at death,
+## so callers must never advance the clock separately (that would double-count
+## time and let a dead player's clock keep moving).
 func _step_seconds(seconds: int) -> void:
 	if seconds <= 0:
 		return
-	clock.advance_seconds(seconds)
 	player.advance_simulation(seconds * GameClock.MINUTES_PER_REAL_SECOND)
 	_emit_transitions()
 
 
 ## "Wait 1 Hour" support action: identical to the reference implementation.
 func wait_one_hour() -> void:
-	clock.advance_seconds(15)
 	player.advance_simulation(60)
 	_emit_transitions()
 	state_changed.emit()

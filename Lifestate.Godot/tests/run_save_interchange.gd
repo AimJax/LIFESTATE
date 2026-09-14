@@ -28,6 +28,10 @@ const FIXED_STAMP: float = 1800000000.0
 ## 7-digit fractional part, which is the documented .NET round-trip form.
 const STAMP_KEYS := ["SavedAtUtc"]
 
+## The Health + Death foundation keys. The frozen C# v7 fixture tool cannot
+## emit them, so the v7 load comparison ignores them.
+const V10_LIFE_KEYS: PackedStringArray = ["Health", "IsDead", "DeathDay", "DeathAge", "CauseOfDeath"]
+
 var _harness := TestHarness.new()
 
 
@@ -71,14 +75,19 @@ func _initialize() -> void:
 		if _canonical(reserialized[key]) != _canonical(original[key]):
 			changed.append("%s (%s != %s)" % [key, reserialized[key], original[key]])
 	var extra: PackedStringArray = []
+	# Version 10 adds the Health + Death foundation keys; legacy Version 7 saves
+	# legitimately re-serialize with them (living defaults + derived LifeSeed).
+	var v10_keys: PackedStringArray = ["Health", "IsDead", "DeathDay", "DeathAge",
+		"CauseOfDeath", "LifeSeed", "StarvingMinutesAccumulator", "DehydratedMinutesAccumulator"]
 	for key in reserialized:
-		if not original.has(key) and key != "SecondaryGrade" and key != "CurrentJobId":
+		if not original.has(key) and not (str(key) in v10_keys) \
+				and key != "SecondaryGrade" and key != "CurrentJobId":
 			extra.append(str(key))
 
 	_harness.eq_int("every C# key is re-serialized", missing.size(), 0)
 	_harness.eq_int("no key changes value on round trip", changed.size(), 0)
 	_harness.eq_int("port adds no unexpected keys", extra.size(), 0)
-	_harness.eq_int("re-serialized C# save upgrades to Version 9", reserialized["Version"], 9)
+	_harness.eq_int("re-serialized C# save upgrades to Version 10", reserialized["Version"], 10)
 	_harness.eq_int("legacy C# save defaults SecondaryGrade to zero", reserialized["SecondaryGrade"], 0)
 	_harness.eq_string("legacy C# save defaults CurrentJobId to unemployed", reserialized["CurrentJobId"], "")
 	for key in missing:
@@ -87,6 +96,18 @@ func _initialize() -> void:
 		_harness.check("  changed key %s" % entry, false)
 	for key in extra:
 		_harness.check("  extra key %s" % key, false)
+	var v10_defaults: PackedStringArray = []
+	if int(reserialized["Health"]) != 100:
+		v10_defaults.append("Health=%s" % reserialized["Health"])
+	if reserialized["IsDead"]:
+		v10_defaults.append("IsDead must be false")
+	if int(reserialized["DeathDay"]) != -1 or int(reserialized["DeathAge"]) != -1:
+		v10_defaults.append("DeathDay/DeathAge must default to -1")
+	if str(reserialized["CauseOfDeath"]) != "":
+		v10_defaults.append("CauseOfDeath must default to empty")
+	_harness.eq_int("legacy C# save migrates to living v10 defaults", v10_defaults.size(), 0)
+	for message in v10_defaults:
+		_harness.check("  %s" % message, false)
 
 	# JSON has no integer type, so the loader must coerce whole-number fields
 	# back to int. If it did not, the port would re-write "1460.0" and the C#
@@ -108,7 +129,7 @@ func _initialize() -> void:
 	var csharp_summary: Variant = JSON.parse_string(FileAccess.get_file_as_string(CSHARP_SUMMARY))
 	_harness.check("C# summary fixture is valid JSON", typeof(csharp_summary) == TYPE_DICTIONARY)
 	if typeof(csharp_summary) == TYPE_DICTIONARY:
-		var load_errors: PackedStringArray = _compare(clock, player, csharp_summary)
+		var load_errors: PackedStringArray = _compare(clock, player, csharp_summary, V10_LIFE_KEYS)
 		_harness.eq_int("loaded state matches every C# value", load_errors.size(), 0)
 		for entry in load_errors:
 			_harness.check("  %s" % entry, false)
@@ -122,8 +143,22 @@ func _initialize() -> void:
 	_harness.check("port loads the C# save with 1 hour of offline time",
 		offline["ok"], str(offline.get("error", "")))
 	_harness.eq_int("offline seconds are exactly 3600", offline["offline_seconds"], 3600)
+	# Mortality may freeze the clock on the save day, so "advances" is elapsed
+	# in-game minutes rather than a calendar-day jump.
 	_harness.check("offline time advances the clock",
-		offline_clock.day > clock.day, "%d vs %d" % [offline_clock.day, clock.day])
+		offline_clock.day * 1440 + offline_clock.hour * 60 + offline_clock.minute
+			> clock.day * 1440 + clock.hour * 60 + clock.minute,
+		"%d/%d:%02d vs %d/%d:%02d" % [offline_clock.day, offline_clock.hour,
+		offline_clock.minute, clock.day, clock.hour, clock.minute])
+	# Mortality now applies offline: the fixture's Hunger/Thirst are both 0, so
+	# the character dies 15 game-hours in (06:08 -> 21:08). The reference fixture
+	# (regenerated for v10) pins the exact frozen death state.
+	_harness.eq_bool("offline dehydration death occurs", offline_player.is_dead, true)
+	_harness.eq_string("offline death cause is dehydration", offline_player.cause_of_death,
+		PlayerState.CAUSE_DEHYDRATION)
+	_harness.eq_int("offline death day is the save day", offline_player.death_day, 2921)
+	_harness.eq_int("offline death freezes the clock at the fatal hour", offline_clock.hour, 21)
+	_harness.eq_int("offline death freezes the clock minute", offline_clock.minute, 8)
 	var offline_summary: Variant = JSON.parse_string(FileAccess.get_file_as_string(GODOT_OFFLINE_SUMMARY))
 	_harness.check("offline summary fixture is valid JSON", typeof(offline_summary) == TYPE_DICTIONARY)
 	if typeof(offline_summary) == TYPE_DICTIONARY:
@@ -153,17 +188,23 @@ func _initialize() -> void:
 	_finish()
 
 
-## Compares a live state against a reference summary dictionary.
-func _compare(clock: GameClock, player: PlayerState, reference: Dictionary) -> PackedStringArray:
+## Compares a live state against a reference summary dictionary. Keys in
+## ignore_keys are skipped: the retained C# v7 tool cannot emit v10 life keys,
+## so the living-v7 comparison ignores them while the regenerated offline
+## reference (which does contain them) uses the strict default.
+func _compare(clock: GameClock, player: PlayerState, reference: Dictionary,
+		ignore_keys: PackedStringArray = []) -> PackedStringArray:
 	var actual: Dictionary = _summary(clock, player)
 	var errors: PackedStringArray = []
 	for key in reference:
+		if str(key) in ignore_keys:
+			continue
 		if not actual.has(key):
 			errors.append("%s is missing (expected %s)" % [key, reference[key]])
 		elif _canonical(actual[key]) != _canonical(reference[key]):
 			errors.append("%s = %s, expected %s" % [key, actual[key], reference[key]])
 	for key in actual:
-		if not reference.has(key):
+		if not reference.has(key) and not (str(key) in ignore_keys):
 			errors.append("%s was produced but is not in the reference" % key)
 	return errors
 
@@ -219,6 +260,13 @@ func _summary(clock: GameClock, player: PlayerState) -> Dictionary:
 		"Patience": _scaled(player.traits.patience),
 		"Ambition": _scaled(player.traits.ambition),
 		"Empathy": _scaled(player.traits.empathy),
+		# Health + Death foundation (v10): compared against the regenerated
+		# offline reference so death state is part of the interchange contract.
+		"Health": _scaled(player.health),
+		"IsDead": 1 if player.is_dead else 0,
+		"DeathDay": player.death_day,
+		"DeathAge": player.death_age,
+		"CauseOfDeath": player.cause_of_death,
 	}
 
 

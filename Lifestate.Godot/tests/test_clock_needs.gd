@@ -13,6 +13,19 @@ static func fresh() -> Array:
 	return [clock, PlayerState.new(clock)]
 
 
+## Drives hunger to exactly 0 over 100 game hours in 19-hour chunks while
+## topping thirst up, so dehydration never starts (thirst stays above 20).
+## Hunger drains 1/hour, so 100 hours lands exactly on the floor with zero
+## deprivation hours: the character survives.
+static func _drain_hunger(player: PlayerState) -> void:
+	var remaining: int = 60 * 100
+	while remaining > 0 and not player.is_dead:
+		player.drink(100)
+		var step: int = mini(60 * 19, remaining)
+		player.advance_simulation(step)
+		remaining -= step
+
+
 static func run(h: TestHarness) -> void:
 	_clock_basics(h)
 	_age_and_life_stage(h)
@@ -117,10 +130,16 @@ static func _needs_decay(h: TestHarness) -> void:
 	h.eq_int("Needs-9 hunger -1 per hour over 11 hours", player.hunger, 89)
 	h.eq_int("Needs-10 thirst floors at 0", player.thirst, 78)
 
-	# Drain completely and confirm the clamp at zero.
+	# Drain completely: unattended, the character now dies of dehydration at the
+	# exact fatal hour (thirst hits 0 at 39h after Needs-10, 20 damage hours
+	# later at 59h total). The clamp semantics survive: needs floor at 0 without
+	# wrapping and Health floors at 0 in the centralized death transition.
 	player.advance_simulation(60 * 500)
-	h.eq_int("Needs-11 energy never goes negative", player.energy, 0)
-	h.eq_int("Needs-12 hunger never goes negative", player.hunger, 0)
+	h.eq_bool("Needs-11 long unattended drain ends in death", player.is_dead, true)
+	h.eq_string("Needs-11a cause is dehydration", player.cause_of_death, PlayerState.CAUSE_DEHYDRATION)
+	h.check("Needs-11b health floored at zero", player.health == 0.0, str(player.health))
+	h.eq_int("Needs-12 energy never goes negative (frozen at death)", player.energy, 30)
+	h.eq_int("Needs-12a hunger never goes negative (frozen at death)", player.hunger, 30)
 	h.eq_int("Needs-13 thirst never goes negative", player.thirst, 0)
 
 
@@ -130,7 +149,9 @@ static func _energy_and_sleep(h: TestHarness) -> void:
 	var pair := fresh()
 	var player: PlayerState = pair[1]
 
-	player.advance_simulation(60 * 100)
+	# Sleep semantics need a drained character; a real 100-hour drain would now
+	# dehydrate them first, so the drained state is set directly (test support).
+	player.debug_set_energy(0)
 	h.eq_int("Sleep-E1 energy drained to 0", player.energy, 0)
 
 	player.start_sleeping()
@@ -169,7 +190,12 @@ static func _food_and_drink(h: TestHarness) -> void:
 	player.eat(20)
 	h.eq_int("Eat-Drink1 eating at full hunger stays at 100", player.hunger, 100)
 
-	player.advance_simulation(60 * 100)
+	# Drain hunger to exactly 0 over 100 game hours, topping thirst so the
+	# character survives the Health/Death foundation (thirst-only keep-alive).
+	_drain_hunger(player)
+	h.eq_int("Eat-Drink1a hunger drained to floor", player.hunger, 0)
+	h.check("Eat-Drink1b character survived the hunger drain", not player.is_dead)
+
 	player.eat(20)
 	h.eq_int("Eat-Drink2 eat restores hunger", player.hunger, 20)
 
@@ -182,7 +208,13 @@ static func _food_and_drink(h: TestHarness) -> void:
 	player.eat(-25)
 	h.eq_int("Eat-Drink5 negative restore is a no-op", player.hunger, 100)
 
-	player.advance_simulation(60 * 100)
+	# Same pattern for thirst, but the state is set directly: thirst drains at
+	# 2/hour, so a literal 100-hour advance would run 50 deprivation hours and
+	# kill the character before the restore semantics under test could run.
+	player.debug_set_thirst(0)
+	h.eq_int("Eat-Drink5a thirst drained to floor", player.thirst, 0)
+	h.check("Eat-Drink5b constructing the drained state does not kill", not player.is_dead)
+
 	player.drink(20)
 	h.eq_int("Eat-Drink6 drink restores thirst", player.thirst, 20)
 

@@ -12,8 +12,12 @@ var _age_label: Label
 var _stage_label: Label
 var _money_label: Label
 var _activity_label: Label
+var _needs_card: PanelContainer
 var _need_bars: Dictionary = {}
 var _need_values: Dictionary = {}
+
+var _terminal_card: PanelContainer
+var _terminal_summary: VBoxContainer
 
 var _pending_card: PanelContainer
 var _pending_tag: Label
@@ -37,6 +41,7 @@ func build(parent: Control) -> void:
 	_column = UiTheme.centered_column(parent, UiTheme.LIFE_CONTENT_MAX_WIDTH, UiTheme.SPACE_LG)
 
 	_build_identity_header()
+	_build_terminal()
 	_build_needs()
 	_build_pending_event()
 	_build_feed()
@@ -70,15 +75,16 @@ func _build_identity_header() -> void:
 
 
 func _build_needs() -> void:
-	var card := UiTheme.card(UiTheme.SURFACE)
-	_column.add_child(card)
-	var body := UiTheme.card_body(card, UiTheme.SPACE_XS)
+	_needs_card = UiTheme.card(UiTheme.SURFACE)
+	_column.add_child(_needs_card)
+	var body := UiTheme.card_body(_needs_card, UiTheme.SPACE_XS)
 	body.add_child(UiTheme.tag("NEEDS"))
 
 	var definitions: Array = [
 		["Energy", UiTheme.ACCENT],
 		["Hunger", UiTheme.WARNING],
 		["Thirst", UiTheme.ACCENT_MUTED],
+		["Health", UiTheme.NEGATIVE],
 	]
 	for entry in definitions:
 		var name: String = entry[0]
@@ -100,6 +106,36 @@ func _build_needs() -> void:
 		body.add_child(row)
 		_need_bars[name] = bar
 		_need_values[name] = value_label
+
+
+## Terminal state card, shown only when the player has died. The Life screen
+## becomes a life record: cause, death day/age and a concise life summary.
+func _build_terminal() -> void:
+	_terminal_card = UiTheme.card(UiTheme.SURFACE_RAISED, UiTheme.NEGATIVE)
+	_terminal_card.visible = false
+	_column.add_child(_terminal_card)
+
+	var body := UiTheme.card_body(_terminal_card, UiTheme.SPACE_MD)
+	body.alignment = BoxContainer.ALIGNMENT_CENTER
+	body.name = "CardBody"
+
+	var ended := UiTheme.label("LIFE ENDED", UiTheme.FONT_DISPLAY, UiTheme.NEGATIVE)
+	ended.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.add_child(ended)
+
+	var subtitle := UiTheme.label("", UiTheme.FONT_HEADING, UiTheme.TEXT_PRIMARY)
+	subtitle.name = "TerminalSubtitle"
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.add_child(subtitle)
+
+	var cause := UiTheme.label("", UiTheme.FONT_BODY, UiTheme.TEXT_SECONDARY)
+	cause.name = "TerminalCause"
+	cause.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.add_child(cause)
+
+	_terminal_summary = UiTheme.vbox(UiTheme.SPACE_XS)
+	_terminal_summary.name = "TerminalSummary"
+	body.add_child(_terminal_summary)
 
 
 func _build_pending_event() -> void:
@@ -144,12 +180,50 @@ func refresh() -> void:
 		# Job identity rides along with the working label; Life stays lean.
 		_activity_label.text = "Currently Working · %s" % player.career.current_job().display_name
 
+	# Terminal state: the needs area is replaced by the LIFE ENDED record.
+	_needs_card.visible = not player.is_dead
+	_pending_card.visible = not player.is_dead and _pending_card.visible
+	_terminal_card.visible = player.is_dead
+	if player.is_dead:
+		_refresh_terminal(player)
+		_refresh_feed()
+		return
+
 	_set_need("Energy", player.energy)
 	_set_need("Hunger", player.hunger)
 	_set_need("Thirst", player.thirst)
+	_set_need("Health", int(round(player.health)))
 
 	_refresh_pending_event()
 	_refresh_feed()
+
+
+func _refresh_terminal(player: PlayerState) -> void:
+	var subtitle: Label = _terminal_card.get_node("CardBody/TerminalSubtitle")
+	var cause: Label = _terminal_card.get_node("CardBody/TerminalCause")
+	subtitle.text = "Age %d   ·   Day %s" % [player.death_age, UiTheme.format_int(player.death_day)]
+	cause.text = "Cause: %s" % PlayerState.display_cause(player.cause_of_death)
+
+	# Concise life summary (foundation scope: no statistics system).
+	_clear_children(_terminal_summary)
+	_summary_row("Final Money", UiTheme.format_money(player.money))
+	_summary_row("Education", EducationState.display_name(player.education.status))
+	_summary_row("Final Occupation", _final_occupation(player))
+
+
+func _final_occupation(player: PlayerState) -> String:
+	if player.career.is_employed():
+		return player.career.current_job().display_name
+	return "Unemployed"
+
+
+func _summary_row(name: String, value: String) -> void:
+	var row := UiTheme.hbox(UiTheme.SPACE_SM)
+	var key := UiTheme.label(name, UiTheme.FONT_SMALL, UiTheme.TEXT_SECONDARY)
+	key.custom_minimum_size = Vector2(120, 0)
+	row.add_child(key)
+	row.add_child(UiTheme.label(value, UiTheme.FONT_BODY, UiTheme.TEXT_PRIMARY))
+	_terminal_summary.add_child(row)
 
 
 func _set_need(name: String, value: int) -> void:

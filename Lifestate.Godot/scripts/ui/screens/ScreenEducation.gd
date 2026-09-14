@@ -124,12 +124,12 @@ func refresh() -> void:
 		and education.status == EducationState.Status.COMPLETED_PRIMARY
 	)
 
-	_status_label.text = EducationState.display_name(education.status)
-	_empty_label.visible = not_enrolled and not primary_eligible
-	_enroll_button.visible = not_enrolled and primary_eligible
-	_secondary_enroll_button.visible = secondary_eligible
+	# Terminal state: education stays inspectable, enrollment closes forever.
+	_enroll_button.visible = not player.is_dead and not_enrolled and primary_eligible
+	_secondary_enroll_button.visible = not player.is_dead and secondary_eligible
 	_secondary_hint_label.visible = (
-		education.status == EducationState.Status.COMPLETED_PRIMARY
+		not player.is_dead
+		and education.status == EducationState.Status.COMPLETED_PRIMARY
 		and not secondary_eligible
 	)
 	_body_card.visible = not not_enrolled

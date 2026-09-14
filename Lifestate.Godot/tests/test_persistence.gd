@@ -121,7 +121,7 @@ static func _schema(h: TestHarness) -> void:
 	h.check("Schema-S1 save file parses as JSON", typeof(data) == TYPE_DICTIONARY)
 	var save: Dictionary = data
 
-	h.eq_int("Schema-S2 version is 9", save["Version"], 9)
+	h.eq_int("Schema-S2 version is 10", save["Version"], 10)
 	var required: PackedStringArray = [
 		"Day", "Hour", "Minute", "Money", "Energy", "Hunger", "Thirst", "StudyXP",
 		"IsSleeping", "IsWorking", "IsStudying", "IsPlaying", "IsSpendingFamilyTime",
@@ -261,14 +261,22 @@ static func _offline(h: TestHarness) -> void:
 	h.check("Offline-O1 load succeeds", result["ok"], result["error"])
 	h.eq_int("Offline-O2 elapsed seconds measured", result["offline_seconds"], 3600)
 	h.eq_int("Offline-O3 elapsed minutes converted", result["offline_minutes"], 14400)
-	h.eq_int("Offline-O4 clock advanced by one hour of real time",
-		loaded_clock.day, day_at_save + 10)
-	h.eq_int("Offline-O5 work earnings applied offline",
-		loaded_player.money, money_at_save + 2400)
-	h.eq_int("Offline-O6 offline energy drains to the floor", loaded_player.energy, 0)
-	h.eq_int("Offline-O7 offline hunger drains to the floor", loaded_player.hunger, 0)
-	h.eq_int("Offline-O8 offline thirst drains to the floor", loaded_player.thirst, 0)
-	h.eq_int("Offline-O9 activity state persists through a load", loaded_player.is_working, true)
+	# One real hour = 240 game hours without eat/drink, so the Health/Death
+	# foundation ends the life mid-interval. Saved needs (thirst 94, hunger 97,
+	# energy 97) put the exact fatal point at 47 + 20 = 67 game hours after the
+	# save: day_at_save + 2 days, 22:00.
+	h.eq_int("Offline-O4 clock stops at the exact death point",
+		loaded_clock.day, day_at_save + 2)
+	h.eq_int("Offline-O4a clock hour stops at the death hour", loaded_clock.hour, 22)
+	h.eq_int("Offline-O5 work earnings stop at death",
+		loaded_player.money, money_at_save + 670)
+	h.check("Offline-O5a death cause is dehydration",
+		loaded_player.is_dead and loaded_player.cause_of_death == PlayerState.CAUSE_DEHYDRATION)
+	h.eq_int("Offline-O6 energy frozen at death", loaded_player.energy, 30)
+	h.eq_int("Offline-O7 hunger frozen at death", loaded_player.hunger, 30)
+	h.eq_int("Offline-O8 thirst at the floor at death", loaded_player.thirst, 0)
+	h.eq_bool("Offline-O9 death stopped the working activity",
+		loaded_player.is_working, false)
 
 	# A future timestamp yields no offline progress.
 	var future := fresh()
@@ -288,7 +296,8 @@ static func _offline(h: TestHarness) -> void:
 	h.eq_int("Offline-O13 sub-second remainder is truncated",
 		fractional_result["offline_minutes"], 3599 * GameClock.MINUTES_PER_REAL_SECOND)
 
-	# Offline study also advances education and skills.
+	# Offline study also advances education and skills. 10 real minutes = 40
+	# game hours: survivable (thirst 100 -> 20) and fully reward-bearing.
 	var studier := fresh()
 	var studier_clock: GameClock = studier[0]
 	var studier_player: PlayerState = studier[1]
@@ -300,14 +309,15 @@ static func _offline(h: TestHarness) -> void:
 	var study_loaded := fresh()
 	var study_loaded_clock: GameClock = study_loaded[0]
 	var study_loaded_player: PlayerState = study_loaded[1]
-	SaveManager.load_game(study_loaded_clock, study_loaded_player, TEST_PATH, FIXED_NOW + 3600.0)
-	h.eq_int("Offline-O14 offline study grants StudyXP", study_loaded_player.study_xp, 2400)
+	SaveManager.load_game(study_loaded_clock, study_loaded_player, TEST_PATH, FIXED_NOW + 600.0)
+	h.check("Offline-O13a 40 offline game-hours are survivable", not study_loaded_player.is_dead)
+	h.eq_int("Offline-O14 offline study grants StudyXP", study_loaded_player.study_xp, 400)
 	h.eq_int("Offline-O15 offline study grants Academics XP",
-		study_loaded_player.skills.academics.experience, 2400)
+		study_loaded_player.skills.academics.experience, 400)
 	h.eq_int("Offline-O16 offline study advances education progress",
-		study_loaded_player.education.education_progress, 100)
+		study_loaded_player.education.education_progress, 40)
 	h.near_float("Offline-O17 offline study grants intelligence",
-		study_loaded_player.attributes.intelligence, 10.0 + 240.0 * 0.05)
+		study_loaded_player.attributes.intelligence, 10.0 + 40.0 * 0.05)
 
 	# Overflow is rejected rather than wrapped.
 	var overflowing := fresh()
@@ -338,7 +348,9 @@ static func _large_offline(h: TestHarness) -> void:
 	var loaded_player: PlayerState = loaded[1]
 
 	# ~31.7 years of real time. A per-minute loop would need ~66 million
-	# iterations; this must return almost immediately.
+	# iterations; this must return almost immediately. Since needs always drain
+	# offline, the Health/Death foundation now ends the life mid-interval at the
+	# exact fatal point instead of running the full duration.
 	var started: int = Time.get_ticks_msec()
 	var result: Dictionary = SaveManager.load_game(loaded_clock, loaded_player, TEST_PATH, FIXED_NOW + 1000000000.0)
 	var elapsed_ms: int = Time.get_ticks_msec() - started
@@ -347,19 +359,22 @@ static func _large_offline(h: TestHarness) -> void:
 	h.check("Offline-L2 huge offline load is O(1), not a loop", elapsed_ms < 2000, "%d ms" % elapsed_ms)
 	h.eq_int("Offline-L3 elapsed seconds measured",
 		result["offline_seconds"], 1000000000)
-	h.eq_int("Offline-L4 clock advanced by the full duration",
-		loaded_clock.day, clock.day + 1000000000 * GameClock.MINUTES_PER_REAL_SECOND / 1440)
-	h.eq_int("Offline-L5 needs clamped, not corrupted", loaded_player.energy, 0)
-	h.eq_int("Offline-L6 thirst clamped, not corrupted", loaded_player.thirst, 0)
-	h.check("Offline-L7 play hours accumulated without overflow",
-		loaded_player.total_play_hours > 0 and loaded_player.total_play_hours < PlayerState.INT64_MAX)
-	h.check("Offline-L8 no grades fabricated without education progress",
+	# Death at 70 game hours after day 2190 00:00 = day 2192 22:00.
+	h.eq_int("Offline-L4 clock stops at the exact death point", loaded_clock.day, 2192)
+	h.eq_int("Offline-L4a clock hour stops at the death hour", loaded_clock.hour, 22)
+	h.eq_bool("Offline-L5 player died of dehydration mid-interval", loaded_player.is_dead, true)
+	h.eq_string("Offline-L5a cause of death", loaded_player.cause_of_death, PlayerState.CAUSE_DEHYDRATION)
+	h.eq_int("Offline-L6 thirst clamped at death", loaded_player.thirst, 0)
+	h.check("Offline-L7 rewards stop exactly at death",
+		loaded_player.money == 1000 and loaded_player.total_play_hours == 70,
+		"money=%d play=%d" % [loaded_player.money, loaded_player.total_play_hours])
+	h.check("Offline-L8 no grades fabricated after death",
 		loaded_player.education.status == EducationState.Status.PRIMARY_SCHOOL
 		and loaded_player.education.primary_grade == 1)
-	h.check("Offline-L9 age advanced sensibly", loaded_player.age > 30, str(loaded_player.age))
+	h.eq_int("Offline-L9 age frozen at death", loaded_player.age, 6)
 
-	# Extreme duration: a real day of unplayed time is already covered above, but
-	# verify the day/overflow guard rejects values past the 32-bit day counter.
+	# Extreme duration: the day/overflow guard rejects values past the 32-bit
+	# day counter BEFORE any simulation runs (transactional, no partial state).
 	var extreme := fresh()
 	var extreme_clock: GameClock = extreme[0]
 	var extreme_player: PlayerState = extreme[1]
