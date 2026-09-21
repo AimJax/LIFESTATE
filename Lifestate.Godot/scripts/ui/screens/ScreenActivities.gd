@@ -92,22 +92,12 @@ func _build_support_actions() -> void:
 	)
 	row.add_child(wait_button)
 
-	var eat_button := UiTheme.button("Eat +20", UiTheme.TEXT_SECONDARY, UiTheme.BUTTON_HEIGHT_SMALL)
-	eat_button.pressed.connect(func() -> void:
-		_service.player.eat(20)
-		refresh()
-	)
-	row.add_child(eat_button)
-
-	var drink_button := UiTheme.button("Drink +20", UiTheme.TEXT_SECONDARY, UiTheme.BUTTON_HEIGHT_SMALL)
-	drink_button.pressed.connect(func() -> void:
-		_service.player.drink(20)
-		refresh()
-	)
-	row.add_child(drink_button)
-
 	# Support actions are gameplay mutations: they must die with the player.
-	_support_buttons = [wait_button, eat_button, drink_button]
+	# Hunger/Thirst restoration is intentionally NOT free here: normal
+	# player-facing restoration goes through the paid FOOD & DRINK section
+	# below (PlayerState.purchase_consumable). eat()/drink() remain domain
+	# primitives for purchases, God Mode and tests — never normal UI.
+	_support_buttons = [wait_button]
 
 
 ## Instant paid consumables: bought and consumed at once, advancing zero

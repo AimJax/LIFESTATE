@@ -344,29 +344,51 @@ func _check_live_data() -> void:
 	_harness.check("People shows a derived parent age", mother_age.text.contains("Age "), mother_age.text)
 	_harness.check("parent age is not the newborn default", mother_age.text != "Mother · Age 28", mother_age.text)
 
-	# Food & drink through the real Activities UI.
+	# Food & drink through the real Activities UI. The obsolete free controls
+	# must be gone: no visible button may restore Hunger/Thirst for free.
 	_main.go_to("activities")
 	var activities = _main._screens["activities"]
+	var host: Control = _main.get_node("Layout/ScreenHost")
+	_harness.check("no free Eat control exists",
+		_find_text_control(_main._screen_roots["activities"], "Eat +20") == null)
+	_harness.check("no free Drink control exists",
+		_find_text_control(_main._screen_roots["activities"], "Drink +20") == null)
 	var eat_button: Button = activities._food_buttons["basic_meal"]
 	var drink_button: Button = activities._food_buttons["basic_drink"]
 	_harness.eq_string("meal button reads EAT", eat_button.text, "EAT")
 	_harness.eq_string("drink button reads DRINK", drink_button.text, "DRINK")
+	var eat_rect := _visible_rect(eat_button, host)
+	_harness.check("EAT button has non-zero visible geometry",
+		eat_rect.size.x > 0.0 and eat_rect.size.y > 0.0, "%s" % eat_rect)
+	var drink_rect := _visible_rect(drink_button, host)
+	_harness.check("DRINK button has non-zero visible geometry",
+		drink_rect.size.x > 0.0 and drink_rect.size.y > 0.0, "%s" % drink_rect)
+	var wait_rect := _visible_rect(_find_text_control(_main._screen_roots["activities"], "Wait 1 Hour"), host)
+	_harness.check("Wait 1 Hour remains visible",
+		wait_rect.size.x > 0.0 and wait_rect.size.y > 0.0, "%s" % wait_rect)
 	var feedback: Label = _main.get_node("Layout/FeedbackLabel")
-	player.money = 100
+	player.money = 20
 	player.debug_set_hunger(40)
-	player.debug_set_thirst(20)
 	eat_button.pressed.emit()
-	_harness.eq_int("UI meal charges $8", player.money, 92)
+	_harness.eq_int("UI meal charges $8", player.money, 12)
 	_harness.eq_int("UI meal restores hunger", player.hunger, 75)
+	_harness.eq_int("UI meal counted", player.economy.meals_purchased, 1)
 	_harness.eq_string("UI meal feedback", feedback.text, "Ate Basic Meal for $8.")
+	player.debug_set_thirst(40)
 	drink_button.pressed.emit()
-	_harness.eq_int("UI drink charges $3", player.money, 89)
-	_harness.eq_int("UI drink restores thirst", player.thirst, 50)
+	_harness.eq_int("UI drink charges $3", player.money, 9)
+	_harness.eq_int("UI drink restores thirst", player.thirst, 70)
+	_harness.eq_int("UI drink spending totals", player.economy.food_drink_spent, 11)
+	_harness.eq_int("UI drink counted", player.economy.drinks_purchased, 1)
 	_harness.eq_string("UI drink feedback", feedback.text, "Drank Basic Drink for $3.")
 	player.money = 7
+	player.debug_set_hunger(40)
+	var spent_before: int = player.economy.food_drink_spent
 	eat_button.pressed.emit()
 	_harness.eq_string("UI shortfall feedback", feedback.text, "Not enough money.")
 	_harness.eq_int("UI shortfall keeps money", player.money, 7)
+	_harness.eq_int("UI shortfall keeps hunger", player.hunger, 40)
+	_harness.eq_int("UI shortfall keeps spending", player.economy.food_drink_spent, spent_before)
 	_main.go_to("economy")
 	var economy_screen = _main._screens["economy"]
 	_harness.eq_string("Economy shows food spending",
