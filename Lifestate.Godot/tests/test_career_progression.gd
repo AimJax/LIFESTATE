@@ -498,7 +498,7 @@ static func _save_v11(h: TestHarness) -> void:
 	SaveManager.save_game(clock, player, TEST_PATH, FIXED_NOW)
 
 	var raw: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(TEST_PATH))
-	h.eq_int("Prog-S5 save version is exactly 11", raw["Version"], 11)
+	h.eq_int("Prog-S5 save version is exactly 12", raw["Version"], 12)
 	var stored: Dictionary = raw["CareerProgress"]
 	h.check("Prog-S6 all four tracks persisted",
 		stored.has("laborer") and stored.has("retail_worker")

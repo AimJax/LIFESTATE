@@ -682,7 +682,7 @@ static func _save_v10_round_trip(h: TestHarness) -> void:
 	advance_days(clock, 30 * 365)
 	SaveManager.save_game(clock, player, TEST_PATH, FIXED_NOW)
 	var raw: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(TEST_PATH))
-	h.eq_int("Save-V10 version is exactly 11", raw["Version"], 11)
+	h.eq_int("Save-V10 version is exactly 12", raw["Version"], 12)
 	h.near_float("Save-V10 health serialized", raw["Health"], 73.5)
 	h.eq_bool("Save-V10 IsDead serialized", raw["IsDead"], false)
 	h.eq_int("Save-V10 DeathDay default serialized", raw["DeathDay"], -1)

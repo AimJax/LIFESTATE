@@ -141,6 +141,12 @@ static func load_game(clock: GameClock, player: PlayerState, path: String = "", 
 	if not temp_player.career.restore_progress(v["CareerProgress"]):
 		return _result(false, "Career progression is invalid.")
 
+	# Economy totals likewise restore BEFORE offline progression: assessments
+	# for newly entered offline days must accumulate onto the saved totals.
+	# Pre-v12 saves default all totals to zero (no retroactive charges).
+	if not temp_player.economy.restore(v["EconomyPaid"], v["EconomyOutstanding"], v["EconomyMissed"]):
+		return _result(false, "Economy state is invalid.")
+
 	# ---- Life / death state (version 10+, with legacy migration) -----------
 	# Restored BEFORE offline progression: offline old-age mortality rolls are
 	# derived from the LifeSeed, so it must be final before any time advances.
@@ -209,6 +215,9 @@ static func load_game(clock: GameClock, player: PlayerState, path: String = "", 
 	player.relationships.restore(temp_player.relationships.mother_relationship, temp_player.relationships.father_relationship)
 	player.career.restore(temp_player.career.current_job_id)
 	player.career.restore_progress(temp_player.career.snapshot_progress())
+	player.economy.restore(
+		temp_player.economy.total_paid, temp_player.economy.outstanding,
+		temp_player.economy.missed_payments)
 	player.restore_total_play_hours(temp_player.total_play_hours)
 	player.events.clear_pending()
 	player.events.restore_history(temp_player.events.duplicate_history())
@@ -488,6 +497,33 @@ static func validate_and_extract(data: Dictionary) -> Dictionary:
 			validated[definition.id] = {"rank": entry_rank, "experience": entry_xp}
 		values["CareerProgress"] = validated
 
+	# ---- Economy (version 12+) --------------------------------------------
+	# Pre-v12 saves migrate to zeroed totals with no retroactive charges.
+	values["EconomyPaid"] = 0
+	values["EconomyOutstanding"] = 0
+	values["EconomyMissed"] = 0
+	if version >= 12:
+		var economy_raw: Variant = data.get("Economy", null)
+		if typeof(economy_raw) != TYPE_DICTIONARY:
+			return _result(false, "Economy is missing or malformed.")
+		var economy_data: Dictionary = economy_raw
+		for field in ["TotalLivingExpensesPaid", "OutstandingLivingExpenses", "MissedLivingExpensePayments"]:
+			if not economy_data.has(field):
+				return _result(false, "Economy is missing '%s'." % field)
+		for field in economy_data:
+			if not ["TotalLivingExpensesPaid", "OutstandingLivingExpenses", "MissedLivingExpensePayments"].has(str(field)):
+				return _result(false, "Economy references an unknown field.")
+		var paid: int = _get_economy_value(economy_data, "TotalLivingExpensesPaid", errors)
+		var owing: int = _get_economy_value(economy_data, "OutstandingLivingExpenses", errors)
+		var missed: int = _get_economy_value(economy_data, "MissedLivingExpensePayments", errors)
+		if not errors.is_empty():
+			return _result(false, "Economy contains malformed values.")
+		if paid < 0 or owing < 0 or missed < 0:
+			return _result(false, "Economy values must not be negative.")
+		values["EconomyPaid"] = paid
+		values["EconomyOutstanding"] = owing
+		values["EconomyMissed"] = missed
+
 	# ---- Events + TotalPlayHours (version 7+) -----------------------------
 	values["TotalPlayHours"] = 0
 	values["CurrentEventId"] = null
@@ -603,6 +639,22 @@ static func _write_text(path: String, text: String) -> Dictionary:
 
 static func _is_number(value: Variant) -> bool:
 	return typeof(value) == TYPE_INT or typeof(value) == TYPE_FLOAT
+
+
+## Strict 64-bit integer reader for economy totals: real ints, or whole
+## floats inside the int64 domain (C# interop). Strings, nulls, booleans,
+## fractional values and out-of-range magnitudes are malformed — never
+## silently repaired or clamped.
+static func _get_economy_value(data: Dictionary, key: String, errors: PackedStringArray) -> int:
+	var value: Variant = data[key]
+	if typeof(value) == TYPE_INT:
+		return value
+	if typeof(value) == TYPE_FLOAT:
+		var as_float: float = value
+		if as_float == floor(as_float) and absf(as_float) < 9223372036854775808.0:
+			return int(as_float)
+	errors.append(key)
+	return 0
 
 
 static func _get_int(data: Dictionary, key: String, default_value: int, errors: PackedStringArray) -> int:

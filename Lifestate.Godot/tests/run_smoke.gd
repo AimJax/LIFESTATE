@@ -155,6 +155,23 @@ func _check_career_path() -> bool:
 	_main._nav_buttons["activities"].pressed.emit()
 	_harness.eq_string("Activities Work card returns to unemployed state",
 		_main._screens["activities"]._cards["work"]["status"].text, "Get a job first.")
+
+	# Economy through the real screen: run to the next midnight (age 18 pays
+	# $5/day) and verify the charge plus the Economy screen readout.
+	var to_midnight: int = 1440 - (_service.clock.hour * 60 + _service.clock.minute)
+	var econ_before: int = player.money
+	player.advance_simulation(to_midnight)
+	_harness.eq_int("crossing midnight charges one $5 day", player.money, econ_before - 5)
+	_harness.eq_int("charge recorded as paid", player.economy.total_paid, 5)
+	_main.go_to("economy")
+	_harness.eq_string("economy screen is reachable", _main._current_screen, "economy")
+	var economy_screen = _main._screens["economy"]
+	_harness.eq_string("Economy shows the daily cost",
+		economy_screen._daily_label.text, "Current Daily Cost  $5 / day")
+	_harness.eq_string("Economy shows the bracket",
+		economy_screen._bracket_label.text, "Current Rate  Age 18–24 · $5/day")
+	_harness.eq_string("Economy shows the clear state",
+		economy_screen._clear_state_label.text, "No outstanding living expenses.")
 	return true
 
 

@@ -283,6 +283,8 @@ static func _bulk_parity(h: TestHarness) -> void:
 	work_bulk_player.start_working()
 	work_bulk_player.bulk_advance_simulation(720)
 	h.eq_int("Bulk-B8 work money parity", work_bulk_player.money, work_stepped_player.money)
+	# 12 stepped/bulk hours from 00:00 end at noon: no midnight is entered, so
+	# no living expense applies and earnings are exactly 12 * $10.
 	h.eq_int("Bulk-B9 work day earnings", work_bulk_player.money, 1000 + 120)
 
 	# Play: bulk counts play hours identically.

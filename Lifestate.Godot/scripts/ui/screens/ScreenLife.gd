@@ -11,6 +11,7 @@ var _column: VBoxContainer
 var _age_label: Label
 var _stage_label: Label
 var _money_label: Label
+var _daily_cost_label: Label
 var _activity_label: Label
 var _needs_card: PanelContainer
 var _need_bars: Dictionary = {}
@@ -69,7 +70,10 @@ func _build_identity_header() -> void:
 	_money_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_activity_label = UiTheme.label("Currently Idle", UiTheme.FONT_SMALL, UiTheme.TEXT_SECONDARY)
 	_activity_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_daily_cost_label = UiTheme.label("Daily Cost $0", UiTheme.FONT_SMALL, UiTheme.TEXT_MUTED)
+	_daily_cost_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	status.add_child(_money_label)
+	status.add_child(_daily_cost_label)
 	status.add_child(_activity_label)
 	row.add_child(status)
 
@@ -174,6 +178,7 @@ func refresh() -> void:
 	_age_label.text = "Age %d" % player.age
 	_stage_label.text = player.life_stage_name
 	_money_label.text = UiTheme.format_money(player.money)
+	_daily_cost_label.text = "Daily Cost $%d" % EconomyState.daily_rate_for_age(player.age)
 	var activity_name: String = player.current_activity_name()
 	_activity_label.text = "Currently " + activity_name
 	if player.is_working:

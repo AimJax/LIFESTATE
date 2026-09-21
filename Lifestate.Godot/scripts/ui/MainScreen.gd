@@ -11,6 +11,7 @@ const ScreenMoreClass = preload("res://scripts/ui/screens/ScreenMore.gd")
 const ScreenCharacterClass = preload("res://scripts/ui/screens/ScreenCharacter.gd")
 const ScreenEducationClass = preload("res://scripts/ui/screens/ScreenEducation.gd")
 const ScreenCareerClass = preload("res://scripts/ui/screens/ScreenCareer.gd")
+const ScreenEconomyClass = preload("res://scripts/ui/screens/ScreenEconomy.gd")
 const ScreenSaveLoadClass = preload("res://scripts/ui/screens/ScreenSaveLoad.gd")
 const ScreenSettingsClass = preload("res://scripts/ui/screens/ScreenSettings.gd")
 
@@ -71,6 +72,7 @@ func _build_screens() -> void:
 		"character": ScreenCharacterClass.new(GameService),
 		"education": ScreenEducationClass.new(GameService),
 		"career": ScreenCareerClass.new(GameService),
+		"economy": ScreenEconomyClass.new(GameService),
 		"save_load": ScreenSaveLoadClass.new(GameService),
 		"settings": ScreenSettingsClass.new(GameService),
 	}
@@ -187,6 +189,11 @@ func _build_god_overlay() -> void:
 	body.add_child(UiTheme.spacer(UiTheme.SPACE_XS))
 	body.add_child(UiTheme.tag("CAREER TESTING", UiTheme.WARNING))
 	_add_god_feedback_button(body, "Max Current Career XP", func() -> Dictionary: return GameService.god_mode.max_career_xp())
+
+	# ---- Economy testing tools (developer-only) -------------------------------
+	body.add_child(UiTheme.spacer(UiTheme.SPACE_XS))
+	body.add_child(UiTheme.tag("ECONOMY TESTING", UiTheme.WARNING))
+	_add_god_feedback_button(body, "Clear Economy Debt", func() -> Dictionary: return GameService.god_mode.clear_economy_debt())
 
 	var close_button := UiTheme.button("Close (F2)", UiTheme.NEGATIVE, UiTheme.BUTTON_HEIGHT_SMALL)
 	close_button.pressed.connect(toggle_god_mode)

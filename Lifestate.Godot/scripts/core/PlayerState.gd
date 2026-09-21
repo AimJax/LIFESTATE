@@ -93,6 +93,7 @@ var family: PlayerFamily = PlayerFamily.new()
 var relationships: PlayerRelationships
 var events: LifeEventSystem
 var career: CareerState = CareerState.new()
+var economy: EconomyState = EconomyState.new()
 
 var total_play_hours: int = 0
 var money: int = STARTING_MONEY
@@ -133,6 +134,10 @@ var _dehydrated_minutes_accumulator: int = 0
 ## Last day whose old-age mortality has been resolved. Days are evaluated
 ## exactly once, at the moment they are entered.
 var _mortality_evaluated_day: int = 0
+
+## Last day whose living-expense assessment has been resolved. Like mortality,
+## each entered day is assessed exactly once, at the moment it is entered.
+var _economy_assessed_day: int = 0
 
 
 func _init(clock: GameClock) -> void:
@@ -284,11 +289,32 @@ func _evaluate_daily_mortality() -> void:
 	_mortality_evaluated_day = _clock.day
 
 
+## Assesses the combined living expense for every newly entered day, exactly
+## once per day. The rate uses the age on the entered day itself, so bracket
+## birthdays take effect immediately with no cached rate. Zero-cost days are
+## no-ops; shortfalls accrue to outstanding without touching money (see
+## EconomyState). Never runs for the dead, and never for days entered by
+## non-simulating clock jumps (those sync the pointer without assessing).
+func _assess_entered_days() -> void:
+	while _economy_assessed_day < _clock.day and not is_dead:
+		_economy_assessed_day += 1
+		var expense: int = EconomyState.daily_rate_for_age(
+			_economy_assessed_day / GameClock.DAYS_PER_YEAR)
+		if expense <= 0:
+			continue
+		var outcome: Dictionary = economy.apply_daily_charge(expense, money)
+		money = outcome["new_money"]
+
+
 ## Marks all days up to the current clock day as mortality-resolved WITHOUT
 ## evaluating them. God Mode time skips call this so skips are predictable and
 ## never kill the character; the engine calls it at the end of every interval.
+## Economy assessments are marked resolved alongside mortality: skips are
+## navigation/testing cheats and must never simulate needs, rewards, deaths or
+## living expenses for the skipped days.
 func sync_mortality_to_clock() -> void:
 	_mortality_evaluated_day = _clock.day
+	_economy_assessed_day = _clock.day
 
 
 # =====================================================================
@@ -657,6 +683,11 @@ func advance_simulation(minutes: int) -> Dictionary:
 	# here, so only midnights crossed DURING engine time can roll mortality.
 	if _clock.day > _mortality_evaluated_day:
 		_mortality_evaluated_day = _clock.day
+	# Same-day economy rule: jumps enter days without simulation, so no living
+	# expense may be assessed for them either. The in-loop pointer below only
+	# ever advances over midnights crossed DURING engine time.
+	if _clock.day > _economy_assessed_day:
+		_economy_assessed_day = _clock.day
 
 	while remaining > 0 and not is_dead:
 		var seg: int = _next_segment_minutes(remaining)
@@ -676,6 +707,11 @@ func advance_simulation(minutes: int) -> Dictionary:
 		_apply_deprivation(seg, hunger_at_start, thirst_at_start)
 		if not is_dead and _clock.day > _mortality_evaluated_day:
 			_evaluate_daily_mortality()
+		# Living expenses resolve after mortality for each entered day, so a
+		# death at (or before) the boundary incurs no further charges while a
+		# charge assessed on entry survives a later same-day death.
+		if not is_dead:
+			_assess_entered_days()
 		remaining -= seg
 
 	sync_mortality_to_clock()
@@ -904,6 +940,8 @@ func snapshot() -> Dictionary:
 		"starving_minutes_accumulator": _starving_minutes_accumulator,
 		"dehydrated_minutes_accumulator": _dehydrated_minutes_accumulator,
 		"mortality_evaluated_day": _mortality_evaluated_day,
+		"economy_assessed_day": _economy_assessed_day,
+		"economy": economy.to_dict(),
 		"career_progress": career.snapshot_progress(),
 	}
 
@@ -925,7 +963,10 @@ func restore_snapshot(state: Dictionary) -> void:
 		state["starving_minutes_accumulator"], state["dehydrated_minutes_accumulator"]
 	)
 	career.restore_progress(state["career_progress"])
+	var economy_state: Dictionary = state["economy"]
+	economy.restore(economy_state["paid"], economy_state["outstanding"], economy_state["missed"])
 	_mortality_evaluated_day = state["mortality_evaluated_day"]
+	_economy_assessed_day = state["economy_assessed_day"]
 
 
 ## Controlled restore. Parameter order matches the C# reference exactly.

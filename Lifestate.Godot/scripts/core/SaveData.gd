@@ -7,8 +7,8 @@ extends RefCounted
 ## System.Text.Json output so a save written by the C# build loads here and
 ## vice versa. Do not rename or reorder-couple these keys to GDScript style.
 
-const VERSION: int = 11
-static var SUPPORTED_VERSIONS: PackedInt32Array = PackedInt32Array([2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
+const VERSION: int = 12
+static var SUPPORTED_VERSIONS: PackedInt32Array = PackedInt32Array([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
 
 static var HISTORY_KEYS: PackedStringArray = PackedStringArray([
 	"EventId", "ChoiceId", "TriggeredDay", "ResolvedDay",
@@ -75,6 +75,13 @@ static func to_dict(clock: GameClock, player: PlayerState, now_unix: float = NAN
 		"SchoolYearStartDay": player.education.school_year_start_day,
 		"CurrentJobId": player.career.current_job_id,
 		"CareerProgress": career_progress,
+		# ---- Economy foundation (Godot-only, version 12+) ------------------
+		# Mutable totals only; rate rules are never serialized.
+		"Economy": {
+			"TotalLivingExpensesPaid": player.economy.total_paid,
+			"OutstandingLivingExpenses": player.economy.outstanding,
+			"MissedLivingExpensePayments": player.economy.missed_payments,
+		},
 		"TotalPlayHours": player.total_play_hours,
 		"CurrentEventId": pending_id,
 		"CurrentEventTriggeredDay": pending_day,

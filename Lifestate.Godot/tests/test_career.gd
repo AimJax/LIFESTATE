@@ -303,16 +303,21 @@ static func _offline_wages(h: TestHarness) -> void:
 
 		h.check("Career-O %s offline load succeeds" % job_id, result["ok"], result["error"])
 		h.check("Career-O %s 40 offline game-hours are survivable" % job_id, not loaded_player.is_dead)
-		# 40 game hours of active Work with a clean accumulator: exactly 40*h pay.
+		# 40 game hours of active Work with a clean accumulator: exactly 40*h
+		# pay, minus the single $5 living expense for the one midnight entered
+		# at age 18 (05:00 -> next day 21:00).
 		h.eq_string("Career-O %s job persists through save" % job_id,
 			loaded_player.career.current_job_id, job_id)
 		h.eq_int("Career-O %s offline wage multiplier correct" % job_id,
-			loaded_player.money, money_at_save + 40 * wage)
+			loaded_player.money, money_at_save + 40 * wage - 5)
+		h.eq_int("Career-O %s offline expense recorded as paid" % job_id,
+			loaded_player.economy.total_paid, 5)
 		h.eq_int("Career-O %s accumulator preserved" % job_id,
 			loaded_player.get_work_minutes_accumulator(), acc_at_save)
 		h.eq_bool("Career-O %s still working after load" % job_id, loaded_player.is_working, true)
 
-	# Unemployed offline progression earns nothing.
+	# Unemployed offline progression earns nothing but still pays the one $5
+	# living expense for the midnight entered at age 18 out of savings.
 	var unemp := fresh()
 	var unemp_clock: GameClock = unemp[0]
 	var unemp_player: PlayerState = unemp[1]
@@ -320,7 +325,9 @@ static func _offline_wages(h: TestHarness) -> void:
 	SaveManager.save_game(unemp_clock, unemp_player, TEST_PATH, FIXED_NOW)
 	var unemp_loaded := fresh()
 	SaveManager.load_game(unemp_loaded[0], unemp_loaded[1], TEST_PATH, FIXED_NOW + 600.0)
-	h.eq_int("Career-O unemployed offline earns nothing", unemp_loaded[1].money, 1000)
+	h.eq_int("Career-O unemployed offline pays one expense", unemp_loaded[1].money, 1000 - 5)
+	h.eq_int("Career-O unemployed offline records payment", unemp_loaded[1].economy.total_paid, 5)
+	h.eq_int("Career-O unemployed offline accrues nothing", unemp_loaded[1].economy.outstanding, 0)
 	h.eq_string("Career-O unemployed stays unemployed offline", unemp_loaded[1].career.current_job_id, "")
 
 
@@ -337,7 +344,7 @@ static func _save_v9_round_trip(h: TestHarness) -> void:
 	SaveManager.save_game(clock, player, TEST_PATH, FIXED_NOW)
 	var raw: String = FileAccess.get_file_as_string(TEST_PATH)
 	var data: Dictionary = JSON.parse_string(raw)
-	h.eq_int("Career-S1 save version is exactly 11", data["Version"], 11)
+	h.eq_int("Career-S1 save version is exactly 12", data["Version"], 12)
 	h.eq_string("Career-S2 CurrentJobId serialized", data["CurrentJobId"], JobCatalog.OFFICE_CLERK_ID)
 
 	var loaded := fresh()
@@ -416,11 +423,11 @@ static func _legacy_migration(h: TestHarness) -> void:
 	h.eq_string("Career-L5 legacy idle stays unemployed", idle[1].career.current_job_id, "")
 	h.eq_bool("Career-L6 legacy idle not working", idle[1].is_working, false)
 
-	# v9 must remain in SUPPORTED_VERSIONS and v2-v10 all still load; the active
-	# schema is now Version 11 (career progression foundation).
-	h.check("Career-L7 versions 9, 10 and 11 supported",
-		SaveData.SUPPORTED_VERSIONS.has(9) and SaveData.SUPPORTED_VERSIONS.has(10)
-		and SaveData.VERSION == 11)
+	# v9 must remain in SUPPORTED_VERSIONS and v2-v11 all still load; the active
+	# schema is now Version 12 (economy foundation).
+	h.check("Career-L7 versions 9 through 12 supported",
+		SaveData.SUPPORTED_VERSIONS.has(9) and SaveData.SUPPORTED_VERSIONS.has(11)
+		and SaveData.VERSION == 12)
 
 
 static func _legacy_v8_fixture() -> Dictionary:

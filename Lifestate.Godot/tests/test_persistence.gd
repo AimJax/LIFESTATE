@@ -121,7 +121,7 @@ static func _schema(h: TestHarness) -> void:
 	h.check("Schema-S1 save file parses as JSON", typeof(data) == TYPE_DICTIONARY)
 	var save: Dictionary = data
 
-	h.eq_int("Schema-S2 version is 11", save["Version"], 11)
+	h.eq_int("Schema-S2 version is 12", save["Version"], 12)
 	var required: PackedStringArray = [
 		"Day", "Hour", "Minute", "Money", "Energy", "Hunger", "Thirst", "StudyXP",
 		"IsSleeping", "IsWorking", "IsStudying", "IsPlaying", "IsSpendingFamilyTime",
@@ -264,12 +264,15 @@ static func _offline(h: TestHarness) -> void:
 	# One real hour = 240 game hours without eat/drink, so the Health/Death
 	# foundation ends the life mid-interval. Saved needs (thirst 94, hunger 97,
 	# energy 97) put the exact fatal point at 47 + 20 = 67 game hours after the
-	# save: day_at_save + 2 days, 22:00.
+	# save: day_at_save + 2 days, 22:00. Both entered days are charged $5 at
+	# age 19 before death freezes the economy.
 	h.eq_int("Offline-O4 clock stops at the exact death point",
 		loaded_clock.day, day_at_save + 2)
 	h.eq_int("Offline-O4a clock hour stops at the death hour", loaded_clock.hour, 22)
 	h.eq_int("Offline-O5 work earnings stop at death",
-		loaded_player.money, money_at_save + 670)
+		loaded_player.money, money_at_save + 670 - 10)
+	h.eq_int("Offline-O5b two daily expenses paid before death",
+		loaded_player.economy.total_paid, 10)
 	h.check("Offline-O5a death cause is dehydration",
 		loaded_player.is_dead and loaded_player.cause_of_death == PlayerState.CAUSE_DEHYDRATION)
 	h.eq_int("Offline-O6 energy frozen at death", loaded_player.energy, 30)

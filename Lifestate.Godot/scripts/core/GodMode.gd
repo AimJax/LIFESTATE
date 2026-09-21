@@ -127,9 +127,21 @@ func max_career_xp() -> Dictionary:
 	return {"ok": true, "message": "Career XP set to 10000."}
 
 
+## Economy testing helper: clears the informational outstanding balance so
+## future economy systems can be tested from a clean slate. Totals, money,
+## career, attributes and clock are untouched.
+## Returns {"ok": bool, "message": String}.
+func clear_economy_debt() -> Dictionary:
+	if not is_enabled:
+		return {"ok": false, "message": "God Mode is disabled."}
+	if _player.is_dead:
+		return {"ok": false, "message": "Life has ended."}
+	_player.economy.clear_outstanding()
+	return {"ok": true, "message": "Outstanding living expenses cleared."}
+
+
 ## Developer-only helper: satisfies the requirements of the current active
 ## school grade and then invokes the real progression logic so the player
-## advances exactly one grade (or completes that tier).
 ## advances exactly one grade (or completes that tier).
 ##
 ## Returns {"ok": bool, "message": String}.

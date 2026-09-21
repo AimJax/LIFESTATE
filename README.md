@@ -52,6 +52,12 @@ they read the session and render it.
 - **Progression:** Study grants StudyXP, Academics XP and Intelligence; Play and
   Family Time grant Attributes/Traits; Skills are XP-based with derived levels;
   formal education spans Primary Grades 1–6 and Secondary Grades 7–12.
+- **Economy (Godot-only, post-migration):** one combined living-expense
+  charge per entered game day, age-bracketed ($0 under 18, $5 at 18–24,
+  $10 at 25–39, $15 at 40–59, $10 at 60+). Shortfalls never drive money
+  negative: the full amount accrues to an informational outstanding balance
+  with a missed-payment count. Identical across normal, bulk and offline
+  progression; frozen by death; persisted with transactional save/load.
 - **Life events:** `LifeEventCatalog` holds immutable definitions; one pending
   event at a time; choices resolve deterministically into ordered history.
 - **Offline progression** uses O(1) bulk arithmetic, never a per-minute loop.
@@ -74,8 +80,8 @@ godot --path Lifestate.Godot
 ```
 
 The project boots straight into `scenes/Main.tscn`. Navigation is
-**LIFE / ACTIVITIES / PEOPLE / MORE**, with Character, Education, Save/Load and
-Settings under MORE. `F2` toggles the developer overlay.
+**LIFE / ACTIVITIES / PEOPLE / MORE**, with Character, Education, Career, Economy,
+Save/Load and Settings under MORE. `F2` toggles the developer overlay.
 
 ### GDScript regression suite (700+ assertions)
 
@@ -146,9 +152,10 @@ dotnet run -- --test          # 287 assertions, also via bin/…/Lifestate.exe -
 
 ## Save compatibility
 
-The Godot build is at Save **Version 11** (`CareerProgress` per-track rank/XP
-added by the Career Progression foundation; v2–v10 all still load). Pre-v11
-saves default every career to Rank 1 / XP 0 with the saved `CurrentJobId`
+The Godot build is at Save **Version 12** (`Economy` living-expense totals
+added by the Economy foundation; v2–v11 all still load). Pre-v12 saves
+migrate economy totals to zero with no retroactive charges. Pre-v11 saves
+default every career to Rank 1 / XP 0 with the saved `CurrentJobId`
 preserved. Pre-v10 saves have no life state: on load they migrate to a
 healthy living character with a LifeSeed derived deterministically from
 stable saved state, so offline mortality rolls are stable across reloads
@@ -158,8 +165,8 @@ saves also have no career state: on load, a save that was actively working
 migrates to **Laborer** (the historical flat 10/hour generic Work wage), an
 unemployed save stays unemployed. The retained C# reference remains Version 7
 and cannot read Godot v8+ saves; Godot still imports C# v7 saves (they upgrade
-to v11 with living defaults, an empty `CurrentJobId` and default career
-progress).
+to v12 with living defaults, an empty `CurrentJobId`, default career
+progress and zeroed economy totals).
 
 | Build | Save location |
 | --- | --- |

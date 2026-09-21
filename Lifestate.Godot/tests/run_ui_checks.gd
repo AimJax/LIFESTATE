@@ -13,7 +13,7 @@ var _education_case_index := 0
 var _career_case_index := 0
 
 const RESOLUTIONS := [Vector2i(1100, 720), Vector2i(1280, 720), Vector2i(1366, 768), Vector2i(1600, 900)]
-const SCREEN_KEYS := ["life", "activities", "people", "more", "character", "education", "career", "save_load", "settings"]
+const SCREEN_KEYS := ["life", "activities", "people", "more", "character", "education", "career", "economy", "save_load", "settings"]
 const EDUCATION_CASES := ["primary_enroll", "primary_active", "primary_completed_wait", "secondary_enroll", "secondary_active", "secondary_completed"]
 const CAREER_CASES := ["unemployed", "employed", "promotable", "max_rank"]
 
@@ -201,8 +201,8 @@ func _check_scene_loaded() -> bool:
 	if not loaded:
 		return false
 	var roots: Variant = _main.get("_screen_roots")
-	var has_roots: bool = typeof(roots) == TYPE_DICTIONARY and (roots as Dictionary).size() == 9
-	_harness.check("all nine screen roots exist", has_roots, str(roots))
+	var has_roots: bool = typeof(roots) == TYPE_DICTIONARY and (roots as Dictionary).size() == 10
+	_harness.check("all ten screen roots exist", has_roots, str(roots))
 	return has_roots
 
 
@@ -245,11 +245,11 @@ func _check_screens() -> void:
 	for key in SCREEN_KEYS:
 		_harness.check("screen '%s' built" % key, _main._screen_roots.has(key))
 	var host: MarginContainer = _main.get_node("Layout/ScreenHost")
-	_harness.eq_int("all screens are hosted", host.get_child_count(), 9)
+	_harness.eq_int("all screens are hosted", host.get_child_count(), 10)
 	_harness.eq_string("Life is the default screen", _main._current_screen, "life")
 	_harness.check("screen roots are Controls",
-		_main._screen_roots.size() == 9
-		and _main._screen_roots.values().filter(func(node): return node is Control).size() == 9)
+		_main._screen_roots.size() == 10
+		and _main._screen_roots.values().filter(func(node): return node is Control).size() == 10)
 
 
 func _check_startup_state() -> void:
@@ -288,6 +288,15 @@ func _check_navigation() -> void:
 	_main.go_to("career")
 	_harness.eq_string("More can open Career", _main._current_screen, "career")
 	_harness.check("Career screen is visible", _main._screen_roots["career"].visible)
+	_main.go_to("economy")
+	_harness.eq_string("More can open Economy", _main._current_screen, "economy")
+	_harness.check("Economy screen is visible", _main._screen_roots["economy"].visible)
+	_harness.check("Economy reports the daily cost",
+		_main._screens["economy"]._daily_label.text == "Current Daily Cost  $0 / day",
+		_main._screens["economy"]._daily_label.text)
+	_harness.check("Economy reports no outstanding balance",
+		_main._screens["economy"]._clear_state_label.text == "No outstanding living expenses.",
+		_main._screens["economy"]._clear_state_label.text)
 	_main.go_to("save_load")
 	_harness.check("Save/Load screen is visible", _main._screen_roots["save_load"].visible)
 	_main.go_to("settings")
@@ -507,6 +516,8 @@ func _representatives(key: String) -> Array[Control]:
 			return [screen._grid.get_child(0)]
 		"career":
 			return [screen._status_card]
+		"economy":
+			return [screen._money_label, screen._daily_label, screen._clear_state_label]
 		"character":
 			return [screen._age_label]
 		"education":
@@ -527,7 +538,9 @@ static func _required_texts(key: String) -> PackedStringArray:
 		"people":
 			return PackedStringArray(["MOTHER", "FATHER"])
 		"more":
-			return PackedStringArray(["CHARACTER", "EDUCATION", "CAREER", "SAVE / LOAD", "SETTINGS"])
+			return PackedStringArray(["CHARACTER", "EDUCATION", "CAREER", "ECONOMY", "SAVE / LOAD", "SETTINGS"])
+		"economy":
+			return PackedStringArray(["ECONOMY", "CURRENT MONEY", "LIVING EXPENSES"])
 	return PackedStringArray()
 
 
