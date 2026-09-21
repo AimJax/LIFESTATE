@@ -296,7 +296,7 @@ static func _save_v13(h: TestHarness) -> void:
 	SaveManager.save_game(pair[0], player, TEST_PATH, FIXED_NOW)
 
 	var raw: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(TEST_PATH))
-	h.eq_int("Food-S1 save version is exactly 13", raw["Version"], 13)
+	h.eq_int("Food-S1 save version is exactly 14", raw["Version"], 14)
 	var stored: Dictionary = raw["Economy"]
 	h.eq_int("Food-S2 spent persisted", stored["FoodDrinkSpent"], 5 * 8 + 2 * 3)
 	h.eq_int("Food-S3 meals persisted", stored["MealsPurchased"], 5)

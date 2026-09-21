@@ -13,7 +13,7 @@ var _education_case_index := 0
 var _career_case_index := 0
 
 const RESOLUTIONS := [Vector2i(1100, 720), Vector2i(1280, 720), Vector2i(1366, 768), Vector2i(1600, 900)]
-const SCREEN_KEYS := ["life", "activities", "people", "more", "character", "education", "career", "economy", "save_load", "settings"]
+const SCREEN_KEYS := ["life", "activities", "people", "more", "character", "education", "career", "economy", "housing", "save_load", "settings"]
 const EDUCATION_CASES := ["primary_enroll", "primary_active", "primary_completed_wait", "secondary_enroll", "secondary_active", "secondary_completed"]
 const CAREER_CASES := ["unemployed", "employed", "promotable", "max_rank"]
 
@@ -201,8 +201,8 @@ func _check_scene_loaded() -> bool:
 	if not loaded:
 		return false
 	var roots: Variant = _main.get("_screen_roots")
-	var has_roots: bool = typeof(roots) == TYPE_DICTIONARY and (roots as Dictionary).size() == 10
-	_harness.check("all ten screen roots exist", has_roots, str(roots))
+	var has_roots: bool = typeof(roots) == TYPE_DICTIONARY and (roots as Dictionary).size() == 11
+	_harness.check("all eleven screen roots exist", has_roots, str(roots))
 	return has_roots
 
 
@@ -245,11 +245,11 @@ func _check_screens() -> void:
 	for key in SCREEN_KEYS:
 		_harness.check("screen '%s' built" % key, _main._screen_roots.has(key))
 	var host: MarginContainer = _main.get_node("Layout/ScreenHost")
-	_harness.eq_int("all screens are hosted", host.get_child_count(), 10)
+	_harness.eq_int("all screens are hosted", host.get_child_count(), 11)
 	_harness.eq_string("Life is the default screen", _main._current_screen, "life")
 	_harness.check("screen roots are Controls",
-		_main._screen_roots.size() == 10
-		and _main._screen_roots.values().filter(func(node): return node is Control).size() == 10)
+		_main._screen_roots.size() == 11
+		and _main._screen_roots.values().filter(func(node): return node is Control).size() == 11)
 
 
 func _check_startup_state() -> void:
@@ -297,10 +297,77 @@ func _check_navigation() -> void:
 	_harness.check("Economy reports no outstanding balance",
 		_main._screens["economy"]._clear_state_label.text == "No outstanding living expenses.",
 		_main._screens["economy"]._clear_state_label.text)
+	_check_housing_flow()
 	_main.go_to("save_load")
 	_harness.check("Save/Load screen is visible", _main._screen_roots["save_load"].visible)
 	_main.go_to("settings")
 	_harness.check("Settings screen is visible", _main._screen_roots["settings"].visible)
+	_main.go_to("life")
+
+
+## Housing through the real UI: move flow, age-25 Parents lock and Economy
+## integration, all through visible controls and domain feedback.
+func _check_housing_flow() -> void:
+	_harness.section("HousingFlow")
+	var service: Node = root.get_node("GameService")
+	var player: PlayerState = service.player
+	var feedback: Label = _main.get_node("Layout/FeedbackLabel")
+	var day_before: int = service.clock.day
+
+	service.clock.restore(21 * 365, 0, 0)
+	_main.go_to("housing")
+	_harness.eq_string("housing screen is reachable", _main._current_screen, "housing")
+	var housing_screen = _main._screens["housing"]
+	_harness.eq_string("housing status title", housing_screen._status_title.text, "CURRENT HOME")
+	var cheap_action: Button = housing_screen._housing_cards["cheap_room"]["action"]
+	_harness.eq_string("cheap room offers MOVE IN", cheap_action.text, "MOVE IN")
+	_harness.eq_bool("cheap room button enabled", cheap_action.disabled, false)
+	cheap_action.pressed.emit()
+	_harness.eq_string("UI move reaches cheap room",
+		player.housing.current_housing_id, HousingCatalog.CHEAP_ROOM_ID)
+	_harness.eq_int("UI move counted", player.housing.moves_completed, 1)
+	_harness.eq_string("UI move feedback", feedback.text, "Moved to Cheap Room.")
+	_harness.eq_int("UI move advances no time", service.clock.day, 21 * 365)
+	var apartment_action: Button = housing_screen._housing_cards["apartment"]["action"]
+	apartment_action.pressed.emit()
+	_harness.eq_string("UI move reaches apartment",
+		player.housing.current_housing_id, HousingCatalog.APARTMENT_ID)
+	_harness.eq_int("UI second move counted", player.housing.moves_completed, 2)
+
+	# Age 25: Parents locks while visible; the guard holds even if invoked.
+	service.clock.restore(25 * 365, 0, 0)
+	housing_screen.refresh()
+	var parents_action: Button = housing_screen._housing_cards["parents"]["action"]
+	_harness.eq_string("parents shows LOCKED at 25", parents_action.text, "LOCKED")
+	_harness.eq_bool("parents button disabled at 25", parents_action.disabled, true)
+	parents_action.pressed.emit()
+	_harness.eq_string("locked parents cannot be taken",
+		player.housing.current_housing_id, HousingCatalog.APARTMENT_ID)
+	_harness.eq_string("locked parents feedback",
+		feedback.text, "You can no longer move back in with your parents.")
+
+	# Economy screen aggregates the apartment at the adult rate.
+	_main.go_to("economy")
+	var economy_screen = _main._screens["economy"]
+	_harness.eq_string("Economy shows the home",
+		economy_screen._home_label.text, "Current Home  Apartment")
+	_harness.eq_string("Economy shows housing cost",
+		economy_screen._housing_cost_label.text, "Housing Cost  $20 / day")
+	_harness.eq_string("Economy totals living",
+		economy_screen._total_living_label.text, "Living Expenses  $10")
+	_harness.eq_string("Economy totals housing",
+		economy_screen._total_housing_label.text, "Housing  $20")
+	_harness.eq_string("Economy totals combined",
+		economy_screen._total_combined_label.text, "Total  $30 / day")
+
+	# A resident home never evicts: parents-current at 25 still shows CURRENT.
+	_main.go_to("housing")
+	player.housing.restore(HousingCatalog.PARENTS_ID, 0, 0, 0, 2)
+	housing_screen.refresh()
+	_harness.eq_string("resident parents shows CURRENT at 25", parents_action.text, "CURRENT")
+	_harness.eq_bool("resident parents button disabled", parents_action.disabled, true)
+	# Leave the session clock as found so later geometry sees the startup age.
+	service.clock.restore(day_before, 0, 0)
 	_main.go_to("life")
 
 
@@ -572,7 +639,10 @@ func _representatives(key: String) -> Array[Control]:
 			return [screen._status_card]
 		"economy":
 			return [screen._money_label, screen._daily_label, screen._clear_state_label,
-				screen._food_spent_label, screen._meals_label, screen._drinks_label]
+				screen._food_spent_label, screen._meals_label, screen._drinks_label,
+				screen._home_label]
+		"housing":
+			return [screen._status_title, screen._status_detail]
 		"character":
 			return [screen._age_label]
 		"education":
@@ -597,7 +667,10 @@ static func _required_texts(key: String) -> PackedStringArray:
 		"people":
 			return PackedStringArray(["MOTHER", "FATHER"])
 		"more":
-			return PackedStringArray(["CHARACTER", "EDUCATION", "CAREER", "ECONOMY", "SAVE / LOAD", "SETTINGS"])
+			return PackedStringArray(["CHARACTER", "EDUCATION", "CAREER", "ECONOMY", "HOUSING", "SAVE / LOAD", "SETTINGS"])
+		"housing":
+			return PackedStringArray(["HOUSING", "CURRENT HOME", "LIVING WITH PARENTS",
+				"CHEAP ROOM", "APARTMENT", "NICE APARTMENT"])
 		"economy":
 			return PackedStringArray(["ECONOMY", "CURRENT MONEY", "LIVING EXPENSES"])
 	return PackedStringArray()

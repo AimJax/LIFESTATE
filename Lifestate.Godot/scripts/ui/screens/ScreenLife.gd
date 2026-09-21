@@ -12,6 +12,7 @@ var _age_label: Label
 var _stage_label: Label
 var _money_label: Label
 var _daily_cost_label: Label
+var _home_label: Label
 var _activity_label: Label
 var _needs_card: PanelContainer
 var _need_bars: Dictionary = {}
@@ -72,8 +73,11 @@ func _build_identity_header() -> void:
 	_activity_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_daily_cost_label = UiTheme.label("Daily Cost $0", UiTheme.FONT_SMALL, UiTheme.TEXT_MUTED)
 	_daily_cost_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_home_label = UiTheme.label("Home Living with Parents", UiTheme.FONT_SMALL, UiTheme.TEXT_MUTED)
+	_home_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	status.add_child(_money_label)
 	status.add_child(_daily_cost_label)
+	status.add_child(_home_label)
 	status.add_child(_activity_label)
 	row.add_child(status)
 
@@ -179,6 +183,8 @@ func refresh() -> void:
 	_stage_label.text = player.life_stage_name
 	_money_label.text = UiTheme.format_money(player.money)
 	_daily_cost_label.text = "Daily Cost $%d" % EconomyState.daily_rate_for_age(player.age)
+	var home: HousingDefinition = player.housing.current_definition()
+	_home_label.text = "Home %s" % home.display_name if home != null else "Home Unknown"
 	var activity_name: String = player.current_activity_name()
 	_activity_label.text = "Currently " + activity_name
 	if player.is_working:

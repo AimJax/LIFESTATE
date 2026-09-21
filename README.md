@@ -64,6 +64,12 @@ they read the session and render it.
   shortfall-guarded, with deprivation-streak recovery and lifetime spending
   statistics. Separate from daily living expenses; persisted with
   transactional save/load.
+- **Housing (Godot-only, post-migration):** Living with Parents ($0, age 0+),
+  Cheap Room ($8/day, 18+), Apartment ($20/day, 21+) and Nice Apartment
+  ($40/day, 25+). Manual instant moves (no fee, history retained, no eviction
+  at 25 but no return either); housing assessed daily after living expenses
+  with independent outstanding balances. Identical across normal, bulk and
+  offline progression; frozen by death; persisted with transactional save/load.
 - **Life events:** `LifeEventCatalog` holds immutable definitions; one pending
   event at a time; choices resolve deterministically into ordered history.
 - **Offline progression** uses O(1) bulk arithmetic, never a per-minute loop.
@@ -87,7 +93,7 @@ godot --path Lifestate.Godot
 
 The project boots straight into `scenes/Main.tscn`. Navigation is
 **LIFE / ACTIVITIES / PEOPLE / MORE**, with Character, Education, Career, Economy,
-Save/Load and Settings under MORE. `F2` toggles the developer overlay.
+Housing, Save/Load and Settings under MORE. `F2` toggles the developer overlay.
 
 ### GDScript regression suite (700+ assertions)
 
@@ -158,22 +164,24 @@ dotnet run -- --test          # 287 assertions, also via bin/…/Lifestate.exe -
 
 ## Save compatibility
 
-The Godot build is at Save **Version 13** (`FoodDrinkSpent`/`MealsPurchased`/
-`DrinksPurchased` added by the Food & Drink foundation; v2–v12 all still
-load). Pre-v13 saves default food statistics to zero with living-expense
-totals intact. Pre-v12 saves migrate economy totals to zero with no
-retroactive charges. Pre-v11 saves default every career to Rank 1 / XP 0
-with the saved `CurrentJobId` preserved. Pre-v10 saves have no life state:
-on load they migrate to a healthy living character with a LifeSeed derived
-deterministically from stable saved state, so offline mortality rolls are
-stable across reloads (`Health`/`IsDead`/`DeathDay`/`DeathAge`/`CauseOfDeath`/
-`LifeSeed`/deprivation accumulators came from the Health + Death foundation).
-Pre-v9 saves also have no career state: on load, a save that was actively
-working migrates to **Laborer** (the historical flat 10/hour generic Work
-wage), an unemployed save stays unemployed. The retained C# reference remains
-Version 7 and cannot read Godot v8+ saves; Godot still imports C# v7 saves
-(they upgrade to v13 with living defaults, an empty `CurrentJobId`, default
-career progress and zeroed economy totals).
+The Godot build is at Save **Version 14** (`Housing` current-home and payment
+history added by the Housing foundation; v2–v13 all still load). Pre-v14
+saves default to Living with Parents with zeroed housing counters and no
+retroactive charges. Pre-v13 saves default food statistics to zero with
+living-expense totals intact. Pre-v12 saves migrate economy totals to zero
+with no retroactive charges. Pre-v11 saves default every career to Rank 1 /
+XP 0 with the saved `CurrentJobId` preserved. Pre-v10 saves have no life
+state: on load they migrate to a healthy living character with a LifeSeed
+derived deterministically from stable saved state, so offline mortality rolls
+are stable across reloads (`Health`/`IsDead`/`DeathDay`/`DeathAge`/
+`CauseOfDeath`/`LifeSeed`/deprivation accumulators came from the Health +
+Death foundation). Pre-v9 saves also have no career state: on load, a save
+that was actively working migrates to **Laborer** (the historical flat
+10/hour generic Work wage), an unemployed save stays unemployed. The retained
+C# reference remains Version 7 and cannot read Godot v8+ saves; Godot still
+imports C# v7 saves (they upgrade to v14 with living defaults, an empty
+`CurrentJobId`, default career progress, zeroed economy totals and parents
+housing).
 
 | Build | Save location |
 | --- | --- |

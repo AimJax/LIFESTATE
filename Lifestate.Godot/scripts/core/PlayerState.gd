@@ -94,6 +94,7 @@ var relationships: PlayerRelationships
 var events: LifeEventSystem
 var career: CareerState = CareerState.new()
 var economy: EconomyState = EconomyState.new()
+var housing: HousingState = HousingState.new()
 
 var total_play_hours: int = 0
 var money: int = STARTING_MONEY
@@ -295,15 +296,23 @@ func _evaluate_daily_mortality() -> void:
 ## no-ops; shortfalls accrue to outstanding without touching money (see
 ## EconomyState). Never runs for the dead, and never for days entered by
 ## non-simulating clock jumps (those sync the pointer without assessing).
+##
+## Housing resolves immediately after living expenses for the same entered
+## day (living first, housing second), using the home occupied when the day
+## becomes due. The two systems stay distinct: separate charges, separate
+## totals, separate outstanding balances.
 func _assess_entered_days() -> void:
 	while _economy_assessed_day < _clock.day and not is_dead:
 		_economy_assessed_day += 1
 		var expense: int = EconomyState.daily_rate_for_age(
 			_economy_assessed_day / GameClock.DAYS_PER_YEAR)
-		if expense <= 0:
-			continue
-		var outcome: Dictionary = economy.apply_daily_charge(expense, money)
-		money = outcome["new_money"]
+		if expense > 0:
+			var living_outcome: Dictionary = economy.apply_daily_charge(expense, money)
+			money = living_outcome["new_money"]
+		var home: HousingDefinition = housing.current_definition()
+		if home != null and home.daily_cost > 0:
+			var housing_outcome: Dictionary = housing.apply_daily_charge(home.daily_cost, money)
+			money = housing_outcome["new_money"]
 
 
 ## Marks all days up to the current clock day as mortality-resolved WITHOUT
@@ -510,6 +519,43 @@ func promote() -> bool:
 	if not evaluate_promotion()["ok"]:
 		return false
 	return career.promote_current()
+
+
+## Lowest age at which Living with Parents can no longer be newly selected.
+## Residents who are already home are never evicted by birthdays or loads.
+const PARENTS_MOVE_OUT_AGE: int = 25
+
+
+## Centralized move evaluation. UI reads the reason; move_to_housing enforces
+## it. Never duplicate this logic in screens.
+func evaluate_move_to(housing_id: String) -> Dictionary:
+	if not HousingCatalog.is_known_housing(housing_id):
+		return {"ok": false, "reason": "That housing does not exist."}
+	if is_dead:
+		return {"ok": false, "reason": "Life has ended."}
+	if housing_id == housing.current_housing_id:
+		return {"ok": false, "reason": "You already live here."}
+	var definition: HousingDefinition = HousingCatalog.get_by_id(housing_id)
+	if age < definition.minimum_age:
+		return {"ok": false, "reason": "Requires age %d." % definition.minimum_age}
+	if housing_id == HousingCatalog.PARENTS_ID and age >= PARENTS_MOVE_OUT_AGE:
+		return {"ok": false, "reason": "You can no longer move back in with your parents."}
+	return {"ok": true, "reason": ""}
+
+
+func can_move_to(housing_id: String) -> bool:
+	return evaluate_move_to(housing_id)["ok"]
+
+
+## Manual instant move: zero game minutes, no activity interruption, no fee.
+## History (including unpaid balances) is retained; only the current home and
+## the move counter change.
+func move_to_housing(housing_id: String) -> bool:
+	if not evaluate_move_to(housing_id)["ok"]:
+		return false
+	housing.current_housing_id = housing_id
+	housing.moves_completed = mini(HousingState.MAX_VALUE, housing.moves_completed + 1)
+	return true
 
 
 func enroll_secondary_school() -> bool:
@@ -972,6 +1018,7 @@ func snapshot() -> Dictionary:
 		"mortality_evaluated_day": _mortality_evaluated_day,
 		"economy_assessed_day": _economy_assessed_day,
 		"economy": economy.to_dict(),
+		"housing": housing.to_dict(),
 		"career_progress": career.snapshot_progress(),
 	}
 
@@ -996,6 +1043,9 @@ func restore_snapshot(state: Dictionary) -> void:
 	var economy_state: Dictionary = state["economy"]
 	economy.restore(economy_state["paid"], economy_state["outstanding"], economy_state["missed"],
 		economy_state["spent"], economy_state["meals"], economy_state["drinks"])
+	var housing_state: Dictionary = state["housing"]
+	housing.restore(housing_state["housing_id"], housing_state["paid"], housing_state["outstanding"],
+		housing_state["missed"], housing_state["moves"])
 	_mortality_evaluated_day = state["mortality_evaluated_day"]
 	_economy_assessed_day = state["economy_assessed_day"]
 

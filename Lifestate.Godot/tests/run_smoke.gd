@@ -199,6 +199,24 @@ func _check_career_path() -> bool:
 	_harness.eq_int("load restores money", player.money, 1009)
 	_harness.eq_int("load restores meal count", player.economy.meals_purchased, 1)
 	_harness.eq_int("load restores spending", player.economy.food_drink_spent, 11)
+
+	# Housing through the real UI: move to Cheap Room, fail Apartment on age,
+	# then cross a midnight and verify both daily charges.
+	_main.go_to("housing")
+	_harness.eq_string("housing screen is reachable", _main._current_screen, "housing")
+	var housing_screen = _main._screens["housing"]
+	(housing_screen._housing_cards["cheap_room"]["action"] as Button).pressed.emit()
+	_harness.eq_string("UI move reaches cheap room",
+		player.housing.current_housing_id, HousingCatalog.CHEAP_ROOM_ID)
+	_harness.eq_int("UI move counted", player.housing.moves_completed, 1)
+	(housing_screen._housing_cards["apartment"]["action"] as Button).pressed.emit()
+	_harness.eq_string("apartment locked by age",
+		player.housing.current_housing_id, HousingCatalog.CHEAP_ROOM_ID)
+	var housing_money: int = player.money
+	player.advance_simulation(1440)
+	_harness.eq_int("midnight charges living plus housing",
+		player.money, housing_money - 5 - 8)
+	_harness.eq_int("housing paid recorded", player.housing.total_paid, 8)
 	return true
 
 

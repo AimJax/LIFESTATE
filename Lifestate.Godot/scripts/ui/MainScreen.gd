@@ -12,6 +12,7 @@ const ScreenCharacterClass = preload("res://scripts/ui/screens/ScreenCharacter.g
 const ScreenEducationClass = preload("res://scripts/ui/screens/ScreenEducation.gd")
 const ScreenCareerClass = preload("res://scripts/ui/screens/ScreenCareer.gd")
 const ScreenEconomyClass = preload("res://scripts/ui/screens/ScreenEconomy.gd")
+const ScreenHousingClass = preload("res://scripts/ui/screens/ScreenHousing.gd")
 const ScreenSaveLoadClass = preload("res://scripts/ui/screens/ScreenSaveLoad.gd")
 const ScreenSettingsClass = preload("res://scripts/ui/screens/ScreenSettings.gd")
 
@@ -73,6 +74,7 @@ func _build_screens() -> void:
 		"education": ScreenEducationClass.new(GameService),
 		"career": ScreenCareerClass.new(GameService),
 		"economy": ScreenEconomyClass.new(GameService),
+		"housing": ScreenHousingClass.new(GameService),
 		"save_load": ScreenSaveLoadClass.new(GameService),
 		"settings": ScreenSettingsClass.new(GameService),
 	}
@@ -194,6 +196,7 @@ func _build_god_overlay() -> void:
 	body.add_child(UiTheme.spacer(UiTheme.SPACE_XS))
 	body.add_child(UiTheme.tag("ECONOMY TESTING", UiTheme.WARNING))
 	_add_god_feedback_button(body, "Clear Economy Debt", func() -> Dictionary: return GameService.god_mode.clear_economy_debt())
+	_add_god_feedback_button(body, "Clear Housing Debt", func() -> Dictionary: return GameService.god_mode.clear_housing_debt())
 
 	var close_button := UiTheme.button("Close (F2)", UiTheme.NEGATIVE, UiTheme.BUTTON_HEIGHT_SMALL)
 	close_button.pressed.connect(toggle_god_mode)

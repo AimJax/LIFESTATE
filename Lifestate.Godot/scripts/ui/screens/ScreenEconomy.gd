@@ -17,6 +17,15 @@ var _clear_state_label: Label
 var _food_spent_label: Label
 var _meals_label: Label
 var _drinks_label: Label
+var _home_label: Label
+var _housing_cost_label: Label
+var _housing_paid_label: Label
+var _housing_outstanding_label: Label
+var _housing_missed_label: Label
+var _moves_label: Label
+var _total_living_label: Label
+var _total_housing_label: Label
+var _total_combined_label: Label
 var _back_button: Button
 
 
@@ -65,6 +74,34 @@ func build(parent: Control) -> void:
 	food_body.add_child(_meals_label)
 	food_body.add_child(_drinks_label)
 
+	var housing_card := UiTheme.card(UiTheme.SURFACE)
+	_column.add_child(housing_card)
+	var housing_body := UiTheme.card_body(housing_card, UiTheme.SPACE_XS)
+	housing_body.add_child(UiTheme.tag("HOUSING"))
+	_home_label = UiTheme.label("", UiTheme.FONT_HEADING, UiTheme.TEXT_PRIMARY)
+	_housing_cost_label = UiTheme.label("", UiTheme.FONT_BODY, UiTheme.TEXT_SECONDARY)
+	_housing_paid_label = UiTheme.label("", UiTheme.FONT_BODY, UiTheme.TEXT_SECONDARY)
+	_housing_outstanding_label = UiTheme.label("", UiTheme.FONT_BODY, UiTheme.TEXT_SECONDARY)
+	_housing_missed_label = UiTheme.label("", UiTheme.FONT_BODY, UiTheme.TEXT_SECONDARY)
+	_moves_label = UiTheme.label("", UiTheme.FONT_BODY, UiTheme.TEXT_SECONDARY)
+	housing_body.add_child(_home_label)
+	housing_body.add_child(_housing_cost_label)
+	housing_body.add_child(_housing_paid_label)
+	housing_body.add_child(_housing_outstanding_label)
+	housing_body.add_child(_housing_missed_label)
+	housing_body.add_child(_moves_label)
+
+	var total_card := UiTheme.card(UiTheme.SURFACE)
+	_column.add_child(total_card)
+	var total_body := UiTheme.card_body(total_card, UiTheme.SPACE_XS)
+	total_body.add_child(UiTheme.tag("TOTAL DAILY COST"))
+	_total_living_label = UiTheme.label("", UiTheme.FONT_BODY, UiTheme.TEXT_SECONDARY)
+	_total_housing_label = UiTheme.label("", UiTheme.FONT_BODY, UiTheme.TEXT_SECONDARY)
+	_total_combined_label = UiTheme.label("", UiTheme.FONT_HEADING, UiTheme.TEXT_PRIMARY)
+	total_body.add_child(_total_living_label)
+	total_body.add_child(_total_housing_label)
+	total_body.add_child(_total_combined_label)
+
 	_back_button = UiTheme.button("Back", UiTheme.TEXT_SECONDARY, UiTheme.BUTTON_HEIGHT_SMALL)
 	_back_button.pressed.connect(func() -> void: _service_go_back())
 	_column.add_child(_back_button)
@@ -102,3 +139,18 @@ func refresh() -> void:
 	_food_spent_label.text = "Food & Drink Spent  %s" % UiTheme.format_money(economy.food_drink_spent)
 	_meals_label.text = "Meals Purchased  %d" % economy.meals_purchased
 	_drinks_label.text = "Drinks Purchased  %d" % economy.drinks_purchased
+
+	var housing: HousingState = player.housing
+	var home: HousingDefinition = housing.current_definition()
+	var home_name: String = home.display_name if home != null else "Unknown"
+	var home_cost: int = home.daily_cost if home != null else 0
+	_home_label.text = "Current Home  %s" % home_name
+	_housing_cost_label.text = "Housing Cost  $%d / day" % home_cost
+	_housing_paid_label.text = "Total Housing Paid  %s" % UiTheme.format_money(housing.total_paid)
+	_housing_outstanding_label.text = "Outstanding Housing  %s" % UiTheme.format_money(housing.outstanding)
+	_housing_missed_label.text = "Missed Payments  %d" % housing.missed_payments
+	_moves_label.text = "Moves Completed  %d" % housing.moves_completed
+
+	_total_living_label.text = "Living Expenses  $%d" % rate
+	_total_housing_label.text = "Housing  $%d" % home_cost
+	_total_combined_label.text = "Total  $%d / day" % (rate + home_cost)

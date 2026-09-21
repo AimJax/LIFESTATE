@@ -76,13 +76,13 @@ func _initialize() -> void:
 		if _canonical(reserialized[key]) != _canonical(original[key]):
 			changed.append("%s (%s != %s)" % [key, reserialized[key], original[key]])
 	var extra: PackedStringArray = []
-	# Versions 10–12 add the Health + Death foundation, career progression and
-	# economy keys; legacy Version 7 saves legitimately re-serialize with them
-	# (living defaults + derived LifeSeed + default Rank 1 / XP 0 tracks +
-	# zeroed economy totals).
+	# Versions 10–14 add the Health + Death foundation, career progression,
+	# economy and housing keys; legacy Version 7 saves legitimately re-serialize
+	# with them (living defaults + derived LifeSeed + default Rank 1 / XP 0
+	# tracks + zeroed economy totals + parents housing).
 	var v10_keys: PackedStringArray = ["Health", "IsDead", "DeathDay", "DeathAge",
 		"CauseOfDeath", "LifeSeed", "StarvingMinutesAccumulator", "DehydratedMinutesAccumulator",
-		"CareerProgress", "Economy"]
+		"CareerProgress", "Economy", "Housing"]
 	for key in reserialized:
 		if not original.has(key) and not (str(key) in v10_keys) \
 				and key != "SecondaryGrade" and key != "CurrentJobId":
@@ -91,7 +91,7 @@ func _initialize() -> void:
 	_harness.eq_int("every C# key is re-serialized", missing.size(), 0)
 	_harness.eq_int("no key changes value on round trip", changed.size(), 0)
 	_harness.eq_int("port adds no unexpected keys", extra.size(), 0)
-	_harness.eq_int("re-serialized C# save upgrades to Version 13", reserialized["Version"], 13)
+	_harness.eq_int("re-serialized C# save upgrades to Version 14", reserialized["Version"], 14)
 	_harness.eq_int("legacy C# save defaults SecondaryGrade to zero", reserialized["SecondaryGrade"], 0)
 	_harness.eq_string("legacy C# save defaults CurrentJobId to unemployed", reserialized["CurrentJobId"], "")
 	for key in missing:

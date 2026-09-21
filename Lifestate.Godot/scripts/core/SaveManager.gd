@@ -148,6 +148,14 @@ static func load_game(clock: GameClock, player: PlayerState, path: String = "", 
 			v["EconomySpent"], v["EconomyMeals"], v["EconomyDrinks"]):
 		return _result(false, "Economy state is invalid.")
 
+	# Housing state restores BEFORE offline progression alongside economy:
+	# offline housing charges depend on the saved current home. Pre-v14 saves
+	# default to Living with Parents with zeroed counters (no retroactive
+	# charges, no inferred history).
+	if not temp_player.housing.restore(v["HousingId"], v["HousingPaid"], v["HousingOutstanding"],
+			v["HousingMissed"], v["HousingMoves"]):
+		return _result(false, "Housing state is invalid.")
+
 	# ---- Life / death state (version 10+, with legacy migration) -----------
 	# Restored BEFORE offline progression: offline old-age mortality rolls are
 	# derived from the LifeSeed, so it must be final before any time advances.
@@ -220,6 +228,10 @@ static func load_game(clock: GameClock, player: PlayerState, path: String = "", 
 		temp_player.economy.total_paid, temp_player.economy.outstanding,
 		temp_player.economy.missed_payments, temp_player.economy.food_drink_spent,
 		temp_player.economy.meals_purchased, temp_player.economy.drinks_purchased)
+	player.housing.restore(
+		temp_player.housing.current_housing_id, temp_player.housing.total_paid,
+		temp_player.housing.outstanding, temp_player.housing.missed_payments,
+		temp_player.housing.moves_completed)
 	player.restore_total_play_hours(temp_player.total_play_hours)
 	player.events.clear_pending()
 	player.events.restore_history(temp_player.events.duplicate_history())
@@ -547,6 +559,44 @@ static func validate_and_extract(data: Dictionary) -> Dictionary:
 			values["EconomySpent"] = spent
 			values["EconomyMeals"] = meals
 			values["EconomyDrinks"] = drinks
+
+	# ---- Housing (version 14+) --------------------------------------------
+	# Pre-v14 saves default to Living with Parents with zeroed counters.
+	# Parents + adult age is explicitly legal (no forced eviction).
+	values["HousingId"] = HousingCatalog.PARENTS_ID
+	values["HousingPaid"] = 0
+	values["HousingOutstanding"] = 0
+	values["HousingMissed"] = 0
+	values["HousingMoves"] = 0
+	if version >= 14:
+		var housing_raw: Variant = data.get("Housing", null)
+		if typeof(housing_raw) != TYPE_DICTIONARY:
+			return _result(false, "Housing is missing or malformed.")
+		var housing_data: Dictionary = housing_raw
+		for field in ["CurrentHousingId", "TotalHousingPaid", "OutstandingHousing",
+				"MissedHousingPayments", "MovesCompleted"]:
+			if not housing_data.has(field):
+				return _result(false, "Housing is missing '%s'." % field)
+		for field in housing_data:
+			if not ["CurrentHousingId", "TotalHousingPaid", "OutstandingHousing",
+					"MissedHousingPayments", "MovesCompleted"].has(str(field)):
+				return _result(false, "Housing references an unknown field.")
+		var housing_id: String = _get_string(housing_data, "CurrentHousingId", "", errors)
+		var housing_paid: int = _get_economy_value(housing_data, "TotalHousingPaid", errors)
+		var housing_owing: int = _get_economy_value(housing_data, "OutstandingHousing", errors)
+		var housing_missed: int = _get_economy_value(housing_data, "MissedHousingPayments", errors)
+		var housing_moves: int = _get_economy_value(housing_data, "MovesCompleted", errors)
+		if not errors.is_empty():
+			return _result(false, "Housing contains malformed values.")
+		if not HousingCatalog.is_known_housing(housing_id):
+			return _result(false, "Housing references an unknown home.")
+		if housing_paid < 0 or housing_owing < 0 or housing_missed < 0 or housing_moves < 0:
+			return _result(false, "Housing values must not be negative.")
+		values["HousingId"] = housing_id
+		values["HousingPaid"] = housing_paid
+		values["HousingOutstanding"] = housing_owing
+		values["HousingMissed"] = housing_missed
+		values["HousingMoves"] = housing_moves
 
 	# ---- Events + TotalPlayHours (version 7+) -----------------------------
 	values["TotalPlayHours"] = 0

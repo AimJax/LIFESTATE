@@ -344,7 +344,7 @@ static func _save_v9_round_trip(h: TestHarness) -> void:
 	SaveManager.save_game(clock, player, TEST_PATH, FIXED_NOW)
 	var raw: String = FileAccess.get_file_as_string(TEST_PATH)
 	var data: Dictionary = JSON.parse_string(raw)
-	h.eq_int("Career-S1 save version is exactly 13", data["Version"], 13)
+	h.eq_int("Career-S1 save version is exactly 14", data["Version"], 14)
 	h.eq_string("Career-S2 CurrentJobId serialized", data["CurrentJobId"], JobCatalog.OFFICE_CLERK_ID)
 
 	var loaded := fresh()
@@ -423,11 +423,11 @@ static func _legacy_migration(h: TestHarness) -> void:
 	h.eq_string("Career-L5 legacy idle stays unemployed", idle[1].career.current_job_id, "")
 	h.eq_bool("Career-L6 legacy idle not working", idle[1].is_working, false)
 
-	# v9 must remain in SUPPORTED_VERSIONS and v2-v12 all still load; the active
-	# schema is now Version 13 (food & drink foundation).
-	h.check("Career-L7 versions 9 through 13 supported",
-		SaveData.SUPPORTED_VERSIONS.has(9) and SaveData.SUPPORTED_VERSIONS.has(12)
-		and SaveData.VERSION == 13)
+	# v9 must remain in SUPPORTED_VERSIONS and v2-v13 all still load; the active
+	# schema is now Version 14 (housing foundation).
+	h.check("Career-L7 versions 9 through 14 supported",
+		SaveData.SUPPORTED_VERSIONS.has(9) and SaveData.SUPPORTED_VERSIONS.has(13)
+		and SaveData.VERSION == 14)
 
 
 static func _legacy_v8_fixture() -> Dictionary:
