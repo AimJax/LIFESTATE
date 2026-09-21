@@ -144,7 +144,8 @@ static func load_game(clock: GameClock, player: PlayerState, path: String = "", 
 	if v["version"] >= 10:
 		temp_player.restore_life_state(
 			v["Health"], v["IsDead"], v["DeathDay"], v["DeathAge"],
-			v["CauseOfDeath"], v["LifeSeed"]
+			v["CauseOfDeath"], v["LifeSeed"],
+			v["StarvingMinutesAccumulator"], v["DehydratedMinutesAccumulator"]
 		)
 	else:
 		temp_player.restore_life_state(
@@ -371,6 +372,8 @@ static func validate_and_extract(data: Dictionary) -> Dictionary:
 	values["DeathAge"] = -1
 	values["CauseOfDeath"] = ""
 	values["LifeSeed"] = -1
+	values["StarvingMinutesAccumulator"] = 0
+	values["DehydratedMinutesAccumulator"] = 0
 	if version >= 10:
 		if not errors.is_empty():
 			return _result(false, "Save contains malformed fields: %s" % ", ".join(errors))
@@ -393,6 +396,15 @@ static func validate_and_extract(data: Dictionary) -> Dictionary:
 
 		if values["LifeSeed"] < 0 or values["LifeSeed"] > PlayerState.LIFE_SEED_MAX:
 			return _result(false, "LifeSeed is out of range.")
+
+		values["StarvingMinutesAccumulator"] = _get_int(data, "StarvingMinutesAccumulator", 0, errors)
+		values["DehydratedMinutesAccumulator"] = _get_int(data, "DehydratedMinutesAccumulator", 0, errors)
+		if not errors.is_empty():
+			return _result(false, "Save contains malformed deprivation fields.")
+		if values["StarvingMinutesAccumulator"] < 0 or values["StarvingMinutesAccumulator"] >= 60:
+			return _result(false, "StarvingMinutesAccumulator is out of range.")
+		if values["DehydratedMinutesAccumulator"] < 0 or values["DehydratedMinutesAccumulator"] >= 60:
+			return _result(false, "DehydratedMinutesAccumulator is out of range.")
 
 		if not values["IsDead"]:
 			if values["Health"] <= 0.0:

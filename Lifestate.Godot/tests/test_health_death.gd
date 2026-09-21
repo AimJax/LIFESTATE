@@ -38,6 +38,7 @@ static func run(h: TestHarness) -> void:
 	_save_v10_invalid(h)
 	_legacy_life_seed_migration(h)
 	_normal_bulk_equivalence(h)
+	_deprivation_persistence(h)
 
 
 # =====================================================================
@@ -917,6 +918,163 @@ static func _normal_bulk_equivalence(h: TestHarness) -> void:
 			h.eq_int("%s death day parity" % context, bulk_player.death_day, stepped_player.death_day)
 			h.eq_int("%s death age parity" % context, bulk_player.death_age, stepped_player.death_age)
 			h.eq_string("%s cause parity" % context, bulk_player.cause_of_death, stepped_player.cause_of_death)
+
+
+# =====================================================================
+# Deprivation accumulator persistence (Save Version 10)
+# =====================================================================
+
+static func _deprivation_persistence(h: TestHarness) -> void:
+	h.section("Life-DP")
+
+	# Dehydration partial hour survives save/load: thirst 0 with 45 streak
+	# minutes saved, then +14 = no damage and +1 completes the hour for -5.
+	var pair := fresh()
+	var clock: GameClock = pair[0]
+	var player: PlayerState = pair[1]
+	player.debug_set_thirst(0)
+	player.debug_set_hunger(100)
+	player.advance_simulation(45)
+	h.eq_int("Life-DP1 dehydrated streak builds pre-save", player.get_dehydrated_minutes_accumulator(), 45)
+	SaveManager.save_game(clock, player, TEST_PATH, FIXED_NOW)
+	var raw: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(TEST_PATH))
+	h.eq_int("Life-DP2 dehydrated streak serialized", raw["DehydratedMinutesAccumulator"], 45)
+
+	var loaded := fresh()
+	var load_result: Dictionary = SaveManager.load_game(loaded[0], loaded[1], TEST_PATH, FIXED_NOW)
+	h.check("Life-DP3 load succeeds", load_result["ok"], load_result["error"])
+	h.eq_int("Life-DP4 dehydrated streak restored", loaded[1].get_dehydrated_minutes_accumulator(), 45)
+	loaded[1].advance_simulation(14)
+	h.near_float("Life-DP5 +14 minutes deals no damage", loaded[1].health, 100.0)
+	loaded[1].advance_simulation(1)
+	h.near_float("Life-DP6 +1 minute completes the hour for -5", loaded[1].health, 95.0)
+
+	# Starvation equivalent: hunger 0 with 45 streak minutes, +14 = nothing,
+	# +1 completes the hour for -2.
+	var spair := fresh()
+	var sclock: GameClock = spair[0]
+	var starve: PlayerState = spair[1]
+	starve.debug_set_hunger(0)
+	starve.debug_set_thirst(100)
+	starve.advance_simulation(45)
+	h.eq_int("Life-DP7 starving streak builds pre-save", starve.get_starving_minutes_accumulator(), 45)
+	SaveManager.save_game(sclock, starve, TEST_PATH, FIXED_NOW)
+	var sraw: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(TEST_PATH))
+	h.eq_int("Life-DP8 starving streak serialized", sraw["StarvingMinutesAccumulator"], 45)
+
+	var sloaded := fresh()
+	h.check("Life-DP9 starvation load succeeds",
+		SaveManager.load_game(sloaded[0], sloaded[1], TEST_PATH, FIXED_NOW)["ok"])
+	h.eq_int("Life-DP10 starving streak restored", sloaded[1].get_starving_minutes_accumulator(), 45)
+	sloaded[1].advance_simulation(14)
+	h.near_float("Life-DP11 +14 minutes deals no damage", sloaded[1].health, 100.0)
+	sloaded[1].advance_simulation(1)
+	h.near_float("Life-DP12 +1 minute completes the hour for -2", sloaded[1].health, 98.0)
+
+	# Exact death timing: Health 5 with a 45-minute streak dies on the 15th
+	# post-load minute, not a fresh 60 minutes later.
+	var dpair := fresh()
+	var dclock: GameClock = dpair[0]
+	var dying: PlayerState = dpair[1]
+	dying.debug_set_health(5.0)
+	dying.debug_set_thirst(0)
+	dying.debug_set_hunger(100)
+	dying.advance_simulation(45)
+	SaveManager.save_game(dclock, dying, TEST_PATH, FIXED_NOW)
+
+	var dloaded := fresh()
+	SaveManager.load_game(dloaded[0], dloaded[1], TEST_PATH, FIXED_NOW)
+	dloaded[1].advance_simulation(14)
+	h.eq_bool("Life-DP13 still alive 1 minute before the fatal hour", dloaded[1].is_dead, false)
+	h.near_float("Life-DP14 health untouched before the fatal hour", dloaded[1].health, 5.0)
+	dloaded[1].advance_simulation(1)
+	h.eq_bool("Life-DP15 dead once the streak hour completes", dloaded[1].is_dead, true)
+	h.eq_string("Life-DP16 fatal cause is dehydration", dloaded[1].cause_of_death, PlayerState.CAUSE_DEHYDRATION)
+	h.eq_int("Life-DP17 death clock hour is exact", dloaded[0].hour, 1)
+	h.eq_int("Life-DP18 death clock minute is exact", dloaded[0].minute, 0)
+	h.eq_int("Life-DP19 death day matches the frozen clock", dloaded[1].death_day, dloaded[0].day)
+
+	# Offline progression respects the restored streak: 16 offline game
+	# minutes (45 + 16 > 60) kill, and the clock freezes at the fatal minute.
+	var opair := fresh()
+	var oclock: GameClock = opair[0]
+	var offline: PlayerState = opair[1]
+	offline.debug_set_health(5.0)
+	offline.debug_set_thirst(0)
+	offline.debug_set_hunger(100)
+	offline.advance_simulation(45)
+	SaveManager.save_game(oclock, offline, TEST_PATH, FIXED_NOW)
+
+	var oloaded := fresh()
+	var oresult: Dictionary = SaveManager.load_game(oloaded[0], oloaded[1], TEST_PATH, FIXED_NOW + 4)
+	h.check("Life-DP20 offline load succeeds", oresult["ok"], oresult["error"])
+	h.eq_int("Life-DP21 offline minutes reported", oresult["offline_minutes"], 16)
+	h.eq_bool("Life-DP22 partial streak dies offline", oloaded[1].is_dead, true)
+	h.eq_string("Life-DP23 offline fatal cause is dehydration",
+		oloaded[1].cause_of_death, PlayerState.CAUSE_DEHYDRATION)
+	h.eq_int("Life-DP24 offline death freezes the clock hour", oloaded[0].hour, 1)
+	h.eq_int("Life-DP25 offline death freezes the clock minute", oloaded[0].minute, 0)
+
+	# Version 10 validation: accumulators are 0..59 integers, never clamped.
+	var vpair := fresh()
+	SaveManager.save_game(vpair[0], vpair[1], TEST_PATH, FIXED_NOW)
+	var base_text: String = FileAccess.get_file_as_string(TEST_PATH)
+
+	var live := fresh()
+	var live_clock: GameClock = live[0]
+	var live_player: PlayerState = live[1]
+	live_player.money = 7777
+	live_player.energy = 61
+	live_player.debug_set_hunger(62)
+	live_player.debug_set_thirst(63)
+	live_player.debug_set_health(42.0)
+	live_player.start_sleeping()
+	live_clock.restore(4321, 7, 8)
+
+	var bad_cases: Array = [
+		["negative Starving", {"StarvingMinutesAccumulator": -1}],
+		["Starving at 60", {"StarvingMinutesAccumulator": 60}],
+		["negative Dehydrated", {"DehydratedMinutesAccumulator": -1}],
+		["Dehydrated at 60", {"DehydratedMinutesAccumulator": 60}],
+		["non-integer Starving", {"StarvingMinutesAccumulator": 1.5}],
+		["string Dehydrated", {"DehydratedMinutesAccumulator": "45"}],
+		["null Starving", {"StarvingMinutesAccumulator": null}],
+		["null Dehydrated", {"DehydratedMinutesAccumulator": null}],
+	]
+	for entry in bad_cases:
+		var label: String = entry[0]
+		var patch: Dictionary = entry[1]
+		var data: Dictionary = JSON.parse_string(base_text)
+		for key in patch:
+			data[key] = patch[key]
+		_write(TEST_PATH, JSON.stringify(data))
+		var bad_result: Dictionary = SaveManager.load_game(live_clock, live_player, TEST_PATH, FIXED_NOW)
+		h.eq_bool("Life-DP26 rejects %s" % label, bad_result["ok"], false)
+
+	h.eq_int("Life-DP27 live clock day untouched", live_clock.day, 4321)
+	h.eq_int("Life-DP28 live clock time untouched",
+		live_clock.hour * 60 + live_clock.minute, 7 * 60 + 8)
+	h.eq_int("Life-DP29 live money untouched", live_player.money, 7777)
+	h.eq_int("Life-DP30 live energy untouched", live_player.energy, 61)
+	h.eq_int("Life-DP31 live hunger untouched", live_player.hunger, 62)
+	h.eq_int("Life-DP32 live thirst untouched", live_player.thirst, 63)
+	h.near_float("Life-DP33 live health untouched", live_player.health, 42.0)
+	h.eq_bool("Life-DP34 live death state untouched", live_player.is_dead, false)
+	h.eq_bool("Life-DP35 live activity untouched", live_player.is_sleeping, true)
+	h.eq_int("Life-DP36 live education untouched",
+		live_player.education.status, EducationState.Status.NOT_ENROLLED)
+	h.eq_string("Life-DP37 live career untouched", live_player.career.current_job_id, "")
+
+	# Legacy saves predate the fields and must default both streaks to 0.
+	var legacy: Dictionary = _legacy_v9_fixture()
+	_write(TEST_PATH, JSON.stringify(legacy))
+	var lloaded := fresh()
+	h.check("Life-DP38 v9 save still loads",
+		SaveManager.load_game(lloaded[0], lloaded[1], TEST_PATH, FIXED_NOW)["ok"])
+	h.eq_int("Life-DP39 v9 starving streak defaults to 0",
+		lloaded[1].get_starving_minutes_accumulator(), 0)
+	h.eq_int("Life-DP40 v9 dehydrated streak defaults to 0",
+		lloaded[1].get_dehydrated_minutes_accumulator(), 0)
 
 
 static func _write(path: String, text: String) -> Dictionary:
