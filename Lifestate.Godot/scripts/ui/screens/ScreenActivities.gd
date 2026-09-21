@@ -26,6 +26,8 @@ var _progress_detail: Label
 var _progress_bar: ProgressBar
 var _cards: Dictionary = {}
 var _support_buttons: Array = []
+var _food_card: PanelContainer
+var _food_buttons: Dictionary = {}
 var _last_activity: String = ""
 
 
@@ -42,6 +44,7 @@ func build(parent: Control) -> void:
 	_build_hero()
 	_build_progress()
 	_build_support_actions()
+	_build_food_drink()
 	_build_grid()
 	refresh()
 
@@ -105,6 +108,51 @@ func _build_support_actions() -> void:
 
 	# Support actions are gameplay mutations: they must die with the player.
 	_support_buttons = [wait_button, eat_button, drink_button]
+
+
+## Instant paid consumables: bought and consumed at once, advancing zero
+## game minutes and changing no activity. All validation and mutation lives
+## in PlayerState.purchase_consumable; buttons only forward and report.
+func _build_food_drink() -> void:
+	var card := UiTheme.card(UiTheme.SURFACE)
+	_food_card = card
+	_column.add_child(card)
+	var body := UiTheme.card_body(card, UiTheme.SPACE_XS)
+	body.add_child(UiTheme.tag("FOOD & DRINK"))
+
+	for definition in ConsumableCatalog.definitions():
+		var row := UiTheme.hbox(UiTheme.SPACE_SM)
+		var info := UiTheme.vbox(0)
+		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var title := UiTheme.label(definition.display_name, UiTheme.FONT_HEADING, UiTheme.TEXT_PRIMARY)
+		info.add_child(title)
+		var detail_parts: PackedStringArray = []
+		if definition.hunger_restored > 0:
+			detail_parts.append("Restore %d Hunger" % definition.hunger_restored)
+		if definition.thirst_restored > 0:
+			detail_parts.append("Restore %d Thirst" % definition.thirst_restored)
+		var detail := UiTheme.label(" · ".join(detail_parts), UiTheme.FONT_SMALL, UiTheme.TEXT_SECONDARY)
+		info.add_child(detail)
+		var price := UiTheme.label("$%d" % definition.price, UiTheme.FONT_VALUE, UiTheme.POSITIVE)
+		info.add_child(price)
+		row.add_child(info)
+
+		var buy := UiTheme.button(definition.action_verb.to_upper(), UiTheme.ACCENT, UiTheme.BUTTON_HEIGHT_SMALL)
+		buy.pressed.connect(func() -> void: _on_buy_food(definition.id))
+		row.add_child(buy)
+		body.add_child(row)
+
+		_food_buttons[definition.id] = buy
+		_support_buttons.append(buy)
+
+
+func _on_buy_food(consumable_id: String) -> void:
+	var result: Dictionary = _service.player.purchase_consumable(consumable_id)
+	if result["ok"]:
+		_service.request_feedback(result["message"], UiTheme.POSITIVE)
+	else:
+		_service.request_feedback(result["message"], UiTheme.WARNING)
+	refresh()
 
 
 func _build_grid() -> void:

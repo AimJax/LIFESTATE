@@ -15,6 +15,12 @@ const MAX_VALUE: int = 9223372036854775807
 var total_paid: int = 0
 var outstanding: int = 0
 var missed_payments: int = 0
+## Historical food/drink spending: lifetime money spent plus per-kind purchase
+## counts. Recorded only by successful manual purchases; daily living-expense
+## totals are never touched by purchases and vice versa.
+var food_drink_spent: int = 0
+var meals_purchased: int = 0
+var drinks_purchased: int = 0
 
 
 ## Authoritative daily living expense for a whole-year age. Single source:
@@ -60,20 +66,45 @@ func apply_daily_charge(expense: int, available_money: int) -> Dictionary:
 	return {"new_money": available_money}
 
 
+## Records one successful purchase. Unknown consumable ids are rejected so
+## statistics can never desynchronize from the catalog. Failed purchases must
+## never call this (no statistics change on failure).
+func record_purchase(price: int, consumable_id: String) -> bool:
+	if price < MIN_VALUE:
+		return false
+	if consumable_id == ConsumableCatalog.BASIC_MEAL_ID:
+		meals_purchased = _saturating_add(meals_purchased, 1)
+	elif consumable_id == ConsumableCatalog.BASIC_DRINK_ID:
+		drinks_purchased = _saturating_add(drinks_purchased, 1)
+	else:
+		return false
+	food_drink_spent = _saturating_add(food_drink_spent, price)
+	return true
+
+
 ## God Mode / future-systems helper: clears the informational balance only.
 ## Totals, money, career, attributes and clock are untouched.
 func clear_outstanding() -> void:
 	outstanding = 0
 
 
-## Strict restore for the transactional save path. All three totals must be
+## Strict restore for the transactional save path. All totals must be
 ## non-negative integers; anything else rejects without mutating state.
-func restore(p_paid: int, p_outstanding: int, p_missed: int) -> bool:
+## Food/drink statistics default to zero so pre-v13 callers keep working.
+func restore(
+	p_paid: int, p_outstanding: int, p_missed: int,
+	p_spent: int = 0, p_meals: int = 0, p_drinks: int = 0
+) -> bool:
 	if p_paid < MIN_VALUE or p_outstanding < MIN_VALUE or p_missed < MIN_VALUE:
+		return false
+	if p_spent < MIN_VALUE or p_meals < MIN_VALUE or p_drinks < MIN_VALUE:
 		return false
 	total_paid = p_paid
 	outstanding = p_outstanding
 	missed_payments = p_missed
+	food_drink_spent = p_spent
+	meals_purchased = p_meals
+	drinks_purchased = p_drinks
 	return true
 
 
@@ -82,6 +113,9 @@ func to_dict() -> Dictionary:
 		"paid": total_paid,
 		"outstanding": outstanding,
 		"missed": missed_payments,
+		"spent": food_drink_spent,
+		"meals": meals_purchased,
+		"drinks": drinks_purchased,
 	}
 
 

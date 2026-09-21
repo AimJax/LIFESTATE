@@ -14,6 +14,9 @@ var _paid_label: Label
 var _outstanding_label: Label
 var _missed_label: Label
 var _clear_state_label: Label
+var _food_spent_label: Label
+var _meals_label: Label
+var _drinks_label: Label
 var _back_button: Button
 
 
@@ -51,6 +54,17 @@ func build(parent: Control) -> void:
 	_clear_state_label = UiTheme.label("", UiTheme.FONT_BODY, UiTheme.POSITIVE)
 	rate_body.add_child(_clear_state_label)
 
+	var food_card := UiTheme.card(UiTheme.SURFACE)
+	_column.add_child(food_card)
+	var food_body := UiTheme.card_body(food_card, UiTheme.SPACE_XS)
+	food_body.add_child(UiTheme.tag("FOOD & DRINK"))
+	_food_spent_label = UiTheme.label("", UiTheme.FONT_BODY, UiTheme.TEXT_SECONDARY)
+	_meals_label = UiTheme.label("", UiTheme.FONT_BODY, UiTheme.TEXT_SECONDARY)
+	_drinks_label = UiTheme.label("", UiTheme.FONT_BODY, UiTheme.TEXT_SECONDARY)
+	food_body.add_child(_food_spent_label)
+	food_body.add_child(_meals_label)
+	food_body.add_child(_drinks_label)
+
 	_back_button = UiTheme.button("Back", UiTheme.TEXT_SECONDARY, UiTheme.BUTTON_HEIGHT_SMALL)
 	_back_button.pressed.connect(func() -> void: _service_go_back())
 	_column.add_child(_back_button)
@@ -84,3 +98,7 @@ func refresh() -> void:
 		_clear_state_label.text = "$%s outstanding" % UiTheme.format_money(economy.outstanding).trim_prefix("$")
 		_clear_state_label.add_theme_color_override("font_color", UiTheme.WARNING)
 		_outstanding_label.add_theme_color_override("font_color", UiTheme.WARNING)
+
+	_food_spent_label.text = "Food & Drink Spent  %s" % UiTheme.format_money(economy.food_drink_spent)
+	_meals_label.text = "Meals Purchased  %d" % economy.meals_purchased
+	_drinks_label.text = "Drinks Purchased  %d" % economy.drinks_purchased

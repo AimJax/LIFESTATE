@@ -344,6 +344,38 @@ func _check_live_data() -> void:
 	_harness.check("People shows a derived parent age", mother_age.text.contains("Age "), mother_age.text)
 	_harness.check("parent age is not the newborn default", mother_age.text != "Mother · Age 28", mother_age.text)
 
+	# Food & drink through the real Activities UI.
+	_main.go_to("activities")
+	var activities = _main._screens["activities"]
+	var eat_button: Button = activities._food_buttons["basic_meal"]
+	var drink_button: Button = activities._food_buttons["basic_drink"]
+	_harness.eq_string("meal button reads EAT", eat_button.text, "EAT")
+	_harness.eq_string("drink button reads DRINK", drink_button.text, "DRINK")
+	var feedback: Label = _main.get_node("Layout/FeedbackLabel")
+	player.money = 100
+	player.debug_set_hunger(40)
+	player.debug_set_thirst(20)
+	eat_button.pressed.emit()
+	_harness.eq_int("UI meal charges $8", player.money, 92)
+	_harness.eq_int("UI meal restores hunger", player.hunger, 75)
+	_harness.eq_string("UI meal feedback", feedback.text, "Ate Basic Meal for $8.")
+	drink_button.pressed.emit()
+	_harness.eq_int("UI drink charges $3", player.money, 89)
+	_harness.eq_int("UI drink restores thirst", player.thirst, 50)
+	_harness.eq_string("UI drink feedback", feedback.text, "Drank Basic Drink for $3.")
+	player.money = 7
+	eat_button.pressed.emit()
+	_harness.eq_string("UI shortfall feedback", feedback.text, "Not enough money.")
+	_harness.eq_int("UI shortfall keeps money", player.money, 7)
+	_main.go_to("economy")
+	var economy_screen = _main._screens["economy"]
+	_harness.eq_string("Economy shows food spending",
+		economy_screen._food_spent_label.text, "Food & Drink Spent  $11")
+	_harness.eq_string("Economy shows meal count",
+		economy_screen._meals_label.text, "Meals Purchased  1")
+	_harness.eq_string("Economy shows drink count",
+		economy_screen._drinks_label.text, "Drinks Purchased  1")
+
 
 func _check_developer_overlay() -> void:
 	_harness.section("GodMode")
@@ -509,7 +541,7 @@ func _representatives(key: String) -> Array[Control]:
 			# alive), and the needs card: named members survive layout changes.
 			return [screen._column.get_child(0), screen._terminal_card, screen._needs_card]
 		"activities":
-			return [screen._column.get_child(0), screen._hero_card, screen._cards["sleep"]["card"]]
+			return [screen._column.get_child(0), screen._hero_card, screen._cards["sleep"]["card"], screen._food_card]
 		"people":
 			return [screen._mother_card, screen._father_card]
 		"more":
@@ -517,7 +549,8 @@ func _representatives(key: String) -> Array[Control]:
 		"career":
 			return [screen._status_card]
 		"economy":
-			return [screen._money_label, screen._daily_label, screen._clear_state_label]
+			return [screen._money_label, screen._daily_label, screen._clear_state_label,
+				screen._food_spent_label, screen._meals_label, screen._drinks_label]
 		"character":
 			return [screen._age_label]
 		"education":
@@ -534,7 +567,11 @@ static func _required_texts(key: String) -> PackedStringArray:
 		"life":
 			return PackedStringArray(["Age 0", "Infant", "$1,000", "Currently Idle", "Energy", "Hunger", "Thirst", "Your life story is just beginning."])
 		"activities":
-			return PackedStringArray(["ACTIVITIES", "IDLE", "SUPPORT", "SLEEP", "STUDY"])
+			return PackedStringArray(["ACTIVITIES", "IDLE", "SUPPORT", "SLEEP", "STUDY",
+				"FOOD & DRINK", "Basic Meal", "$8", "Basic Drink", "$3"])
+		"economy":
+			return PackedStringArray(["ECONOMY", "CURRENT MONEY", "LIVING EXPENSES",
+				"FOOD & DRINK", "Meals Purchased", "Drinks Purchased"])
 		"people":
 			return PackedStringArray(["MOTHER", "FATHER"])
 		"more":

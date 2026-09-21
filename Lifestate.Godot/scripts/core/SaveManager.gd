@@ -144,7 +144,8 @@ static func load_game(clock: GameClock, player: PlayerState, path: String = "", 
 	# Economy totals likewise restore BEFORE offline progression: assessments
 	# for newly entered offline days must accumulate onto the saved totals.
 	# Pre-v12 saves default all totals to zero (no retroactive charges).
-	if not temp_player.economy.restore(v["EconomyPaid"], v["EconomyOutstanding"], v["EconomyMissed"]):
+	if not temp_player.economy.restore(v["EconomyPaid"], v["EconomyOutstanding"], v["EconomyMissed"],
+			v["EconomySpent"], v["EconomyMeals"], v["EconomyDrinks"]):
 		return _result(false, "Economy state is invalid.")
 
 	# ---- Life / death state (version 10+, with legacy migration) -----------
@@ -217,7 +218,8 @@ static func load_game(clock: GameClock, player: PlayerState, path: String = "", 
 	player.career.restore_progress(temp_player.career.snapshot_progress())
 	player.economy.restore(
 		temp_player.economy.total_paid, temp_player.economy.outstanding,
-		temp_player.economy.missed_payments)
+		temp_player.economy.missed_payments, temp_player.economy.food_drink_spent,
+		temp_player.economy.meals_purchased, temp_player.economy.drinks_purchased)
 	player.restore_total_play_hours(temp_player.total_play_hours)
 	player.events.clear_pending()
 	player.events.restore_history(temp_player.events.duplicate_history())
@@ -499,19 +501,30 @@ static func validate_and_extract(data: Dictionary) -> Dictionary:
 
 	# ---- Economy (version 12+) --------------------------------------------
 	# Pre-v12 saves migrate to zeroed totals with no retroactive charges.
+	# Food/drink statistics arrived in v13; older saves default them to zero
+	# while living-expense totals migrate exactly as before.
 	values["EconomyPaid"] = 0
 	values["EconomyOutstanding"] = 0
 	values["EconomyMissed"] = 0
+	values["EconomySpent"] = 0
+	values["EconomyMeals"] = 0
+	values["EconomyDrinks"] = 0
 	if version >= 12:
 		var economy_raw: Variant = data.get("Economy", null)
 		if typeof(economy_raw) != TYPE_DICTIONARY:
 			return _result(false, "Economy is missing or malformed.")
 		var economy_data: Dictionary = economy_raw
+		var known_fields: Array = ["TotalLivingExpensesPaid", "OutstandingLivingExpenses",
+			"MissedLivingExpensePayments", "FoodDrinkSpent", "MealsPurchased", "DrinksPurchased"]
 		for field in ["TotalLivingExpensesPaid", "OutstandingLivingExpenses", "MissedLivingExpensePayments"]:
 			if not economy_data.has(field):
 				return _result(false, "Economy is missing '%s'." % field)
+		if version >= 13:
+			for field in ["FoodDrinkSpent", "MealsPurchased", "DrinksPurchased"]:
+				if not economy_data.has(field):
+					return _result(false, "Economy is missing '%s'." % field)
 		for field in economy_data:
-			if not ["TotalLivingExpensesPaid", "OutstandingLivingExpenses", "MissedLivingExpensePayments"].has(str(field)):
+			if not known_fields.has(str(field)):
 				return _result(false, "Economy references an unknown field.")
 		var paid: int = _get_economy_value(economy_data, "TotalLivingExpensesPaid", errors)
 		var owing: int = _get_economy_value(economy_data, "OutstandingLivingExpenses", errors)
@@ -523,6 +536,17 @@ static func validate_and_extract(data: Dictionary) -> Dictionary:
 		values["EconomyPaid"] = paid
 		values["EconomyOutstanding"] = owing
 		values["EconomyMissed"] = missed
+		if version >= 13:
+			var spent: int = _get_economy_value(economy_data, "FoodDrinkSpent", errors)
+			var meals: int = _get_economy_value(economy_data, "MealsPurchased", errors)
+			var drinks: int = _get_economy_value(economy_data, "DrinksPurchased", errors)
+			if not errors.is_empty():
+				return _result(false, "Economy contains malformed values.")
+			if spent < 0 or meals < 0 or drinks < 0:
+				return _result(false, "Economy values must not be negative.")
+			values["EconomySpent"] = spent
+			values["EconomyMeals"] = meals
+			values["EconomyDrinks"] = drinks
 
 	# ---- Events + TotalPlayHours (version 7+) -----------------------------
 	values["TotalPlayHours"] = 0

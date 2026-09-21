@@ -17,6 +17,7 @@ const TestGodModeEducation = preload("res://tests/test_godmode_education.gd")
 const TestCareer = preload("res://tests/test_career.gd")
 const TestCareerProgression = preload("res://tests/test_career_progression.gd")
 const TestEconomy = preload("res://tests/test_economy.gd")
+const TestFoodDrink = preload("res://tests/test_food_drink.gd")
 const TestHealthDeath = preload("res://tests/test_health_death.gd")
 func _initialize() -> void:
 	var harness := TestHarness.new()
@@ -35,6 +36,7 @@ func _initialize() -> void:
 	TestCareer.run(harness)
 	TestCareerProgression.run(harness)
 	TestEconomy.run(harness)
+	TestFoodDrink.run(harness)
 	TestHealthDeath.run(harness)
 
 	print("")

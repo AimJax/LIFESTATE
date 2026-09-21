@@ -586,6 +586,36 @@ func drink(thirst_restored: int) -> void:
 	_dehydrated_minutes_accumulator = 0
 
 
+## Authoritative food/drink purchase path: the ONLY way bought consumables
+## enter the simulation. UI calls this and reports the returned message; it
+## never mutates money or needs directly.
+##
+## Instant action: advances zero game minutes, changes no activity, and pays
+## the full price even when restoration clamps at 100. All-or-nothing:
+## shortfalls fail with money, needs and statistics untouched, and no living-
+## expense debt is created. Outstanding living expenses never block a
+## purchase the player can afford in cash.
+## Returns {"ok": bool, "message": String}.
+func purchase_consumable(consumable_id: String) -> Dictionary:
+	if not ConsumableCatalog.is_known_consumable(consumable_id):
+		return {"ok": false, "message": "That item does not exist."}
+	if is_dead:
+		return {"ok": false, "message": "Life has ended."}
+	var definition: ConsumableDefinition = ConsumableCatalog.get_by_id(consumable_id)
+	if money < definition.price:
+		return {"ok": false, "message": "Not enough money."}
+	money -= definition.price
+	# Controlled restoration: eat()/drink() clamp to 100 and reset the
+	# matching deprivation streak, so revived needs accrue no stale damage.
+	if definition.hunger_restored > 0:
+		eat(definition.hunger_restored)
+	if definition.thirst_restored > 0:
+		drink(definition.thirst_restored)
+	economy.record_purchase(definition.price, definition.id)
+	return {"ok": true, "message": "%s %s for $%d." % [
+		definition.consumed_verb, definition.display_name, definition.price]}
+
+
 # =====================================================================
 # Activity rewards
 # =====================================================================
@@ -964,7 +994,8 @@ func restore_snapshot(state: Dictionary) -> void:
 	)
 	career.restore_progress(state["career_progress"])
 	var economy_state: Dictionary = state["economy"]
-	economy.restore(economy_state["paid"], economy_state["outstanding"], economy_state["missed"])
+	economy.restore(economy_state["paid"], economy_state["outstanding"], economy_state["missed"],
+		economy_state["spent"], economy_state["meals"], economy_state["drinks"])
 	_mortality_evaluated_day = state["mortality_evaluated_day"]
 	_economy_assessed_day = state["economy_assessed_day"]
 

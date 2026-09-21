@@ -172,6 +172,33 @@ func _check_career_path() -> bool:
 		economy_screen._bracket_label.text, "Current Rate  Age 18–24 · $5/day")
 	_harness.eq_string("Economy shows the clear state",
 		economy_screen._clear_state_label.text, "No outstanding living expenses.")
+
+	# Food & drink through the real Activities UI.
+	player.debug_set_hunger(30)
+	player.debug_set_thirst(25)
+	_main._nav_buttons["activities"].pressed.emit()
+	var activities_screen = _main._screens["activities"]
+	(activities_screen._food_buttons["basic_meal"] as Button).pressed.emit()
+	_harness.eq_int("UI meal charges $8", player.money, 1012)
+	_harness.eq_int("UI meal restores hunger", player.hunger, 65)
+	_harness.eq_int("UI meal counted", player.economy.meals_purchased, 1)
+	(activities_screen._food_buttons["basic_drink"] as Button).pressed.emit()
+	_harness.eq_int("UI drink charges $3", player.money, 1009)
+	_harness.eq_int("UI drink restores thirst", player.thirst, 55)
+	_harness.eq_int("UI drink counted", player.economy.drinks_purchased, 1)
+	_harness.eq_int("UI spending totals", player.economy.food_drink_spent, 11)
+	_main.go_to("economy")
+	_harness.eq_string("Economy shows meal count",
+		_main._screens["economy"]._meals_label.text, "Meals Purchased  1")
+
+	# Counters survive save/load through the real session.
+	_service.save_game("user://smoke_food.json")
+	(activities_screen._food_buttons["basic_meal"] as Button).pressed.emit()
+	_harness.eq_int("extra meal counted pre-load", player.economy.meals_purchased, 2)
+	_service.load_game("user://smoke_food.json")
+	_harness.eq_int("load restores money", player.money, 1009)
+	_harness.eq_int("load restores meal count", player.economy.meals_purchased, 1)
+	_harness.eq_int("load restores spending", player.economy.food_drink_spent, 11)
 	return true
 
 

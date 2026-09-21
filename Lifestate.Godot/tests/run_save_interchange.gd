@@ -91,7 +91,7 @@ func _initialize() -> void:
 	_harness.eq_int("every C# key is re-serialized", missing.size(), 0)
 	_harness.eq_int("no key changes value on round trip", changed.size(), 0)
 	_harness.eq_int("port adds no unexpected keys", extra.size(), 0)
-	_harness.eq_int("re-serialized C# save upgrades to Version 12", reserialized["Version"], 12)
+	_harness.eq_int("re-serialized C# save upgrades to Version 13", reserialized["Version"], 13)
 	_harness.eq_int("legacy C# save defaults SecondaryGrade to zero", reserialized["SecondaryGrade"], 0)
 	_harness.eq_string("legacy C# save defaults CurrentJobId to unemployed", reserialized["CurrentJobId"], "")
 	for key in missing:
@@ -109,9 +109,16 @@ func _initialize() -> void:
 		v10_defaults.append("DeathDay/DeathAge must default to -1")
 	if str(reserialized["CauseOfDeath"]) != "":
 		v10_defaults.append("CauseOfDeath must default to empty")
-	_harness.eq_int("legacy C# save migrates to living v10 defaults", v10_defaults.size(), 0)
+	_harness.eq_int("legacy C# save migrates to living v12+ defaults", v10_defaults.size(), 0)
 	for message in v10_defaults:
 		_harness.check("  %s" % message, false)
+	var economy_defaults: PackedStringArray = []
+	var migrated_economy: Dictionary = reserialized["Economy"]
+	if int(migrated_economy["FoodDrinkSpent"]) != 0:
+		economy_defaults.append("FoodDrinkSpent must default to 0")
+	if int(migrated_economy["MealsPurchased"]) != 0 or int(migrated_economy["DrinksPurchased"]) != 0:
+		economy_defaults.append("meal/drink counts must default to 0")
+	_harness.eq_int("legacy C# save migrates to zeroed food statistics", economy_defaults.size(), 0)
 
 	# JSON has no integer type, so the loader must coerce whole-number fields
 	# back to int. If it did not, the port would re-write "1460.0" and the C#
