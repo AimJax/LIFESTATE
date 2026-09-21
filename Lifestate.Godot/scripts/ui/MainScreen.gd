@@ -183,6 +183,11 @@ func _build_god_overlay() -> void:
 	_add_god_feedback_button(body, "Set Thirst to 0", func() -> Dictionary: return GameService.god_mode.set_thirst(0))
 	_add_god_feedback_button(body, "Force Old Age Death", func() -> Dictionary: return GameService.god_mode.force_old_age_death())
 
+	# ---- Career testing tools (developer-only) --------------------------------
+	body.add_child(UiTheme.spacer(UiTheme.SPACE_XS))
+	body.add_child(UiTheme.tag("CAREER TESTING", UiTheme.WARNING))
+	_add_god_feedback_button(body, "Max Current Career XP", func() -> Dictionary: return GameService.god_mode.max_career_xp())
+
 	var close_button := UiTheme.button("Close (F2)", UiTheme.NEGATIVE, UiTheme.BUTTON_HEIGHT_SMALL)
 	close_button.pressed.connect(toggle_god_mode)
 	body.add_child(close_button)

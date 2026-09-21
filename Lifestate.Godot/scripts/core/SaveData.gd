@@ -7,8 +7,8 @@ extends RefCounted
 ## System.Text.Json output so a save written by the C# build loads here and
 ## vice versa. Do not rename or reorder-couple these keys to GDScript style.
 
-const VERSION: int = 10
-static var SUPPORTED_VERSIONS: PackedInt32Array = PackedInt32Array([2, 3, 4, 5, 6, 7, 8, 9, 10])
+const VERSION: int = 11
+static var SUPPORTED_VERSIONS: PackedInt32Array = PackedInt32Array([2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
 
 static var HISTORY_KEYS: PackedStringArray = PackedStringArray([
 	"EventId", "ChoiceId", "TriggeredDay", "ResolvedDay",
@@ -33,6 +33,16 @@ static func to_dict(clock: GameClock, player: PlayerState, now_unix: float = NAN
 		pending_day = player.events.current_event.triggered_day
 
 	var stamp: float = now_unix if not is_nan(now_unix) else Time.get_unix_time_from_system()
+
+	# Only mutable progress is persisted (rank + XP per track); the immutable
+	# rank definitions are reconstructed from the career id on load.
+	var career_progress: Dictionary = {}
+	for definition in JobCatalog.definitions():
+		var track: CareerProgress = player.career.progress_for(definition.id)
+		if track != null:
+			career_progress[definition.id] = {"Rank": track.rank, "Experience": track.experience}
+		else:
+			career_progress[definition.id] = {"Rank": 1, "Experience": 0}
 
 	return {
 		"Version": VERSION,
@@ -64,6 +74,7 @@ static func to_dict(clock: GameClock, player: PlayerState, now_unix: float = NAN
 		"EducationProgress": player.education.education_progress,
 		"SchoolYearStartDay": player.education.school_year_start_day,
 		"CurrentJobId": player.career.current_job_id,
+		"CareerProgress": career_progress,
 		"TotalPlayHours": player.total_play_hours,
 		"CurrentEventId": pending_id,
 		"CurrentEventTriggeredDay": pending_day,

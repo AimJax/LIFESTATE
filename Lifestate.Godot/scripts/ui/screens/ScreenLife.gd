@@ -177,8 +177,8 @@ func refresh() -> void:
 	var activity_name: String = player.current_activity_name()
 	_activity_label.text = "Currently " + activity_name
 	if player.is_working:
-		# Job identity rides along with the working label; Life stays lean.
-		_activity_label.text = "Currently Working · %s" % player.career.current_job().display_name
+		# Position identity rides along with the working label; Life stays lean.
+		_activity_label.text = "Currently Working · %s" % player.career.current_title()
 
 	# Terminal state: the needs area is replaced by the LIFE ENDED record.
 	_needs_card.visible = not player.is_dead
@@ -213,7 +213,7 @@ func _refresh_terminal(player: PlayerState) -> void:
 
 func _final_occupation(player: PlayerState) -> String:
 	if player.career.is_employed():
-		return player.career.current_job().display_name
+		return player.career.current_title()
 	return "Unemployed"
 
 

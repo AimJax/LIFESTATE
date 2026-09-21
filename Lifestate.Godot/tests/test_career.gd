@@ -1,7 +1,7 @@
 extends RefCounted
 
 ## Career foundation coverage: catalog, deterministic hiring, job wages for the
-## Work activity, offline integration and Save Version 9 persistence including
+## Work activity, offline integration and Save Version 11 persistence including
 ## the legacy pre-v9 migration rule.
 
 const TEST_PATH: String = "user://test_career_save.json"
@@ -337,7 +337,7 @@ static func _save_v9_round_trip(h: TestHarness) -> void:
 	SaveManager.save_game(clock, player, TEST_PATH, FIXED_NOW)
 	var raw: String = FileAccess.get_file_as_string(TEST_PATH)
 	var data: Dictionary = JSON.parse_string(raw)
-	h.eq_int("Career-S1 save version is exactly 10", data["Version"], 10)
+	h.eq_int("Career-S1 save version is exactly 11", data["Version"], 11)
 	h.eq_string("Career-S2 CurrentJobId serialized", data["CurrentJobId"], JobCatalog.OFFICE_CLERK_ID)
 
 	var loaded := fresh()
@@ -416,10 +416,11 @@ static func _legacy_migration(h: TestHarness) -> void:
 	h.eq_string("Career-L5 legacy idle stays unemployed", idle[1].career.current_job_id, "")
 	h.eq_bool("Career-L6 legacy idle not working", idle[1].is_working, false)
 
-	# v9 must remain in SUPPORTED_VERSIONS and v2-v8 all still load; the active
-	# schema is now Version 10 (Health/Death foundation).
-	h.check("Career-L7 versions 9 and 10 supported",
-		SaveData.SUPPORTED_VERSIONS.has(9) and SaveData.VERSION == 10)
+	# v9 must remain in SUPPORTED_VERSIONS and v2-v10 all still load; the active
+	# schema is now Version 11 (career progression foundation).
+	h.check("Career-L7 versions 9, 10 and 11 supported",
+		SaveData.SUPPORTED_VERSIONS.has(9) and SaveData.SUPPORTED_VERSIONS.has(10)
+		and SaveData.VERSION == 11)
 
 
 static func _legacy_v8_fixture() -> Dictionary:

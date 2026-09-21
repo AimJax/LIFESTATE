@@ -112,8 +112,24 @@ func force_old_age_death() -> Dictionary:
 	return {"ok": true, "message": "Life has ended. Cause: Old Age."}
 
 
+## Career testing helper: pins the CURRENT career's XP to the cap without
+## promoting, so promotion availability/acceptance can be tested directly.
+## Other tracks, rank, attributes and money are untouched.
+## Returns {"ok": bool, "message": String}.
+func max_career_xp() -> Dictionary:
+	if not is_enabled:
+		return {"ok": false, "message": "God Mode is disabled."}
+	if _player.is_dead:
+		return {"ok": false, "message": "Life has ended."}
+	if not _player.career.is_employed():
+		return {"ok": false, "message": "You are not employed."}
+	_player.career.max_out_experience(_player.career.current_job_id)
+	return {"ok": true, "message": "Career XP set to 10000."}
+
+
 ## Developer-only helper: satisfies the requirements of the current active
 ## school grade and then invokes the real progression logic so the player
+## advances exactly one grade (or completes that tier).
 ## advances exactly one grade (or completes that tier).
 ##
 ## Returns {"ok": bool, "message": String}.

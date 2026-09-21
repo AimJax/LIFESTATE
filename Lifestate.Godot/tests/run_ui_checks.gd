@@ -15,7 +15,7 @@ var _career_case_index := 0
 const RESOLUTIONS := [Vector2i(1100, 720), Vector2i(1280, 720), Vector2i(1366, 768), Vector2i(1600, 900)]
 const SCREEN_KEYS := ["life", "activities", "people", "more", "character", "education", "career", "save_load", "settings"]
 const EDUCATION_CASES := ["primary_enroll", "primary_active", "primary_completed_wait", "secondary_enroll", "secondary_active", "secondary_completed"]
-const CAREER_CASES := ["unemployed", "employed"]
+const CAREER_CASES := ["unemployed", "employed", "promotable", "max_rank"]
 
 
 func _initialize() -> void:
@@ -101,9 +101,34 @@ func _prepare_career_case() -> void:
 			player.education.restore(EducationState.Status.COMPLETED_SECONDARY, 6, 100, service.clock.day - 365, 12)
 			player.attributes.restore(20.0, 10.0, 10.0, 10.0, 10.0)
 			player.apply_for_job(JobCatalog.OFFICE_CLERK_ID)
+		"promotable":
+			service.clock.restore(20 * 365, 0, 0)
+			player.career.restore("")
+			_reset_career_progress(player)
+			player.apply_for_job(JobCatalog.LABORER_ID)
+			player.career.award_experience(JobCatalog.LABORER_ID, 600)
+			player.attributes.restore(10.0, 30.0, 10.0, 10.0, 10.0)
+		"max_rank":
+			service.clock.restore(20 * 365, 0, 0)
+			player.career.restore("")
+			_reset_career_progress(player)
+			player.apply_for_job(JobCatalog.LABORER_ID)
+			player.career.award_experience(JobCatalog.LABORER_ID, 1600)
+			player.attributes.restore(10.0, 50.0, 10.0, 10.0, 10.0)
+			player.promote()
+			player.promote()
 	_main.go_to("career")
 	_main._screens["career"].refresh()
 	_settle_frames = 0
+
+
+func _reset_career_progress(player: PlayerState) -> void:
+	player.career.restore_progress({
+		"laborer": {"rank": 1, "experience": 0},
+		"retail_worker": {"rank": 1, "experience": 0},
+		"delivery_driver": {"rank": 1, "experience": 0},
+		"office_clerk": {"rank": 1, "experience": 0},
+	})
 
 
 func _check_career_case() -> void:
@@ -121,6 +146,12 @@ func _check_career_case() -> void:
 		"employed":
 			control = screen._status_detail
 			expected_text = "Office Clerk · $18/hour"
+		"promotable":
+			control = screen._status_detail
+			expected_text = "Laborer · $10/hour"
+		"max_rank":
+			control = screen._status_detail
+			expected_text = "Crew Leader · $22/hour"
 	var visible_rect := _visible_rect(control, host)
 	_harness.section("Career " + case_name)
 	_harness.check(case_name + " representative has non-zero visible geometry",
@@ -136,10 +167,31 @@ func _check_career_case() -> void:
 	_harness.check(case_name + " Laborer Apply button has non-zero visible geometry",
 		apply_rect.size.x > 0.0 and apply_rect.size.y > 0.0, "%s" % apply_rect)
 	_harness.eq_bool(case_name + " employed flag matches player",
-		screen._service.player.career.is_employed(), case_name == "employed")
-	if case_name == "employed":
-		_harness.eq_bool("employed career disables Apply buttons", laborer_entry["apply_button"].disabled, true)
-		_harness.eq_bool("employed career shows Quit button", screen._quit_button.visible, true)
+		screen._service.player.career.is_employed(), case_name != "unemployed")
+	if case_name != "unemployed":
+		_harness.eq_bool(case_name + " disables Apply buttons while employed",
+			laborer_entry["apply_button"].disabled, true)
+		_harness.eq_bool(case_name + " shows Quit button", screen._quit_button.visible, true)
+	if case_name == "promotable":
+		_harness.eq_string("promotable rank label", screen._rank_label.text, "Rank 1 / 3")
+		_harness.eq_string("promotable XP label", screen._xp_label.text, "Career XP: 600 / 10000")
+		_harness.eq_string("promotable next title", screen._promo_detail.text, "Skilled Laborer · $15/hour")
+		_harness.eq_string("promotable status", screen._promo_status.text, "PROMOTION AVAILABLE")
+		var accept_rect := _visible_rect(screen._accept_button, host)
+		_harness.check("promotable ACCEPT PROMOTION has non-zero visible geometry",
+			accept_rect.size.x > 0.0 and accept_rect.size.y > 0.0, "%s" % accept_rect)
+		_harness.eq_string("promotable accept text", screen._accept_button.text, "ACCEPT PROMOTION")
+		var xp_bar_rect := _visible_rect(screen._xp_bar, host)
+		_harness.check("promotable XP bar has non-zero visible geometry",
+			xp_bar_rect.size.x > 0.0 and xp_bar_rect.size.y > 0.0, "%s" % xp_bar_rect)
+	if case_name == "max_rank":
+		_harness.eq_string("max_rank rank label", screen._rank_label.text, "Rank 3 / 3")
+		_harness.eq_string("max_rank XP label", screen._xp_label.text, "Career XP: 1600 / 10000")
+		var max_rect := _visible_rect(screen._max_label, host)
+		_harness.check("max_rank MAX RANK has non-zero visible geometry",
+			max_rect.size.x > 0.0 and max_rect.size.y > 0.0, "%s" % max_rect)
+		_harness.eq_string("max_rank max text", screen._max_label.text, "MAX RANK")
+		_harness.eq_bool("max_rank hides promotion button", screen._accept_button.visible, false)
 
 
 func _check_scene_loaded() -> bool:

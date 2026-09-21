@@ -43,6 +43,7 @@ const THIRST_PER_HOUR: int = 2
 ## (CareerState.hourly_wage). Laborer matches this value exactly.
 const MONEY_PER_WORK_HOUR: int = 10
 const STUDY_XP_PER_HOUR: int = 10
+const CAREER_XP_PER_WORK_HOUR: int = 10
 const INTELLIGENCE_PER_STUDY_HOUR: float = 0.05
 const ACADEMICS_XP_PER_STUDY_HOUR: int = 10
 const CURIOSITY_PER_STUDY_HOUR: float = 0.02
@@ -443,11 +444,46 @@ func _attribute_value(name: String) -> float:
 	match name:
 		"intelligence":
 			return attributes.intelligence
+		"fitness":
+			return attributes.fitness
 		"social":
 			return attributes.social
 		"discipline":
 			return attributes.discipline
 	return 0.0
+
+
+## Centralized promotion evaluation. UI reads the reason; promote() enforces
+## it. Never duplicate this logic in screens.
+func evaluate_promotion() -> Dictionary:
+	if is_dead:
+		return {"ok": false, "reason": "Life has ended."}
+	if not career.is_employed():
+		return {"ok": false, "reason": "You are not employed."}
+	var job: JobDefinition = career.current_job()
+	if job == null:
+		return {"ok": false, "reason": "That job does not exist."}
+	var next_definition: CareerRank = career.next_rank_definition()
+	if next_definition == null:
+		return {"ok": false, "reason": "Maximum career rank reached."}
+	if career.current_experience() < next_definition.promotion_xp:
+		return {"ok": false, "reason": "Need %d Career XP." % next_definition.promotion_xp}
+	if _attribute_value(next_definition.promotion_attribute) < next_definition.promotion_attribute_min:
+		return {"ok": false, "reason": "%s must be at least %d." % [
+			next_definition.promotion_attribute.capitalize(), int(next_definition.promotion_attribute_min)]}
+	return {"ok": true, "reason": ""}
+
+
+func can_promote() -> bool:
+	return evaluate_promotion()["ok"]
+
+
+## Manual promotion: exactly one rank, XP untouched, job id unchanged, Work
+## uninterrupted (later completed hours simply pay the new wage).
+func promote() -> bool:
+	if not evaluate_promotion()["ok"]:
+		return false
+	return career.promote_current()
 
 
 func enroll_secondary_school() -> bool:
@@ -535,7 +571,12 @@ func update_work(elapsed_minutes: int) -> void:
 	_work_minutes_accumulator += elapsed_minutes
 	var hours_worked: int = _work_minutes_accumulator / MINUTES_PER_HOUR
 	if hours_worked > 0:
+		# One authoritative completed-hour count drives both wages (at the
+		# CURRENT rank wage) and Career XP for the held track, so pay and
+		# progression can never disagree. Partial hours carry, exactly as
+		# before; XP stops at death with wages by construction.
 		money += hours_worked * career.hourly_wage()
+		career.award_experience(career.current_job_id, hours_worked * CAREER_XP_PER_WORK_HOUR)
 		_work_minutes_accumulator %= MINUTES_PER_HOUR
 
 
@@ -863,6 +904,7 @@ func snapshot() -> Dictionary:
 		"starving_minutes_accumulator": _starving_minutes_accumulator,
 		"dehydrated_minutes_accumulator": _dehydrated_minutes_accumulator,
 		"mortality_evaluated_day": _mortality_evaluated_day,
+		"career_progress": career.snapshot_progress(),
 	}
 
 
@@ -882,6 +924,7 @@ func restore_snapshot(state: Dictionary) -> void:
 		state["cause_of_death"], state["life_seed"],
 		state["starving_minutes_accumulator"], state["dehydrated_minutes_accumulator"]
 	)
+	career.restore_progress(state["career_progress"])
 	_mortality_evaluated_day = state["mortality_evaluated_day"]
 
 

@@ -105,12 +105,51 @@ func _check_career_path() -> bool:
 	var money_before: int = player.money
 	player.advance_simulation(60)
 	_harness.eq_int("one game hour of Laborer pays +10", player.money, money_before + 10)
+	_harness.eq_int("one game hour grants +10 Career XP",
+		player.career.get_experience(JobCatalog.LABORER_ID), 10)
+
+	# Promote through the real UI: Max XP + Max Attributes in the God Mode
+	# overlay, then ACCEPT PROMOTION on the Career screen.
+	_main.toggle_god_mode()
+	var max_xp_button := _find_button(_main, "Max Current Career XP")
+	_harness.check("God Mode offers Max Current Career XP", max_xp_button != null)
+	if max_xp_button != null:
+		max_xp_button.pressed.emit()
+	var max_attr_button := _find_button(_main, "Max Attributes")
+	_harness.check("God Mode offers Max Attributes", max_attr_button != null)
+	if max_attr_button != null:
+		max_attr_button.pressed.emit()
+	_main.toggle_god_mode()
+	_main.go_to("career")
+	_harness.eq_string("promotion is available", career_screen._promo_status.text, "PROMOTION AVAILABLE")
+	career_screen._accept_button.pressed.emit()
+	_harness.eq_string("UI promotion resolves Skilled Laborer", player.career.current_title(), "Skilled Laborer")
+	_harness.eq_int("UI promotion resolves the rank wage", player.career.hourly_wage(), 15)
+
+	# Another Work hour through the real Activities screen pays the new wage.
+	# (The earlier shift may still be active, and the button toggles.)
+	_main._nav_buttons["activities"].pressed.emit()
+	var rank2_action: Button = _main._screens["activities"]._cards["work"]["action"]
+	if not player.is_working:
+		rank2_action.pressed.emit()
+	_harness.eq_bool("Work runs at the new rank", player.is_working, true)
+	money_before = player.money
+	player.advance_simulation(60)
+	_harness.eq_int("one game hour of Skilled Laborer pays +15", player.money, money_before + 15)
+	_harness.eq_int("XP stays capped after promotion", player.career.get_experience(JobCatalog.LABORER_ID), 10000)
 
 	# Quit through the real Career screen button and verify the state returns.
 	_main.go_to("career")
 	career_screen._quit_button.pressed.emit()
 	_harness.eq_string("UI quit clears the job", player.career.current_job_id, "")
 	_harness.eq_bool("UI quit stops Work", player.is_working, false)
+
+	# Rehire through the real Apply button: history must be retained.
+	laborer_entry["apply_button"].pressed.emit()
+	_harness.eq_string("UI rehire restores Skilled Laborer", player.career.current_title(), "Skilled Laborer")
+	_harness.eq_int("UI rehire restores rank", player.career.current_rank(), 2)
+	_main.go_to("career")
+	career_screen._quit_button.pressed.emit()
 
 	# Navigating back re-renders Activities from live state, like a real user.
 	_main._nav_buttons["activities"].pressed.emit()

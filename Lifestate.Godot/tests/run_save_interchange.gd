@@ -9,8 +9,9 @@ extends SceneTree
 ##   1. load a save file WRITTEN BY THE C# BUILD (tests/fixtures/csharp_save_v7.json)
 ##   2. re-serialize it and compare every persisted key against the C# original
 ##   3. compare a canonical integer summary against the C# save-time summary
-## Godot Version 9 (with career state) -> C# loading is intentionally
-## unsupported. The career system is Godot-only post-migration functionality.
+## Godot Version 9+ (with career state, now career progression at Version 11)
+## -> C# loading is intentionally unsupported. Careers are Godot-only
+## post-migration functionality.
 ##
 ## Exits 0 only when every check passes.
 
@@ -28,8 +29,8 @@ const FIXED_STAMP: float = 1800000000.0
 ## 7-digit fractional part, which is the documented .NET round-trip form.
 const STAMP_KEYS := ["SavedAtUtc"]
 
-## The Health + Death foundation keys. The frozen C# v7 fixture tool cannot
-## emit them, so the v7 load comparison ignores them.
+## The Health + Death foundation and career progression keys. The frozen C# v7
+## fixture tool cannot emit them, so the v7 load comparison ignores them.
 const V10_LIFE_KEYS: PackedStringArray = ["Health", "IsDead", "DeathDay", "DeathAge", "CauseOfDeath"]
 
 var _harness := TestHarness.new()
@@ -75,10 +76,12 @@ func _initialize() -> void:
 		if _canonical(reserialized[key]) != _canonical(original[key]):
 			changed.append("%s (%s != %s)" % [key, reserialized[key], original[key]])
 	var extra: PackedStringArray = []
-	# Version 10 adds the Health + Death foundation keys; legacy Version 7 saves
-	# legitimately re-serialize with them (living defaults + derived LifeSeed).
+	# Versions 10 and 11 add the Health + Death foundation and career
+	# progression keys; legacy Version 7 saves legitimately re-serialize with
+	# them (living defaults + derived LifeSeed + default Rank 1 / XP 0 tracks).
 	var v10_keys: PackedStringArray = ["Health", "IsDead", "DeathDay", "DeathAge",
-		"CauseOfDeath", "LifeSeed", "StarvingMinutesAccumulator", "DehydratedMinutesAccumulator"]
+		"CauseOfDeath", "LifeSeed", "StarvingMinutesAccumulator", "DehydratedMinutesAccumulator",
+		"CareerProgress"]
 	for key in reserialized:
 		if not original.has(key) and not (str(key) in v10_keys) \
 				and key != "SecondaryGrade" and key != "CurrentJobId":
@@ -87,7 +90,7 @@ func _initialize() -> void:
 	_harness.eq_int("every C# key is re-serialized", missing.size(), 0)
 	_harness.eq_int("no key changes value on round trip", changed.size(), 0)
 	_harness.eq_int("port adds no unexpected keys", extra.size(), 0)
-	_harness.eq_int("re-serialized C# save upgrades to Version 10", reserialized["Version"], 10)
+	_harness.eq_int("re-serialized C# save upgrades to Version 11", reserialized["Version"], 11)
 	_harness.eq_int("legacy C# save defaults SecondaryGrade to zero", reserialized["SecondaryGrade"], 0)
 	_harness.eq_string("legacy C# save defaults CurrentJobId to unemployed", reserialized["CurrentJobId"], "")
 	for key in missing:

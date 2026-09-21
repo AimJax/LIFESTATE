@@ -45,7 +45,10 @@ they read the session and render it.
   Laborer ($10/h), Retail Worker ($12/h, Primary completed, Social 15+),
   Delivery Driver ($15/h, Primary completed, Discipline 20+) and Office Clerk
   ($18/h, Secondary completed, Intelligence 20+). Work requires a held job;
-  hourly pay comes from the job definition. No promotions, firing or RNG yet.
+  hourly pay comes from the current rank wage. Each career tracks persistent
+  Rank 1–3 history with cumulative Career XP (+10 per completed Work hour,
+  capped at 10000); promotions are manual (XP + attribute thresholds), never
+  automatic, and quitting never resets history. No firing or RNG yet.
 - **Progression:** Study grants StudyXP, Academics XP and Intelligence; Play and
   Family Time grant Attributes/Traits; Skills are XP-based with derived levels;
   formal education spans Primary Grades 1–6 and Secondary Grades 7–12.
@@ -143,17 +146,20 @@ dotnet run -- --test          # 287 assertions, also via bin/…/Lifestate.exe -
 
 ## Save compatibility
 
-The Godot build is at Save **Version 10** (`Health`/`IsDead`/`DeathDay`/
-`DeathAge`/`CauseOfDeath`/`LifeSeed`/deprivation accumulators added by the
-Health + Death foundation; v2–v9 all still load). Pre-v10 saves have no life
-state: on load they migrate to a healthy living character with a LifeSeed
-derived deterministically from stable saved state, so offline mortality rolls
-are stable across reloads. Pre-v9 saves also have no career state: on load, a
-save that was actively working migrates to **Laborer** (the historical flat
-10/hour generic Work wage), an unemployed save stays unemployed. The retained
-C# reference remains Version 7 and cannot read Godot v8+ saves; Godot still
-imports C# v7 saves (they upgrade to v10 with living defaults and an empty
-`CurrentJobId`).
+The Godot build is at Save **Version 11** (`CareerProgress` per-track rank/XP
+added by the Career Progression foundation; v2–v10 all still load). Pre-v11
+saves default every career to Rank 1 / XP 0 with the saved `CurrentJobId`
+preserved. Pre-v10 saves have no life state: on load they migrate to a
+healthy living character with a LifeSeed derived deterministically from
+stable saved state, so offline mortality rolls are stable across reloads
+(`Health`/`IsDead`/`DeathDay`/`DeathAge`/`CauseOfDeath`/`LifeSeed`/
+deprivation accumulators came from the Health + Death foundation). Pre-v9
+saves also have no career state: on load, a save that was actively working
+migrates to **Laborer** (the historical flat 10/hour generic Work wage), an
+unemployed save stays unemployed. The retained C# reference remains Version 7
+and cannot read Godot v8+ saves; Godot still imports C# v7 saves (they upgrade
+to v11 with living defaults, an empty `CurrentJobId` and default career
+progress).
 
 | Build | Save location |
 | --- | --- |

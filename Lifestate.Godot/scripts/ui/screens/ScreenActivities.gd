@@ -314,8 +314,7 @@ func _refresh_cards(player: PlayerState) -> void:
 		else:
 			card.add_theme_stylebox_override("panel", UiTheme.panel_style(UiTheme.SURFACE, UiTheme.BORDER))
 			if key == "work" and player.career.is_employed():
-				var job: JobDefinition = player.career.current_job()
-				status.text = "%s · $%d/hour" % [job.display_name, job.hourly_wage]
+				status.text = "%s · $%d/hour" % [player.career.current_title(), player.career.hourly_wage()]
 				status.add_theme_color_override("font_color", UiTheme.TEXT_PRIMARY)
 			else:
 				status.text = requirement if not requirement.is_empty() else "Available"

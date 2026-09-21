@@ -135,6 +135,12 @@ static func load_game(clock: GameClock, player: PlayerState, path: String = "", 
 	if temp_player.is_working and not temp_player.career.is_employed():
 		return _result(false, "A save cannot be working without a job.")
 
+	# Career progression restores BEFORE offline progression: offline Work must
+	# pay the saved rank's wage and continue XP from the saved value, not
+	# Rank 1 defaults. Pre-v11 saves default every track to Rank 1 / XP 0.
+	if not temp_player.career.restore_progress(v["CareerProgress"]):
+		return _result(false, "Career progression is invalid.")
+
 	# ---- Life / death state (version 10+, with legacy migration) -----------
 	# Restored BEFORE offline progression: offline old-age mortality rolls are
 	# derived from the LifeSeed, so it must be final before any time advances.
@@ -202,6 +208,7 @@ static func load_game(clock: GameClock, player: PlayerState, path: String = "", 
 	player.family.restore(temp_player.family.mother, temp_player.family.father)
 	player.relationships.restore(temp_player.relationships.mother_relationship, temp_player.relationships.father_relationship)
 	player.career.restore(temp_player.career.current_job_id)
+	player.career.restore_progress(temp_player.career.snapshot_progress())
 	player.restore_total_play_hours(temp_player.total_play_hours)
 	player.events.clear_pending()
 	player.events.restore_history(temp_player.events.duplicate_history())
@@ -443,6 +450,44 @@ static func validate_and_extract(data: Dictionary) -> Dictionary:
 		if values["IsWorking"] and values["CurrentJobId"].is_empty():
 			return _result(false, "IsWorking is true without a current job.")
 
+	# ---- Career progression (version 11+) ---------------------------------
+	# Internal shape mirrors CareerState.snapshot_progress():
+	# {career_id: {"rank": int, "experience": int}}. Pre-v11 saves default
+	# every track to Rank 1 / XP 0 with the current job preserved as saved.
+	values["CareerProgress"] = _default_career_progress()
+	if version >= 11:
+		var progress_raw: Variant = data.get("CareerProgress", null)
+		if typeof(progress_raw) != TYPE_DICTIONARY:
+			return _result(false, "CareerProgress is missing or malformed.")
+		var progress_data: Dictionary = progress_raw
+		for definition in JobCatalog.definitions():
+			if not progress_data.has(definition.id):
+				return _result(false, "CareerProgress is missing '%s'." % definition.id)
+		for key in progress_data:
+			if not JobCatalog.is_known_job(str(key)):
+				return _result(false, "CareerProgress references an unknown career.")
+		var validated: Dictionary = {}
+		for definition in JobCatalog.definitions():
+			var entry: Variant = progress_data[definition.id]
+			if typeof(entry) != TYPE_DICTIONARY:
+				return _result(false, "CareerProgress for '%s' is malformed." % definition.id)
+			var entry_dict: Dictionary = entry
+			if not entry_dict.has("Rank") or not entry_dict.has("Experience"):
+				return _result(false, "CareerProgress for '%s' is malformed." % definition.id)
+			var entry_rank: int = _get_int(entry_dict, "Rank", -1, errors)
+			var entry_xp: int = _get_int(entry_dict, "Experience", -1, errors)
+			if not errors.is_empty():
+				return _result(false, "CareerProgress for '%s' is malformed." % definition.id)
+			var probe := CareerProgress.new()
+			if not probe.restore(entry_rank, entry_xp):
+				if entry_rank < CareerProgress.MIN_RANK or entry_rank > CareerProgress.MAX_RANK:
+					return _result(false, "Career rank for '%s' is out of range." % definition.id)
+				if entry_xp < CareerProgress.MIN_EXPERIENCE or entry_xp > CareerProgress.MAX_EXPERIENCE:
+					return _result(false, "Career experience for '%s' is out of range." % definition.id)
+				return _result(false, "Career rank and experience are inconsistent for '%s'." % definition.id)
+			validated[definition.id] = {"rank": entry_rank, "experience": entry_xp}
+		values["CareerProgress"] = validated
+
 	# ---- Events + TotalPlayHours (version 7+) -----------------------------
 	values["TotalPlayHours"] = 0
 	values["CurrentEventId"] = null
@@ -523,6 +568,15 @@ static func _validate_education(status: int, primary_grade: int, secondary_grade
 
 static func _is_valid_closeness(value: float) -> bool:
 	return not (is_nan(value) or is_inf(value)) and value >= 0.0 and value <= 100.0
+
+
+## Default per-track progression for pre-v11 saves: every known career at
+## Rank 1 / XP 0. Internal snapshot shape (lowercase keys).
+static func _default_career_progress() -> Dictionary:
+	var state: Dictionary = {}
+	for definition in JobCatalog.definitions():
+		state[definition.id] = {"rank": 1, "experience": 0}
+	return state
 
 
 static func _result(ok: bool, error: String) -> Dictionary:
